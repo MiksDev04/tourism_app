@@ -19,7 +19,7 @@ class ComplianceRecord {
   final String business;
   final String period;
   final ComplianceStatus status;
-  final int? warnings;      // null = show dash
+  final int? warnings; // null = show dash
   final String? lastNotice; // null = show dash
   final String notes;
 }
@@ -61,10 +61,21 @@ const _records = [
   ),
 ];
 
-const _monthOptions    = ['All Months', 'April 2024', 'March 2024', 'February 2024'];
-const _yearOptions     = ['All Years', '2024', '2023'];
-const _businessOptions = ['All Businesses', 'Grand Hotel San Pablo', 'Sampaloc Lake Resort', 'Paradise Resort & Spa', 'Lakeview Boutique Hotel'];
-const _statusOptions   = ['All Statuses', 'Compliant', 'Non-Compliant'];
+const _monthOptions = [
+  'All Months',
+  'April 2024',
+  'March 2024',
+  'February 2024',
+];
+const _yearOptions = ['All Years', '2024', '2023'];
+const _businessOptions = [
+  'All Businesses',
+  'Grand Hotel San Pablo',
+  'Sampaloc Lake Resort',
+  'Paradise Resort & Spa',
+  'Lakeview Boutique Hotel',
+];
+const _statusOptions = ['All Statuses', 'Compliant', 'Non-Compliant'];
 
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
 
@@ -76,11 +87,11 @@ class AdminCompliancePage extends StatefulWidget {
 }
 
 class _AdminCompliancePageState extends State<AdminCompliancePage> {
-  String _searchQuery      = '';
-  String _selectedMonth    = 'All Months';
-  String _selectedYear     = 'All Years';
+  String _searchQuery = '';
+  String _selectedMonth = 'All Months';
+  String _selectedYear = 'All Years';
   String _selectedBusiness = 'All Businesses';
-  String _selectedStatus   = 'All Statuses';
+  String _selectedStatus = 'All Statuses';
 
   final _searchCtrl = TextEditingController();
 
@@ -103,10 +114,12 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       final q = _searchQuery.toLowerCase();
       final matchesSearch = q.isEmpty || r.business.toLowerCase().contains(q);
 
-      final matchesBusiness = _selectedBusiness == 'All Businesses' ||
+      final matchesBusiness =
+          _selectedBusiness == 'All Businesses' ||
           r.business == _selectedBusiness;
 
-      final matchesStatus = _selectedStatus == 'All Statuses' ||
+      final matchesStatus =
+          _selectedStatus == 'All Statuses' ||
           (_selectedStatus == 'Compliant' &&
               r.status == ComplianceStatus.compliant) ||
           (_selectedStatus == 'Non-Compliant' &&
@@ -127,7 +140,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PageHeader(),
+            const _PageHeader(),
             const SizedBox(height: 20),
             _SummaryCards(
               compliant: _compliantCount,
@@ -159,6 +172,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
+  const _PageHeader();
+
   @override
   Widget build(BuildContext context) {
     return const Column(
@@ -197,38 +212,44 @@ class _SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.check_circle_outline_rounded,
-            iconColor: AppColors.accentGreen,
-            borderColor: AppColors.accentGreen,
-            value: '$compliant',
-            label: 'Compliant',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.cancel_outlined,
-            iconColor: AppColors.accentRed,
-            borderColor: AppColors.accentRed,
-            value: '$nonCompliant',
-            label: 'Non-Compliant',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.warning_amber_rounded,
-            iconColor: AppColors.accentOrange,
-            borderColor: AppColors.accentOrange,
-            value: '$warning',
-            label: 'Warning',
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Mobile: Stack vertically
+
+        return Row(
+          children: [
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: AppColors.accentGreen,
+                borderColor: AppColors.accentGreen,
+                value: '$compliant',
+                label: 'Compliant',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.cancel_outlined,
+                iconColor: AppColors.accentRed,
+                borderColor: AppColors.accentRed,
+                value: '$nonCompliant',
+                label: 'Non-Compliant',
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.warning_amber_rounded,
+                iconColor: AppColors.accentOrange,
+                borderColor: AppColors.accentOrange,
+                value: '$warning',
+                label: 'Warning',
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -251,6 +272,7 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: iconColor.withOpacity(0.06),
@@ -310,45 +332,158 @@ class _FilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 200,
-          child: _SearchField(controller: searchCtrl, onChanged: onSearchChanged),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedMonth,
-            items: _monthOptions,
-            onChanged: onMonthChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedYear,
-            items: _yearOptions,
-            onChanged: onYearChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedBusiness,
-            items: _businessOptions,
-            onChanged: onBusinessChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedStatus,
-            items: _statusOptions,
-            onChanged: onStatusChanged,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          // Mobile: Wrap filters vertically
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _SearchField(
+                      controller: searchCtrl,
+                      onChanged: onSearchChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedMonth,
+                      items: _monthOptions,
+                      onChanged: onMonthChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedYear,
+                      items: _yearOptions,
+                      onChanged: onYearChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusiness,
+                      items: _businessOptions,
+                      onChanged: onBusinessChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _DropdownFilter(
+                value: selectedStatus,
+                items: _statusOptions,
+                onChanged: onStatusChanged,
+              ),
+            ],
+          );
+        } else if (constraints.maxWidth < 1000) {
+          // Tablet: Two rows
+          return Column(
+            children: [
+              Row(
+                children: [
+                  SizedBox(
+                    width: 200,
+                    child: _SearchField(
+                      controller: searchCtrl,
+                      onChanged: onSearchChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedMonth,
+                      items: _monthOptions,
+                      onChanged: onMonthChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedYear,
+                      items: _yearOptions,
+                      onChanged: onYearChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusiness,
+                      items: _businessOptions,
+                      onChanged: onBusinessChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedStatus,
+                      items: _statusOptions,
+                      onChanged: onStatusChanged,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        } else {
+          // Desktop: Full row
+          return Row(
+            children: [
+              SizedBox(
+                width: 200,
+                child: _SearchField(
+                  controller: searchCtrl,
+                  onChanged: onSearchChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DropdownFilter(
+                  value: selectedMonth,
+                  items: _monthOptions,
+                  onChanged: onMonthChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DropdownFilter(
+                  value: selectedYear,
+                  items: _yearOptions,
+                  onChanged: onYearChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DropdownFilter(
+                  value: selectedBusiness,
+                  items: _businessOptions,
+                  onChanged: onBusinessChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DropdownFilter(
+                  value: selectedStatus,
+                  items: _statusOptions,
+                  onChanged: onStatusChanged,
+                ),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 }
@@ -374,8 +509,11 @@ class _SearchField extends StatelessWidget {
         decoration: const InputDecoration(
           hintText: 'Search...',
           hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
-          prefixIcon:
-              Icon(Icons.search_rounded, color: AppColors.textSubtle, size: 18),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.textSubtle,
+            size: 18,
+          ),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           isDense: true,
@@ -462,24 +600,59 @@ class _ComplianceTable extends StatelessWidget {
   }
 }
 
-// ─── Table Header ─────────────────────────────────────────────────────────────
+// ─── Table Header (Responsive columns) ────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(flex: 4, child: _HeaderCell('Business')),
-          Expanded(flex: 3, child: _HeaderCell('Period')),
-          Expanded(flex: 3, child: _HeaderCell('Status')),
-          Expanded(flex: 2, child: _HeaderCell('Warnings')),
-          Expanded(flex: 3, child: _HeaderCell('Last Notice')),
-          Expanded(flex: 5, child: _HeaderCell('Notes')),
-          Expanded(flex: 1, child: _HeaderCell('History')),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 700) {
+          // Mobile: Show fewer columns
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(flex: 5, child: _HeaderCell('Business')),
+                Expanded(flex: 3, child: _HeaderCell('Period')),
+                Expanded(flex: 3, child: _HeaderCell('Status')),
+                const SizedBox(width: 40), // Space for history icon
+              ],
+            ),
+          );
+        } else if (constraints.maxWidth < 900) {
+          // Small tablet: Show all columns except maybe one
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(flex: 4, child: _HeaderCell('Business')),
+                Expanded(flex: 2, child: _HeaderCell('Period')),
+                Expanded(flex: 2, child: _HeaderCell('Status')),
+                Expanded(flex: 2, child: _HeaderCell('Warnings')),
+                Expanded(flex: 3, child: _HeaderCell('Notes')),
+                Expanded(flex: 1, child: _HeaderCell('')),
+              ],
+            ),
+          );
+        } else {
+          // Desktop: Full header
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(flex: 4, child: _HeaderCell('Business')),
+                Expanded(flex: 3, child: _HeaderCell('Period')),
+                Expanded(flex: 3, child: _HeaderCell('Status')),
+                Expanded(flex: 2, child: _HeaderCell('Warnings')),
+                Expanded(flex: 3, child: _HeaderCell('Last Notice')),
+                Expanded(flex: 5, child: _HeaderCell('Notes')),
+                Expanded(flex: 1, child: _HeaderCell('History')),
+              ],
+            ),
+          );
+        }
+      },
     );
   }
 }
@@ -501,7 +674,7 @@ class _HeaderCell extends StatelessWidget {
   }
 }
 
-// ─── Compliance Row ───────────────────────────────────────────────────────────
+// ─── Compliance Row (Responsive) ──────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
   const _ComplianceRow({required this.record});
@@ -510,74 +683,192 @@ class _ComplianceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 4,
-            child: Text(
-              record.business,
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              record.period,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: _StatusBadge(status: record.status),
-          ),
-          Expanded(
-            flex: 2,
-            child: record.warnings != null
-                ? _WarningBadge(count: record.warnings!)
-                : const Text(
-                    '—',
-                    style: TextStyle(color: AppColors.textSubtle, fontSize: 13),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 850) {
+          // Mobile: Compact card-like row
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 5,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.business,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        record.period,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              record.lastNotice ?? '—',
-              style: TextStyle(
-                color: record.lastNotice != null
-                    ? AppColors.textGray
-                    : AppColors.textSubtle,
-                fontSize: 13,
-              ),
+                ),
+                Expanded(flex: 3, child: _StatusBadge(status: record.status)),
+                GestureDetector(
+                  onTap: () {},
+                  child: const Icon(
+                    Icons.visibility_outlined,
+                    color: AppColors.textGray,
+                    size: 20,
+                  ),
+                ),
+              ],
             ),
-          ),
-          Expanded(
-            flex: 5,
-            child: Text(
-              record.notes,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
-              overflow: TextOverflow.ellipsis,
+          );
+        } else if (constraints.maxWidth < 1000) {
+          // Small tablet: Show most columns
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    record.business,
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    record.period,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Expanded(flex: 2, child: _StatusBadge(status: record.status)),
+                Expanded(
+                  flex: 2,
+                  child: record.warnings != null
+                      ? _WarningBadge(count: record.warnings!)
+                      : const Text(
+                          '—',
+                          style: TextStyle(
+                            color: AppColors.textSubtle,
+                            fontSize: 13,
+                          ),
+                        ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    record.notes,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 11,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {},
+                  child: const Icon(
+                    Icons.visibility_outlined,
+                    color: AppColors.textGray,
+                    size: 18,
+                  ),
+                ),
+              ],
             ),
-          ),
-          Expanded(
-            flex: 1,
-            child: GestureDetector(
-              onTap: () {},
-              child: const Icon(
-                Icons.visibility_outlined,
-                color: AppColors.textGray,
-                size: 18,
-              ),
+          );
+        } else {
+          // Desktop: Full row
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    record.business,
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    record.period,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Expanded(flex: 3, child: _StatusBadge(status: record.status)),
+                Expanded(
+                  flex: 2,
+                  child: record.warnings != null
+                      ? _WarningBadge(count: record.warnings!)
+                      : const Text(
+                          '—',
+                          style: TextStyle(
+                            color: AppColors.textSubtle,
+                            fontSize: 13,
+                          ),
+                        ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    record.lastNotice ?? '—',
+                    style: TextStyle(
+                      color: record.lastNotice != null
+                          ? AppColors.textGray
+                          : AppColors.textSubtle,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    record.notes,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12.5,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: GestureDetector(
+                    onTap: () {},
+                    child: const Icon(
+                      Icons.visibility_outlined,
+                      color: AppColors.textGray,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
+          );
+        }
+      },
     );
   }
 }
@@ -658,7 +949,7 @@ class _WarningBadge extends StatelessWidget {
 // ─── Color Extensions ─────────────────────────────────────────────────────────
 
 extension _ExtraColors on AppColors {
-  static const accentGreen  = Color(0xFF00C48C);
+  static const accentGreen = Color(0xFF00C48C);
   static const accentOrange = Color(0xFFFFB020);
-  static const accentRed    = Color(0xFFFF4D6A);
+  static const accentRed = Color(0xFFFF4D6A);
 }

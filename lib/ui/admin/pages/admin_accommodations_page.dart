@@ -137,28 +137,37 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       title: 'Accommodations',
       selectedIndex: 1,
       onNavSelected: (_) {},
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PageHeader(),
-            const SizedBox(height: 20),
-            _FilterTabBar(
-              selectedTab: _selectedTab,
-              tabs: _filterTabs,
-              countForStatus: _countForStatus,
-              onTabSelected: (i) => setState(() => _selectedTab = i),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          return Padding(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _PageHeader(),
+                const SizedBox(height: 20),
+                _FilterTabBar(
+                  selectedTab: _selectedTab,
+                  tabs: _filterTabs,
+                  countForStatus: _countForStatus,
+                  onTabSelected: (i) => setState(() => _selectedTab = i),
+                ),
+                const SizedBox(height: 14),
+                _SearchBar(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: isNarrow
+                      ? _AccommodationCardList(rows: _filtered)
+                      : _AccommodationTable(rows: _filtered),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            _SearchBar(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _searchQuery = v),
-            ),
-            const SizedBox(height: 14),
-            Expanded(child: _AccommodationTable(rows: _filtered)),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -207,21 +216,24 @@ class _FilterTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(tabs.length, (i) {
-        final tab = tabs[i];
-        final count = countForStatus(tab.status);
-        final isActive = selectedTab == i;
-        return Padding(
-          padding: const EdgeInsets.only(right: 6),
-          child: _FilterChip(
-            label: tab.label,
-            count: count,
-            isActive: isActive,
-            onTap: () => onTabSelected(i),
-          ),
-        );
-      }),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: List.generate(tabs.length, (i) {
+          final tab = tabs[i];
+          final count = countForStatus(tab.status);
+          final isActive = selectedTab == i;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: _FilterChip(
+              label: tab.label,
+              count: count,
+              isActive: isActive,
+              onTap: () => onTabSelected(i),
+            ),
+          );
+        }),
+      ),
     );
   }
 }
@@ -330,7 +342,7 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-// ─── Accommodation Table ──────────────────────────────────────────────────────
+// ─── Accommodation Table (wide screens) ──────────────────────────────────────
 
 class _AccommodationTable extends StatelessWidget {
   const _AccommodationTable({required this.rows});
@@ -497,6 +509,133 @@ class _TableRow extends StatelessWidget {
           Expanded(flex: 2, child: _ActionButtons(status: item.status)),
         ],
       ),
+    );
+  }
+}
+
+// ─── Accommodation Card List (narrow screens) ─────────────────────────────────
+
+class _AccommodationCardList extends StatelessWidget {
+  const _AccommodationCardList({required this.rows});
+
+  final List<Accommodation> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'No accommodations found.',
+          style: TextStyle(color: AppColors.textGray),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: rows.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (_, i) => _AccommodationCard(item: rows[i]),
+    );
+  }
+}
+
+class _AccommodationCard extends StatelessWidget {
+  const _AccommodationCard({required this.item});
+
+  final Accommodation item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top row: icon + name + status
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryCyan.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.2),
+                  ),
+                ),
+                child: const Icon(
+                  Icons.apartment_rounded,
+                  color: AppColors.primaryCyan,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.name,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _StatusBadge(status: item.status),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Details grid
+          _CardDetail(label: 'Type', value: item.type),
+          const SizedBox(height: 6),
+          _CardDetail(label: 'Owner', value: item.owner),
+          const SizedBox(height: 6),
+          _CardDetail(label: 'Contact', value: item.contact),
+          const SizedBox(height: 6),
+          _CardDetail(label: 'Rooms', value: '${item.rooms}'),
+          const SizedBox(height: 12),
+          // Actions
+          _ActionButtons(status: item.status),
+        ],
+      ),
+    );
+  }
+}
+
+class _CardDetail extends StatelessWidget {
+  const _CardDetail({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 70,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSubtle,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -70,44 +70,128 @@ class _StatCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            icon: Icons.people_alt_rounded,
-            iconColor: AppColors.primaryCyan,
-            value: '0',
-            label: 'Guests This Month',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.trending_up_rounded,
-            iconColor: AppColors.primaryBlue,
-            value: '51',
-            label: 'Guests This Year',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.schedule_rounded,
-            iconColor: AppColors.accentGreen,
-            value: '2.0 nights',
-            label: 'Avg. Length of Stay',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.bed_rounded,
-            iconColor: AppColors.accentOrange,
-            value: '45',
-            label: 'Total Rooms',
-          ),
-        ),
-      ],
+    // Use LayoutBuilder to make stat cards responsive
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // For small screens, show 2 cards per row
+        if (constraints.maxWidth < 600) {
+          return Column(
+            children: [
+              Row(
+                children: const [
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.people_alt_rounded,
+                      iconColor: AppColors.primaryCyan,
+                      value: '0',
+                      label: 'Guests This Month',
+                    ),
+                  ),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.trending_up_rounded,
+                      iconColor: AppColors.primaryBlue,
+                      value: '51',
+                      label: 'Guests This Year',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: const [
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.schedule_rounded,
+                      iconColor: AppColors.accentGreen,
+                      value: '2.0 nights',
+                      label: 'Avg. Length of Stay',
+                    ),
+                  ),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: _StatCard(
+                      icon: Icons.bed_rounded,
+                      iconColor: AppColors.accentOrange,
+                      value: '45',
+                      label: 'Total Rooms',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        } else {
+          return Row(
+            children: const [
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.people_alt_rounded,
+                  iconColor: AppColors.primaryCyan,
+                  value: '0',
+                  label: 'Guests This Month',
+                ),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.trending_up_rounded,
+                  iconColor: AppColors.primaryBlue,
+                  value: '51',
+                  label: 'Guests This Year',
+                ),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.schedule_rounded,
+                  iconColor: AppColors.accentGreen,
+                  value: '2.0 nights',
+                  label: 'Avg. Length of Stay',
+                ),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: _StatCard(
+                  icon: Icons.bed_rounded,
+                  iconColor: AppColors.accentOrange,
+                  value: '45',
+                  label: 'Total Rooms',
+                ),
+              ),
+            ],
+          );
+        }
+      },
+    );
+  }
+}
+
+// Responsive wrapper for stat cards in wrap layout
+class _ResponsiveStatCard extends StatelessWidget {
+  const _ResponsiveStatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 62) / 2, // Two cards per row with spacing
+      child: _StatCard(
+        icon: icon,
+        iconColor: iconColor,
+        value: value,
+        label: label,
+      ),
     );
   }
 }
@@ -159,114 +243,173 @@ class _DonutChartsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Gender Distribution'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.60, color: AppColors.chartCyan),
-                      _Segment(value: 0.30, color: AppColors.chartPurple),
-                      _Segment(value: 0.10, color: AppColors.chartOrange),
-                    ],
-                    size: 140,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const _Legend(
-                  items: [
-                    _LegendItem(label: 'Male', color: AppColors.chartCyan),
-                    _LegendItem(label: 'Female', color: AppColors.chartPurple),
-                  ],
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // For medium screens, show 2 charts per row
+        if (constraints.maxWidth < 900) {
+          return Column(
+            children: [
+              Row(
+                children: const [
+                  Expanded(child: _DonutChartCard1()),
+                  SizedBox(width: 14),
+                  Expanded(child: _DonutChartCard2()),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const _DonutChartCard3(),
+            ],
+          );
+        }
+        // For small screens, stack all charts vertically
+        else if (constraints.maxWidth < 600) {
+          return Column(
+            children: const [
+              _DonutChartCard1(),
+              SizedBox(height: 14),
+              _DonutChartCard2(),
+              SizedBox(height: 14),
+              _DonutChartCard3(),
+            ],
+          );
+        } 
+        // Default: 3 charts in a row
+        else {
+          return Row(
+            children: const [
+              Expanded(child: _DonutChartCard1()),
+              SizedBox(width: 14),
+              Expanded(child: _DonutChartCard2()),
+              SizedBox(width: 14),
+              Expanded(child: _DonutChartCard3()),
+            ],
+          );
+        }
+      },
+    );
+  }
+}
+
+class _DonutChartCard1 extends StatelessWidget {
+  const _DonutChartCard1();
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 600;
+    final chartSize = isSmallScreen ? 120.0 : 140.0;
+    
+    return _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CardTitle(title: 'Gender Distribution'),
+          const SizedBox(height: 16),
+          Center(
+            child: _DonutChart(
+              segments: const [
+                _Segment(value: 0.60, color: AppColors.chartCyan),
+                _Segment(value: 0.30, color: AppColors.chartPurple),
+                _Segment(value: 0.10, color: AppColors.chartOrange),
               ],
+              size: chartSize,
             ),
           ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Top 5 Nationalities'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.38, color: AppColors.chartGreen),
-                      _Segment(value: 0.20, color: AppColors.chartBlue),
-                      _Segment(value: 0.18, color: AppColors.chartOrange),
-                      _Segment(value: 0.14, color: AppColors.chartPurple),
-                      _Segment(value: 0.10, color: AppColors.chartGray),
-                    ],
-                    size: 140,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const _Legend(
-                  items: [
-                    _LegendItem(
-                      label: 'Philippines',
-                      color: AppColors.chartGreen,
-                    ),
-                    _LegendItem(label: 'USA', color: AppColors.chartBlue),
-                    _LegendItem(label: 'Japan', color: AppColors.chartOrange),
-                    _LegendItem(label: 'Korea', color: AppColors.chartPurple),
-                    _LegendItem(label: 'Others', color: AppColors.chartGray),
-                  ],
-                ),
+          const SizedBox(height: 14),
+          const _Legend(
+            items: [
+              _LegendItem(label: 'Male', color: AppColors.chartCyan),
+              _LegendItem(label: 'Female', color: AppColors.chartPurple),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutChartCard2 extends StatelessWidget {
+  const _DonutChartCard2();
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 600;
+    final chartSize = isSmallScreen ? 120.0 : 140.0;
+    
+    return _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CardTitle(title: 'Top 5 Nationalities'),
+          const SizedBox(height: 16),
+          Center(
+            child: _DonutChart(
+              segments: const [
+                _Segment(value: 0.38, color: AppColors.chartGreen),
+                _Segment(value: 0.20, color: AppColors.chartBlue),
+                _Segment(value: 0.18, color: AppColors.chartOrange),
+                _Segment(value: 0.14, color: AppColors.chartPurple),
+                _Segment(value: 0.10, color: AppColors.chartGray),
               ],
+              size: chartSize,
             ),
           ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Mode of Transportation'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.44, color: AppColors.chartCyan),
-                      _Segment(value: 0.20, color: AppColors.chartGreen),
-                      _Segment(value: 0.16, color: AppColors.chartOrange),
-                      _Segment(value: 0.12, color: AppColors.chartPurple),
-                      _Segment(value: 0.08, color: AppColors.chartGray),
-                    ],
-                    size: 140,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                const _Legend(
-                  items: [
-                    _LegendItem(
-                      label: 'Private Car',
-                      color: AppColors.chartCyan,
-                    ),
-                    _LegendItem(label: 'Bus', color: AppColors.chartGreen),
-                    _LegendItem(label: 'Van', color: AppColors.chartOrange),
-                    _LegendItem(
-                      label: 'Motorcycle',
-                      color: AppColors.chartPurple,
-                    ),
-                    _LegendItem(label: 'Other', color: AppColors.chartGray),
-                  ],
-                ),
+          const SizedBox(height: 14),
+          const _Legend(
+            items: [
+              _LegendItem(label: 'Philippines', color: AppColors.chartGreen),
+              _LegendItem(label: 'USA', color: AppColors.chartBlue),
+              _LegendItem(label: 'Japan', color: AppColors.chartOrange),
+              _LegendItem(label: 'Korea', color: AppColors.chartPurple),
+              _LegendItem(label: 'Others', color: AppColors.chartGray),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DonutChartCard3 extends StatelessWidget {
+  const _DonutChartCard3();
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 600;
+    final chartSize = isSmallScreen ? 120.0 : 140.0;
+    
+    return _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CardTitle(title: 'Mode of Transportation'),
+          const SizedBox(height: 16),
+          Center(
+            child: _DonutChart(
+              segments: const [
+                _Segment(value: 0.44, color: AppColors.chartCyan),
+                _Segment(value: 0.20, color: AppColors.chartGreen),
+                _Segment(value: 0.16, color: AppColors.chartOrange),
+                _Segment(value: 0.12, color: AppColors.chartPurple),
+                _Segment(value: 0.08, color: AppColors.chartGray),
               ],
+              size: chartSize,
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          const _Legend(
+            items: [
+              _LegendItem(label: 'Private Car', color: AppColors.chartCyan),
+              _LegendItem(label: 'Bus', color: AppColors.chartGreen),
+              _LegendItem(label: 'Van', color: AppColors.chartOrange),
+              _LegendItem(label: 'Motorcycle', color: AppColors.chartPurple),
+              _LegendItem(label: 'Other', color: AppColors.chartGray),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -278,13 +421,16 @@ class _TouristTrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final chartHeight = mediaQuery.size.width < 500 ? 150.0 : 200.0;
+    
     return _DashCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _CardTitle(title: 'Tourist Trend (2024)'),
           const SizedBox(height: 16),
-          SizedBox(height: 200, child: _BarChart()),
+          SizedBox(height: chartHeight, child: _BarChart()),
         ],
       ),
     );
@@ -336,10 +482,13 @@ class _RegionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final labelWidth = mediaQuery.size.width < 400 ? 60.0 : 70.0;
+    
     return Row(
       children: [
         SizedBox(
-          width: 70,
+          width: labelWidth,
           child: Text(
             data.name,
             style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
@@ -411,7 +560,7 @@ class _DonutPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
-    const strokeWidth = 24.0;
+    final strokeWidth = size.width * 0.17; // Responsive stroke width (was 24)
     final rect = Rect.fromCircle(
       center: center,
       radius: radius - strokeWidth / 2,
@@ -462,31 +611,50 @@ class _BarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _BarPainter(months: _months, values: _values),
-      size: Size.infinite,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CustomPaint(
+          painter: _BarPainter(
+            months: _months, 
+            values: _values,
+            availableWidth: constraints.maxWidth,
+          ),
+          size: Size.infinite,
+        );
+      },
     );
   }
 }
 
 class _BarPainter extends CustomPainter {
-  const _BarPainter({required this.months, required this.values});
+  const _BarPainter({
+    required this.months, 
+    required this.values,
+    required this.availableWidth,
+  });
   final List<String> months;
   final List<double> values;
+  final double availableWidth;
 
   @override
   void paint(Canvas canvas, Size size) {
     const maxVal = 40.0;
     const yLabels = [0.0, 10.0, 20.0, 30.0, 40.0];
-    const leftPad = 36.0;
-    const bottomPad = 24.0;
+    
+    // Responsive padding based on available width
+    final leftPad = availableWidth < 400 ? 28.0 : 36.0;
+    final bottomPad = availableWidth < 400 ? 20.0 : 24.0;
+    
     final chartH = size.height - bottomPad;
     final chartW = size.width - leftPad;
 
     final gridPaint = Paint()
       ..color = AppColors.cardBorder
       ..strokeWidth = 0.5;
-    const textStyle = TextStyle(color: AppColors.textSubtle, fontSize: 10);
+    final textStyle = TextStyle(
+      color: AppColors.textSubtle, 
+      fontSize: availableWidth < 400 ? 8 : 10,
+    );
 
     // Y grid + labels
     for (final yv in yLabels) {
@@ -501,8 +669,8 @@ class _BarPainter extends CustomPainter {
       );
     }
 
-    // Bars
-    final barW = chartW / months.length * 0.45;
+    // Responsive bar width
+    final barW = (chartW / months.length) * (availableWidth < 500 ? 0.65 : 0.45);
     final gap = chartW / months.length;
 
     for (int i = 0; i < months.length; i++) {
@@ -529,10 +697,12 @@ class _BarPainter extends CustomPainter {
         );
       }
 
+      // Responsive month label positioning
+      final labelX = x - (availableWidth < 400 ? 2 : 4);
       _drawText(
         canvas,
         months[i],
-        Offset(x - 4, size.height - 14),
+        Offset(labelX, size.height - (availableWidth < 400 ? 12 : 14)),
         textStyle,
         size.width,
       );
@@ -565,8 +735,12 @@ class _DashCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 500;
+    final padding = isSmallScreen ? const EdgeInsets.all(14) : const EdgeInsets.all(18);
+    
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: padding,
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
@@ -583,11 +757,14 @@ class _CardTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final fontSize = mediaQuery.size.width < 500 ? 12.0 : 14.0;
+    
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         color: AppColors.textWhite,
-        fontSize: 14,
+        fontSize: fontSize,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -608,8 +785,13 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 500;
+    final spacing = isSmallScreen ? 8.0 : 12.0;
+    final fontSize = isSmallScreen ? 10.0 : 11.0;
+    
     return Wrap(
-      spacing: 12,
+      spacing: spacing,
       runSpacing: 6,
       children: items
           .map(
@@ -627,9 +809,9 @@ class _Legend extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   item.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textGray,
-                    fontSize: 11,
+                    fontSize: fontSize,
                   ),
                 ),
               ],

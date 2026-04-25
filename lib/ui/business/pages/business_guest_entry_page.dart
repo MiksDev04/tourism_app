@@ -153,7 +153,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PageHeader(),
+            const _PageHeader(),
             const SizedBox(height: 20),
             _StayInfoCard(
               checkIn: _checkIn,
@@ -193,6 +193,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
+  const _PageHeader();
+
   @override
   Widget build(BuildContext context) {
     return const Column(
@@ -254,6 +256,10 @@ class _StayInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Determine if we're on mobile (width < 700)
+    final isMobile = screenWidth < 700;
+
     return _SectionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,67 +274,143 @@ class _StayInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
 
-          // Check-in / Check-out / Nights
-          Row(
-            children: [
-              Expanded(
-                child: _LabeledField(
-                  label: 'Check-in Date *',
-                  child: _DatePickerField(
-                    value: _formatDate(checkIn),
-                    onTap: onPickCheckIn,
+          // Row 1: Check-in / Check-out / Nights
+          if (!isMobile)
+            Row(
+              children: [
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Check-in Date *',
+                    child: _DatePickerField(
+                      value: _formatDate(checkIn),
+                      onTap: onPickCheckIn,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _LabeledField(
-                  label: 'Check-out Date *',
-                  child: _DatePickerField(
-                    value: _formatDate(checkOut),
-                    onTap: onPickCheckOut,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Check-out Date *',
+                    child: _DatePickerField(
+                      value: _formatDate(checkOut),
+                      onTap: onPickCheckOut,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _LabeledField(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Length of Stay',
+                    child: _ReadOnlyField(value: '$nights nights'),
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Check-in Date *',
+                        child: _DatePickerField(
+                          value: _formatDate(checkIn),
+                          onTap: onPickCheckIn,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Check-out Date *',
+                        child: _DatePickerField(
+                          value: _formatDate(checkOut),
+                          onTap: onPickCheckOut,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _LabeledField(
                   label: 'Length of Stay',
                   child: _ReadOnlyField(value: '$nights nights'),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 14),
 
-          // Total Guests / Rooms Occupied / Purpose
-          Row(
-            children: [
-              Expanded(
-                child: _LabeledField(
-                  label: 'Total Guests *',
-                  child: _InputField(
-                    controller: totalGuestsCtrl,
-                    hint: 'e.g. 10',
-                    keyboardType: TextInputType.number,
-                    onChanged: onGuestsChanged,
+          // Row 2: Total Guests / Rooms Occupied / Purpose
+          if (!isMobile)
+            Row(
+              children: [
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Total Guests *',
+                    child: _InputField(
+                      controller: totalGuestsCtrl,
+                      hint: 'e.g. 10',
+                      keyboardType: TextInputType.number,
+                      onChanged: onGuestsChanged,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _LabeledField(
-                  label: 'Rooms Occupied *',
-                  child: _InputField(
-                    controller: roomsOccupiedCtrl,
-                    hint: 'e.g. 3',
-                    keyboardType: TextInputType.number,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Rooms Occupied *',
+                    child: _InputField(
+                      controller: roomsOccupiedCtrl,
+                      hint: 'e.g. 3',
+                      keyboardType: TextInputType.number,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: _LabeledField(
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Purpose of Visit *',
+                    child: _DropdownField(
+                      value: purpose,
+                      items: _purposeOptions,
+                      onChanged: onPurposeChanged,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Total Guests *',
+                        child: _InputField(
+                          controller: totalGuestsCtrl,
+                          hint: 'e.g. 10',
+                          keyboardType: TextInputType.number,
+                          onChanged: onGuestsChanged,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: _LabeledField(
+                        label: 'Rooms Occupied *',
+                        child: _InputField(
+                          controller: roomsOccupiedCtrl,
+                          hint: 'e.g. 3',
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _LabeledField(
                   label: 'Purpose of Visit *',
                   child: _DropdownField(
                     value: purpose,
@@ -336,15 +418,25 @@ class _StayInfoCard extends StatelessWidget {
                     onChanged: onPurposeChanged,
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 14),
 
-          // Mode of Transportation
-          SizedBox(
-            width: 480,
-            child: _LabeledField(
+          // Mode of Transportation - full width on mobile
+          if (!isMobile)
+            SizedBox(
+              width: 480,
+              child: _LabeledField(
+                label: 'Mode of Transportation *',
+                child: _DropdownField(
+                  value: transport,
+                  items: _transportOptions,
+                  onChanged: onTransportChanged,
+                ),
+              ),
+            )
+          else
+            _LabeledField(
               label: 'Mode of Transportation *',
               child: _DropdownField(
                 value: transport,
@@ -352,7 +444,6 @@ class _StayInfoCard extends StatelessWidget {
                 onChanged: onTransportChanged,
               ),
             ),
-          ),
         ],
       ),
     );
@@ -380,6 +471,8 @@ class _DemographicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 700;
     final totalLabel = total > 0 ? '$total' : '?';
 
     return _SectionCard(
@@ -387,100 +480,240 @@ class _DemographicCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Guest Demographic Breakdown',
-                    style: TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
+          if (!isMobile)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Guest Demographic Breakdown',
+                      style: TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    'Breakdown must sum to $totalLabel total guests',
-                    style: const TextStyle(
-                      color: AppColors.primaryCyan,
-                      fontSize: 12,
+                    const SizedBox(height: 3),
+                    Text(
+                      'Breakdown must sum to $totalLabel total guests',
+                      style: const TextStyle(
+                        color: AppColors.primaryCyan,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              // Counter
-              Text(
-                '$currentSum / $totalLabel',
-                style: const TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 13,
+                  ],
                 ),
-              ),
-              const SizedBox(width: 12),
-              // Add Row button
-              GestureDetector(
-                onTap: onAddRow,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryCyan.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(7),
-                    border: Border.all(color: AppColors.primaryCyan.withOpacity(0.4)),
+                const Spacer(),
+                Text(
+                  '$currentSum / $totalLabel',
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 13,
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.add, color: AppColors.primaryCyan, size: 14),
-                      SizedBox(width: 4),
-                      Text(
-                        'Add Row',
-                        style: TextStyle(
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: onAddRow,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: AppColors.primaryCyan.withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.add, color: AppColors.primaryCyan, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Add Row',
+                          style: TextStyle(
+                            color: AppColors.primaryCyan,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Guest Demographic Breakdown',
+                  style: TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Breakdown must sum to $totalLabel total guests',
+                        style: const TextStyle(
                           color: AppColors.primaryCyan,
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
                         ),
                       ),
-                    ],
+                    ),
+                    Text(
+                      '$currentSum / $totalLabel',
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: onAddRow,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(7),
+                      border: Border.all(color: AppColors.primaryCyan.withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.add, color: AppColors.primaryCyan, size: 14),
+                        SizedBox(width: 4),
+                        Text(
+                          'Add Row',
+                          style: TextStyle(
+                            color: AppColors.primaryCyan,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
           const SizedBox(height: 16),
 
           // Column headers
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: Row(
-              children: [
-                Expanded(flex: 3, child: _ColHeader('Nationality')),
-                SizedBox(width: 10),
-                Expanded(flex: 3, child: _ColHeader('Region (if PH)')),
-                SizedBox(width: 10),
-                Expanded(flex: 2, child: _ColHeader('Gender')),
-                SizedBox(width: 10),
-                Expanded(flex: 2, child: _ColHeader('Age Group')),
-                SizedBox(width: 10),
-                Expanded(flex: 1, child: _ColHeader('Count')),
-                SizedBox(width: 30), // space for delete icon
-              ],
+          if (!isMobile)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Expanded(flex: 3, child: _ColHeader('Nationality')),
+                  SizedBox(width: 10),
+                  Expanded(flex: 3, child: _ColHeader('Region (if PH)')),
+                  SizedBox(width: 10),
+                  Expanded(flex: 2, child: _ColHeader('Gender')),
+                  SizedBox(width: 10),
+                  Expanded(flex: 2, child: _ColHeader('Age Group')),
+                  SizedBox(width: 10),
+                  Expanded(flex: 1, child: _ColHeader('Count')),
+                  SizedBox(width: 30),
+                ],
+              ),
             ),
-          ),
 
-          // Rows
+          // Rows - mobile: gender, age, count in one row
           ...List.generate(rows.length, (i) {
             final row = rows[i];
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _DemographicRowWidget(
-                row: row,
-                showDelete: rows.length > 1,
-                onDelete: () => onRemoveRow(i),
-                onChanged: onRowChanged,
-              ),
+              child: isMobile
+                  ? Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DropdownField(
+                                value: row.nationality,
+                                items: _nationalityOptions,
+                                onChanged: (v) {
+                                  row.nationality = v!;
+                                  onRowChanged();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DropdownField(
+                                value: row.region,
+                                items: _regionOptions,
+                                onChanged: (v) {
+                                  row.region = v!;
+                                  onRowChanged();
+                                },
+                              ),
+                            ),
+                            SizedBox(
+                              width: 24,
+                              child: rows.length > 1
+                                  ? GestureDetector(
+                                      onTap: () => onRemoveRow(i),
+                                      child: const Icon(
+                                        Icons.close_rounded,
+                                        color: AppColors.textSubtle,
+                                        size: 16,
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _DropdownField(
+                                value: row.gender,
+                                items: _genderOptions,
+                                onChanged: (v) {
+                                  row.gender = v!;
+                                  onRowChanged();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _DropdownField(
+                                value: row.ageGroup,
+                                items: _ageGroupOptions,
+                                onChanged: (v) {
+                                  row.ageGroup = v!;
+                                  onRowChanged();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _InputField(
+                                controller: row.countCtrl,
+                                hint: '0',
+                                keyboardType: TextInputType.number,
+                                onChanged: (_) => onRowChanged(),
+                              ),
+                            ),
+                            const SizedBox(width: 24),
+                          ],
+                        ),
+                      ],
+                    )
+                  : _DemographicRowWidget(
+                      row: row,
+                      showDelete: rows.length > 1,
+                      onDelete: () => onRemoveRow(i),
+                      onChanged: onRowChanged,
+                    ),
             );
           }),
 
@@ -613,31 +846,96 @@ class _FormActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Clear Form
-        SizedBox(
-          height: 46,
-          child: OutlinedButton(
-            onPressed: onClear,
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.cardBorder),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(9),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 700;
+
+    if (!isMobile) {
+      return Row(
+        children: [
+          SizedBox(
+            height: 46,
+            child: OutlinedButton(
+              onPressed: onClear,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.cardBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-            ),
-            child: const Text(
-              'Clear Form',
-              style: TextStyle(color: AppColors.textGray, fontSize: 13.5),
+              child: const Text(
+                'Clear Form',
+                style: TextStyle(color: AppColors.textGray, fontSize: 13.5),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 14),
-
-        // Save Guest Entry
-        Expanded(
-          child: SizedBox(
+          const SizedBox(width: 14),
+          Expanded(
+            child: SizedBox(
+              height: 46,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                  ),
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ElevatedButton.icon(
+                  onPressed: onSave,
+                  icon: const Icon(Icons.person_add_rounded,
+                      size: 17, color: Colors.white),
+                  label: const Text(
+                    'Save Guest Entry',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      return Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: OutlinedButton(
+              onPressed: onClear,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.cardBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+              ),
+              child: const Text(
+                'Clear Form',
+                style: TextStyle(color: AppColors.textGray, fontSize: 13.5),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
             height: 46,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -675,9 +973,9 @@ class _FormActions extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ],
-    );
+        ],
+      );
+    }
   }
 }
 

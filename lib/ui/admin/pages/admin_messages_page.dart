@@ -110,7 +110,7 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _PageHeader(),
+            const _PageHeader(),
             const SizedBox(height: 16),
             _FilterRow(
               searchCtrl: _searchCtrl,
@@ -134,37 +134,51 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
+  const _PageHeader();
+
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 600;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              'Messages & Announcements',
-              style: TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Messages & Announcements',
+                    style: TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: isSmall ? 18 : 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Send notices to accommodation establishments',
+                    style: TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: isSmall ? 11 : 13,
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: 4),
-            Text(
-              'Send notices to accommodation establishments',
-              style: TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
+            const SizedBox(width: 16),
+            const _ComposeButton(),
           ],
-        ),
-        const Spacer(),
-        _ComposeButton(),
-      ],
+        );
+      },
     );
   }
 }
 
 class _ComposeButton extends StatelessWidget {
+  const _ComposeButton();
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -228,41 +242,90 @@ class _FilterRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        // Search
-        SizedBox(
-          width: 220,
-          child: _SearchField(controller: searchCtrl, onChanged: onSearchChanged),
-        ),
-        const SizedBox(width: 10),
-        // Type dropdown
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedType,
-            items: _typeOptions,
-            onChanged: onTypeChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        // Month dropdown
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedMonth,
-            items: _monthOptions,
-            onChanged: onMonthChanged,
-          ),
-        ),
-        const SizedBox(width: 10),
-        // Business dropdown
-        Expanded(
-          child: _DropdownFilter(
-            value: selectedBusiness,
-            items: _businessOptions,
-            onChanged: onBusinessChanged,
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 800;
+        return isSmall
+            ? Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _SearchField(
+                          controller: searchCtrl,
+                          onChanged: onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: _DropdownFilter(
+                          value: selectedType,
+                          items: _typeOptions,
+                          onChanged: onTypeChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DropdownFilter(
+                          value: selectedMonth,
+                          items: _monthOptions,
+                          onChanged: onMonthChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DropdownFilter(
+                          value: selectedBusiness,
+                          items: _businessOptions,
+                          onChanged: onBusinessChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: _SearchField(
+                      controller: searchCtrl,
+                      onChanged: onSearchChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedType,
+                      items: _typeOptions,
+                      onChanged: onTypeChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedMonth,
+                      items: _monthOptions,
+                      onChanged: onMonthChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusiness,
+                      items: _businessOptions,
+                      onChanged: onBusinessChanged,
+                    ),
+                  ),
+                ],
+              );
+      },
     );
   }
 }
@@ -352,7 +415,7 @@ class _MessagesTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _TableHeader(),
+          const _TableHeader(),
           const Divider(color: AppColors.cardBorder, height: 1),
           Expanded(
             child: rows.isEmpty
@@ -378,19 +441,34 @@ class _MessagesTable extends StatelessWidget {
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
+  const _TableHeader();
+
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          Expanded(flex: 3, child: _HeaderCell('Type')),
-          Expanded(flex: 6, child: _HeaderCell('Subject')),
-          Expanded(flex: 4, child: _HeaderCell('Recipient')),
-          Expanded(flex: 3, child: _HeaderCell('Date')),
-          Expanded(flex: 1, child: _HeaderCell('Action')),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // final isSmall = constraints.maxWidth < 700;
+        final isMedium = constraints.maxWidth < 900;
+        
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            children: isMedium
+                ? [
+                    const Expanded(flex: 5, child: _HeaderCell('Type / Subject')),
+                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
+                    const Expanded(flex: 2, child: _HeaderCell('Date')),
+                  ]
+                :  [
+                        const Expanded(flex: 3, child: _HeaderCell('Type')),
+                        const Expanded(flex: 6, child: _HeaderCell('Subject')),
+                        const Expanded(flex: 4, child: _HeaderCell('Recipient')),
+                        const Expanded(flex: 3, child: _HeaderCell('Date')),
+                        const Expanded(flex: 1, child: _HeaderCell('Action')),
+                      ],
+          ),
+        );
+      },
     );
   }
 }
@@ -421,50 +499,101 @@ class _MessageRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        spacing: 5,
-        children: [
-          Expanded(flex: 3, child: _TypeBadge(type: message.type)),
-          Expanded(
-            flex: 6,
-            child: Text(
-              message.subject,
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 4,
-            child: Text(
-              message.recipient,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              message.date,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: GestureDetector(
-              onTap: () {},
-              child: const Icon(
-                Icons.visibility_outlined,
-                color: AppColors.textGray,
-                size: 18,
-              ),
-            ),
-          ),
-        ],
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMedium = constraints.maxWidth < 900;
+        
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: isMedium
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TypeBadge(type: message.type),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            message.subject,
+                            style: const TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () {},
+                          child: const Icon(
+                            Icons.visibility_outlined,
+                            color: AppColors.textGray,
+                            size: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          message.recipient,
+                          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                        ),
+                        const Spacer(),
+                        Text(
+                          message.date,
+                          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  spacing: 5,
+                  children: [
+                    Expanded(
+                      flex:  3,
+                      child: _TypeBadge(type: message.type),
+                    ),
+                    Expanded(
+                      flex:  6,
+                      child: Text(
+                        message.subject,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        message.recipient,
+                        style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        message.date,
+                        style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                      ),
+                    ),
+                    const Expanded(
+                      flex: 1,
+                      child: Icon(
+                        Icons.visibility_outlined,
+                        color: AppColors.textGray,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
     );
   }
 }

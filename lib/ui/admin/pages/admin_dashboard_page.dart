@@ -21,25 +21,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       title: 'Dashboard',
       selectedIndex: 0,
       onNavSelected: (_) {},
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _DashboardHeader(
-              isMonthly: _isMonthly,
-              onToggle: (v) => setState(() => _isMonthly = v),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 600;
+          final isMedium = constraints.maxWidth < 900;
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _DashboardHeader(
+                  isMonthly: _isMonthly,
+                  onToggle: (v) => setState(() => _isMonthly = v),
+                  isNarrow: isNarrow,
+                ),
+                const SizedBox(height: 20),
+                _StatCards(isNarrow: isNarrow, isMedium: isMedium),
+                const SizedBox(height: 20),
+                _DonutChartsRow(isNarrow: isNarrow, isMedium: isMedium),
+                const SizedBox(height: 20),
+                _BottomChartsRow(isNarrow: isNarrow),
+                const SizedBox(height: 20),
+                _TopRegionsCard(),
+              ],
             ),
-            const SizedBox(height: 20),
-            _StatCards(),
-            const SizedBox(height: 20),
-            _DonutChartsRow(),
-            const SizedBox(height: 20),
-            _BottomChartsRow(),
-            const SizedBox(height: 20),
-            _TopRegionsCard(),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -48,13 +55,45 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 // ─── Dashboard Header ─────────────────────────────────────────────────────────
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.isMonthly, required this.onToggle});
+  const _DashboardHeader({
+    required this.isMonthly,
+    required this.onToggle,
+    required this.isNarrow,
+  });
 
   final bool isMonthly;
   final ValueChanged<bool> onToggle;
+  final bool isNarrow;
 
   @override
   Widget build(BuildContext context) {
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tourism Overview',
+                style: TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'San Pablo City — April 2024',
+                style: TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _TogglePill(isMonthly: isMonthly, onToggle: onToggle),
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
@@ -157,66 +196,97 @@ class _PillTab extends StatelessWidget {
 // ─── Stat Cards ───────────────────────────────────────────────────────────────
 
 class _StatCards extends StatelessWidget {
+  const _StatCards({required this.isNarrow, required this.isMedium});
+
+  final bool isNarrow;
+  final bool isMedium;
+
+  static const _cards = [
+    _StatCardData(
+      icon: Icons.assignment_rounded,
+      iconColor: AppColors.primaryCyan,
+      value: '2',
+      label: 'Active Accommodations',
+      sub: '2 pending',
+    ),
+    _StatCardData(
+      icon: Icons.people_alt_rounded,
+      iconColor: AppColors.primaryBlue,
+      value: '221',
+      label: 'Tourists (This Month)',
+    ),
+    _StatCardData(
+      icon: Icons.calendar_today_rounded,
+      iconColor: AppColors.accentOrange,
+      value: '2',
+      label: 'Pending Registrations',
+    ),
+    _StatCardData(
+      icon: Icons.trending_up_rounded,
+      iconColor: AppColors.accentGreen,
+      value: '71%',
+      label: 'Submission Compliance',
+      sub: 'of businesses',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
+    if (isNarrow) {
+      // 2×2 grid on narrow
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _StatCard(data: _cards[0])),
+              const SizedBox(width: 12),
+              Expanded(child: _StatCard(data: _cards[1])),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _StatCard(data: _cards[2])),
+              const SizedBox(width: 12),
+              Expanded(child: _StatCard(data: _cards[3])),
+            ],
+          ),
+        ],
+      );
+    }
+    // Single row on medium/wide
     return Row(
-      children: [
-        Expanded(
-          child: _StatCard(
-            icon: Icons.assignment_rounded,
-            iconColor: AppColors.primaryCyan,
-            value: '2',
-            label: 'Active Accommodations',
-            sub: '2 pending',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.people_alt_rounded,
-            iconColor: AppColors.primaryBlue,
-            value: '221',
-            label: 'Tourists (This Month)',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.calendar_today_rounded,
-            iconColor: AppColors.accentOrange,
-            value: '2',
-            label: 'Pending Registrations',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _StatCard(
-            icon: Icons.trending_up_rounded,
-            iconColor: AppColors.accentGreen,
-            value: '71%',
-            label: 'Submission Compliance',
-            sub: 'of businesses',
-          ),
-        ),
-      ],
+      children: _cards
+          .expand(
+            (d) => [
+              Expanded(child: _StatCard(data: d)),
+              if (d != _cards.last) const SizedBox(width: 14),
+            ],
+          )
+          .toList(),
     );
   }
 }
 
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+class _StatCardData {
+  const _StatCardData({
     required this.icon,
     required this.iconColor,
     required this.value,
     required this.label,
     this.sub,
   });
-
   final IconData icon;
   final Color iconColor;
   final String value;
   final String label;
   final String? sub;
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({required this.data});
+
+  final _StatCardData data;
 
   @override
   Widget build(BuildContext context) {
@@ -224,10 +294,10 @@ class _StatCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 22),
+          Icon(data.icon, color: data.iconColor, size: 22),
           const SizedBox(height: 14),
           Text(
-            value,
+            data.value,
             style: const TextStyle(
               color: AppColors.textWhite,
               fontSize: 28,
@@ -236,14 +306,15 @@ class _StatCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            label,
+            data.label,
             style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
           ),
-          if (sub != null) ...[
+          if (data.sub != null) ...[
             const SizedBox(height: 2),
             Text(
-              sub!,
-              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+              data.sub!,
+              style:
+                  const TextStyle(color: AppColors.textSubtle, fontSize: 11),
             ),
           ],
         ],
@@ -255,115 +326,137 @@ class _StatCard extends StatelessWidget {
 // ─── Donut Charts Row ─────────────────────────────────────────────────────────
 
 class _DonutChartsRow extends StatelessWidget {
+  const _DonutChartsRow({required this.isNarrow, required this.isMedium});
+
+  final bool isNarrow;
+  final bool isMedium;
+
   @override
   Widget build(BuildContext context) {
+    final cards = [
+      _DashCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _CardTitle(title: 'Gender Distribution'),
+            const SizedBox(height: 16),
+            Center(
+              child: _DonutChart(
+                segments: const [
+                  _Segment(value: 0.6, color: AppColors.chartCyan),
+                  _Segment(value: 0.3, color: AppColors.chartPurple),
+                  _Segment(value: 0.1, color: AppColors.chartOrange),
+                ],
+                size: 130,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _Legend(
+              items: const [
+                _LegendItem(label: 'Male', color: AppColors.chartCyan),
+                _LegendItem(label: 'Female', color: AppColors.chartPurple),
+              ],
+            ),
+          ],
+        ),
+      ),
+      _DashCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _CardTitle(title: 'Top 5 Nationalities'),
+            const SizedBox(height: 16),
+            Center(
+              child: _DonutChart(
+                segments: const [
+                  _Segment(value: 0.40, color: AppColors.chartGreen),
+                  _Segment(value: 0.20, color: AppColors.chartBlue),
+                  _Segment(value: 0.15, color: AppColors.chartOrange),
+                  _Segment(value: 0.15, color: AppColors.chartPurple),
+                  _Segment(value: 0.10, color: AppColors.chartGray),
+                ],
+                size: 130,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _Legend(
+              items: const [
+                _LegendItem(label: 'Philippines', color: AppColors.chartGreen),
+                _LegendItem(label: 'USA', color: AppColors.chartBlue),
+                _LegendItem(label: 'Japan', color: AppColors.chartOrange),
+                _LegendItem(label: 'Korea', color: AppColors.chartPurple),
+                _LegendItem(label: 'Others', color: AppColors.chartGray),
+              ],
+            ),
+          ],
+        ),
+      ),
+      _DashCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _CardTitle(title: 'Mode of Transportation'),
+            const SizedBox(height: 16),
+            Center(
+              child: _DonutChart(
+                segments: const [
+                  _Segment(value: 0.45, color: AppColors.chartCyan),
+                  _Segment(value: 0.20, color: AppColors.chartGreen),
+                  _Segment(value: 0.15, color: AppColors.chartBlue),
+                  _Segment(value: 0.12, color: AppColors.chartOrange),
+                  _Segment(value: 0.08, color: AppColors.chartGray),
+                ],
+                size: 130,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _Legend(
+              items: const [
+                _LegendItem(label: 'Private Car', color: AppColors.chartCyan),
+                _LegendItem(label: 'Bus', color: AppColors.chartGreen),
+                _LegendItem(label: 'Van', color: AppColors.chartBlue),
+                _LegendItem(label: 'Motorcycle', color: AppColors.chartOrange),
+                _LegendItem(label: 'Other', color: AppColors.chartGray),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    if (isNarrow) {
+      // Stack all vertically on narrow
+      return Column(
+        children: cards
+            .expand((c) => [c, const SizedBox(height: 14)])
+            .take(cards.length * 2 - 1)
+            .toList(),
+      );
+    }
+    if (isMedium) {
+      // First card full-width, next two side-by-side
+      return Column(
+        children: [
+          cards[0],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: cards[1]),
+              const SizedBox(width: 14),
+              Expanded(child: cards[2]),
+            ],
+          ),
+        ],
+      );
+    }
+    // Original 3-column row
     return Row(
       children: [
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Gender Distribution'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.6, color: AppColors.chartCyan),
-                      _Segment(value: 0.3, color: AppColors.chartPurple),
-                      _Segment(value: 0.1, color: AppColors.chartOrange),
-                    ],
-                    size: 130,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _Legend(
-                  items: const [
-                    _LegendItem(label: 'Male', color: AppColors.chartCyan),
-                    _LegendItem(label: 'Female', color: AppColors.chartPurple),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+        Expanded(child: cards[0]),
         const SizedBox(width: 14),
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Top 5 Nationalities'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.40, color: AppColors.chartGreen),
-                      _Segment(value: 0.20, color: AppColors.chartBlue),
-                      _Segment(value: 0.15, color: AppColors.chartOrange),
-                      _Segment(value: 0.15, color: AppColors.chartPurple),
-                      _Segment(value: 0.10, color: AppColors.chartGray),
-                    ],
-                    size: 130,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _Legend(
-                  items: const [
-                    _LegendItem(
-                      label: 'Philippines',
-                      color: AppColors.chartGreen,
-                    ),
-                    _LegendItem(label: 'USA', color: AppColors.chartBlue),
-                    _LegendItem(label: 'Japan', color: AppColors.chartOrange),
-                    _LegendItem(label: 'Korea', color: AppColors.chartPurple),
-                    _LegendItem(label: 'Others', color: AppColors.chartGray),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+        Expanded(child: cards[1]),
         const SizedBox(width: 14),
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Mode of Transportation'),
-                const SizedBox(height: 16),
-                Center(
-                  child: _DonutChart(
-                    segments: const [
-                      _Segment(value: 0.45, color: AppColors.chartCyan),
-                      _Segment(value: 0.20, color: AppColors.chartGreen),
-                      _Segment(value: 0.15, color: AppColors.chartBlue),
-                      _Segment(value: 0.12, color: AppColors.chartOrange),
-                      _Segment(value: 0.08, color: AppColors.chartGray),
-                    ],
-                    size: 130,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _Legend(
-                  items: const [
-                    _LegendItem(
-                      label: 'Private Car',
-                      color: AppColors.chartCyan,
-                    ),
-                    _LegendItem(label: 'Bus', color: AppColors.chartGreen),
-                    _LegendItem(label: 'Van', color: AppColors.chartBlue),
-                    _LegendItem(
-                      label: 'Motorcycle',
-                      color: AppColors.chartOrange,
-                    ),
-                    _LegendItem(label: 'Other', color: AppColors.chartGray),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+        Expanded(child: cards[2]),
       ],
     );
   }
@@ -372,51 +465,64 @@ class _DonutChartsRow extends StatelessWidget {
 // ─── Bottom Charts Row ────────────────────────────────────────────────────────
 
 class _BottomChartsRow extends StatelessWidget {
+  const _BottomChartsRow({required this.isNarrow});
+
+  final bool isNarrow;
+
   @override
   Widget build(BuildContext context) {
+    final barCard = _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CardTitle(title: 'Tourist Trend (12 Months)'),
+          const SizedBox(height: 16),
+          SizedBox(height: 200, child: _BarChart()),
+        ],
+      ),
+    );
+
+    final gaugeCard = _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CardTitle(title: 'Submission Compliance'),
+          const SizedBox(height: 16),
+          Center(child: _GaugeChart(value: 0.71)),
+          const SizedBox(height: 16),
+          _ComplianceRow(
+            label: 'Compliant',
+            count: '1 businesses',
+            color: AppColors.chartGreen,
+            icon: Icons.check_circle_outline,
+          ),
+          const SizedBox(height: 8),
+          _ComplianceRow(
+            label: 'Non-Compliant',
+            count: '1 businesses',
+            color: AppColors.accentRed,
+            icon: Icons.cancel_outlined,
+          ),
+        ],
+      ),
+    );
+
+    if (isNarrow) {
+      return Column(
+        children: [
+          barCard,
+          const SizedBox(height: 14),
+          gaugeCard,
+        ],
+      );
+    }
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 2,
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Tourist Trend (12 Months)'),
-                const SizedBox(height: 16),
-                SizedBox(height: 200, child: _BarChart()),
-              ],
-            ),
-          ),
-        ),
+        Expanded(flex: 2, child: barCard),
         const SizedBox(width: 14),
-        Expanded(
-          child: _DashCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _CardTitle(title: 'Submission Compliance'),
-                const SizedBox(height: 16),
-                Center(child: _GaugeChart(value: 0.71)),
-                const SizedBox(height: 16),
-                _ComplianceRow(
-                  label: 'Compliant',
-                  count: '1 businesses',
-                  color: AppColors.chartGreen,
-                  icon: Icons.check_circle_outline,
-                ),
-                const SizedBox(height: 8),
-                _ComplianceRow(
-                  label: 'Non-Compliant',
-                  count: '1 businesses',
-                  color: AppColors.accentRed,
-                  icon: Icons.cancel_outlined,
-                ),
-              ],
-            ),
-          ),
-        ),
+        Expanded(child: gaugeCard),
       ],
     );
   }
@@ -610,32 +716,12 @@ class _DonutPainter extends CustomPainter {
 
 class _BarChart extends StatelessWidget {
   static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
   static const _values = [
-    130.0,
-    140.0,
-    155.0,
-    160.0,
-    180.0,
-    210.0,
-    240.0,
-    250.0,
-    245.0,
-    280.0,
-    270.0,
-    360.0,
+    130.0, 140.0, 155.0, 160.0, 180.0, 210.0,
+    240.0, 250.0, 245.0, 280.0, 270.0, 360.0,
   ];
 
   @override
@@ -666,7 +752,7 @@ class _BarPainter extends CustomPainter {
       ..color = AppColors.cardBorder
       ..strokeWidth = 0.5;
 
-    final textStyle = const TextStyle(
+    const textStyle = TextStyle(
       color: AppColors.textSubtle,
       fontSize: 10,
     );

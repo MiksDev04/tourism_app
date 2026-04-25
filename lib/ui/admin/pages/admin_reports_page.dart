@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+
 import '../../shared/layouts/admin_layout.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -143,13 +144,17 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 class _PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMediumScreen = screenWidth < 900;
+    
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Monthly Reports',
               style: TextStyle(
                 color: AppColors.textWhite,
@@ -157,24 +162,29 @@ class _PageHeader extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            SizedBox(height: 4),
-            Text(
+            const SizedBox(height: 4),
+            const Text(
               'Review and approve accommodation reports',
               style: TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ],
         ),
-        const Spacer(),
-        _HeaderButton(
-          icon: Icons.filter_list_rounded,
-          label: 'Filters',
-          onTap: () {},
-        ),
-        const SizedBox(width: 10),
-        _HeaderButton(
-          icon: Icons.download_rounded,
-          label: 'Export',
-          onTap: () {},
+        const SizedBox(height: 12),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _HeaderButton(
+              icon: Icons.filter_list_rounded,
+              label: isMediumScreen ? null : 'Filters',
+              onTap: () {},
+            ),
+            const SizedBox(width: 10),
+            _HeaderButton(
+              icon: Icons.download_rounded,
+              label: isMediumScreen ? null : 'Export',
+              onTap: () {},
+            ),
+          ],
         ),
       ],
     );
@@ -189,7 +199,7 @@ class _HeaderButton extends StatelessWidget {
   });
 
   final IconData icon;
-  final String label;
+  final String? label;
   final VoidCallback onTap;
 
   @override
@@ -206,11 +216,13 @@ class _HeaderButton extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon, color: AppColors.textGray, size: 16),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
+            if (label != null) ...[
+              const SizedBox(width: 6),
+              Text(
+                label!,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
+            ],
           ],
         ),
       ),
@@ -267,7 +279,12 @@ class _ReportsTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _TableHeader(),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isMediumScreen = constraints.maxWidth < 800;
+              return _TableHeader(isMediumScreen: isMediumScreen);
+            },
+          ),
           const Divider(color: AppColors.cardBorder, height: 1),
           Expanded(
             child: rows.isEmpty
@@ -281,7 +298,15 @@ class _ReportsTable extends StatelessWidget {
                     itemCount: rows.length,
                     separatorBuilder: (_, __) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => _TableRow(report: rows[i]),
+                    itemBuilder: (_, i) => LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isMediumScreen = constraints.maxWidth < 800;
+                        return _TableRow(
+                          report: rows[i],
+                          isMediumScreen: isMediumScreen,
+                        );
+                      },
+                    ),
                   ),
           ),
         ],
@@ -293,8 +318,26 @@ class _ReportsTable extends StatelessWidget {
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
+  const _TableHeader({required this.isMediumScreen});
+
+  final bool isMediumScreen;
+
   @override
   Widget build(BuildContext context) {
+    if (isMediumScreen) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(flex: 3, child: _HeaderCell('Business')),
+            Expanded(flex: 2, child: _HeaderCell('Period')),
+            Expanded(flex: 1, child: _HeaderCell('Status')),
+            Expanded(flex: 1, child: _HeaderCell('Actions')),
+          ],
+        ),
+      );
+    }
+
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
@@ -332,16 +375,92 @@ class _HeaderCell extends StatelessWidget {
 // ─── Table Row ────────────────────────────────────────────────────────────────
 
 class _TableRow extends StatelessWidget {
-  const _TableRow({required this.report});
+  const _TableRow({
+    required this.report,
+    required this.isMediumScreen,
+  });
 
   final Report report;
+  final bool isMediumScreen;
 
   @override
   Widget build(BuildContext context) {
+    if (isMediumScreen) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        report.business,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        report.period,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: _StatusBadge(status: report.status),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: () {},
+                  child: const Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: AppColors.textGray,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                _InfoChip(
+                  label: 'Total Guests',
+                  value: '${report.totalGuests}',
+                ),
+                _InfoChip(
+                  label: 'Check-ins',
+                  value: '${report.checkIns}',
+                ),
+                if (report.submitted != null)
+                  _InfoChip(
+                    label: 'Submitted',
+                    value: report.submitted!,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
-        spacing: 5,
         children: [
           Expanded(
             flex: 4,
@@ -404,6 +523,50 @@ class _TableRow extends StatelessWidget {
                 color: AppColors.textGray,
                 size: 18,
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Info Chip for Small Screens ─────────────────────────────────────────────
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder.withOpacity(0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              color: AppColors.textGray,
+              fontSize: 11,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppColors.textWhite,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
