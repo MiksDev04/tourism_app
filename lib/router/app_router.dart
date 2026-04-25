@@ -10,7 +10,11 @@ import '../ui/admin/pages/admin_messages_page.dart';
 import '../ui/admin/pages/admin_compliance_page.dart';
 import '../ui/admin/pages/admin_profile_page.dart';
 import '../ui/business/pages/business_dashboard_page.dart';
-// import '../ui/admin/pages/admin_settings_page.dart';
+import '../ui/business/pages/business_guest_entry_page.dart';
+import '../ui/business/pages/business_guest_records_page.dart';
+import '../ui/business/pages/business_reports_page.dart';
+import '../ui/business/pages/business_messages_page.dart';
+import '../ui/business/pages/business_profile_page.dart';
 
 // ─── Route Names ──────────────────────────────────────────────────────────────
 
@@ -24,6 +28,11 @@ abstract final class AppRoutes {
   static const adminCompliance    = '/admin/compliance';
   static const adminProfile      = '/admin/profile';
   static const businessDashboard = '/business/dashboard'; 
+  static const businessGuestEntry = '/business/guest-entry';
+  static const businessGuestRecord = '/business/guest-records';
+  static const businessReports = '/business/reports';
+  static const businessMessages = '/business/messages';
+  static const businessProfile = '/business/profile';
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -47,7 +56,14 @@ abstract final class AppRouter {
       AppRoutes.adminCompliance    => _fade(const AdminCompliancePage(),   settings),
 
       // Business Pages
- AppRoutes.businessDashboard     => _fade(const BusinessDashboardPage(),    settings),
+      AppRoutes.businessDashboard     => _fade(const BusinessDashboardPage(),    settings),
+      AppRoutes.businessGuestEntry    => _fade(const BusinessGuestEntryPage(),   settings),
+      AppRoutes.businessGuestRecord   => _fade(const BusinessGuestRecordsPage(), settings),
+      AppRoutes.businessMessages      => _fade(const BusinessMessagesPage(),     settings),
+      AppRoutes.businessReports       => _fade(const BusinessReportsPage(),      settings),
+      AppRoutes.businessProfile       => _fade(const BusinessProfilePage(),      settings),
+
+      // ── Placeholders (remove once real pages are wired) ──────────────────
       // AppRoutes.adminAccommodations=> _fade(const AdminAccommodationsPage(), settings),
       // AppRoutes.adminMessages      => _fade(const AdminMessagesPage(),     settings),
       // AppRoutes.adminReports       => _fade(const AdminReportsPage(),      settings),

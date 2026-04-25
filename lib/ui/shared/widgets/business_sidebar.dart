@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../router/app_router.dart';
 
-
 // ─── Nav Item Model ───────────────────────────────────────────────────────────
 
 class BizNavItem {
@@ -11,14 +10,14 @@ class BizNavItem {
     required this.label,
     required this.index,
     this.badge,
-    this.route,
+    required this.route,
   });
 
   final IconData icon;
   final String label;
   final int index;
   final int? badge; // notification count
-  final String? route;
+  final String route;
 }
 
 // ─── Business Sidebar ─────────────────────────────────────────────────────────
@@ -34,12 +33,43 @@ class BusinessSidebar extends StatelessWidget {
   final ValueChanged<int> onItemSelected;
 
   static const _navItems = [
-    BizNavItem(icon: Icons.dashboard_rounded,      label: 'Dashboard',      index: 0, route: AppRoutes.businessDashboard),
-    BizNavItem(icon: Icons.person_add_rounded,     label: 'Guest Entry',    index: 1, ),
-    BizNavItem(icon: Icons.people_alt_rounded,     label: 'Guest Records',  index: 2, ),
-    BizNavItem(icon: Icons.bar_chart_rounded,      label: 'Reports',        index: 3, ),
-    BizNavItem(icon: Icons.chat_bubble_outline_rounded, label: 'Messages',  index: 4, badge: 1),
-    BizNavItem(icon: Icons.person_outline_rounded, label: 'Profile',        index: 5, ),
+    BizNavItem(
+      icon: Icons.dashboard_rounded,
+      label: 'Dashboard',
+      index: 0,
+      route: AppRoutes.businessDashboard,
+    ),
+    BizNavItem(
+      icon: Icons.person_add_rounded,
+      label: 'Guest Entry',
+      index: 1,
+      route: AppRoutes.businessGuestEntry,
+    ),
+    BizNavItem(
+      icon: Icons.people_alt_rounded,
+      label: 'Guest Records',
+      index: 2,
+      route: AppRoutes.businessGuestRecord,
+    ),
+    BizNavItem(
+      icon: Icons.bar_chart_rounded,
+      label: 'Reports',
+      index: 3,
+      route: AppRoutes.businessReports,
+    ),
+    BizNavItem(
+      icon: Icons.chat_bubble_outline_rounded,
+      label: 'Messages',
+      index: 4,
+      badge: 1,
+      route: AppRoutes.businessMessages,
+    ),
+    BizNavItem(
+      icon: Icons.person_outline_rounded,
+      label: 'Profile',
+      index: 5,
+      route: AppRoutes.businessProfile,
+    ),
   ];
 
   @override
@@ -61,11 +91,16 @@ class BusinessSidebar extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               children: _navItems
-                  .map((item) => _NavTile(
-                        item: item,
-                        isSelected: selectedIndex == item.index,
-                        onTap: () => onItemSelected(item.index),
-                      ))
+                  .map(
+                    (item) => _NavTile(
+                      item: item,
+                      isSelected: selectedIndex == item.index,
+                      onTap: () {
+                        onItemSelected(item.index);
+                        Navigator.pushReplacementNamed(context, item.route);
+                      },
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -211,8 +246,9 @@ class _NavTile extends StatelessWidget {
                 Icon(
                   item.icon,
                   size: 18,
-                  color:
-                      isSelected ? AppColors.primaryCyan : AppColors.textGray,
+                  color: isSelected
+                      ? AppColors.primaryCyan
+                      : AppColors.textGray,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -223,15 +259,18 @@ class _NavTile extends StatelessWidget {
                           ? AppColors.textWhite
                           : AppColors.textGray,
                       fontSize: 13.5,
-                      fontWeight:
-                          isSelected ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                 ),
                 if (item.badge != null)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryCyan,
                       borderRadius: BorderRadius.circular(10),
@@ -302,7 +341,7 @@ class _SidebarFooter extends StatelessWidget {
           const SizedBox(width: 6),
           GestureDetector(
             onTap: () {
-               Navigator.pushReplacementNamed(context, AppRoutes.login);
+              Navigator.pushReplacementNamed(context, AppRoutes.login);
             },
             child: const Icon(
               Icons.logout_rounded,
