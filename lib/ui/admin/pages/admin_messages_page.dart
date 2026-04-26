@@ -1,53 +1,39 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../widgets/compose_message_modal.dart';
+import '../widgets/message_view_dialog.dart';
+import '../models/message_models.dart';
 
-// ─── Models ───────────────────────────────────────────────────────────────────
-
-enum MessageType { compliance, announcement, general }
-
-class Message {
-  const Message({
-    required this.type,
-    required this.subject,
-    required this.recipient,
-    required this.date,
-  });
-
-  final MessageType type;
-  final String subject;
-  final String recipient;
-  final String date;
-}
 
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
-const _messages = [
-  Message(
+List<Message> _messages = [
+  const Message(
     type: MessageType.compliance,
     subject: 'Monthly Report Compliance Notice - March 2024',
     recipient: 'Grand Hotel San Pablo',
     date: '2024-04-01',
   ),
-  Message(
+  const Message(
     type: MessageType.announcement,
     subject: 'Tourism Month Celebration - May 2024',
     recipient: 'Sampaloc Lake Resort',
     date: '2024-04-15',
   ),
-  Message(
+  const Message(
     type: MessageType.compliance,
     subject: 'Second Notice: Missing Monthly Reports',
     recipient: 'Paradise Resort & Spa',
     date: '2024-04-10',
   ),
-  Message(
+  const Message(
     type: MessageType.general,
     subject: 'System Update: New Report Features',
     recipient: 'Grand Hotel San Pablo',
     date: '2024-04-20',
   ),
-  Message(
+  const Message(
     type: MessageType.general,
     subject: 'Data Collection Reminder',
     recipient: 'Sampaloc Lake Resort',
@@ -55,9 +41,19 @@ const _messages = [
   ),
 ];
 
-const _typeOptions     = ['All Types', 'Compliance', 'Announcement', 'General'];
-const _monthOptions    = ['All Months', 'April 2024', 'March 2024', 'February 2024'];
-const _businessOptions = ['All Businesses', 'Grand Hotel San Pablo', 'Sampaloc Lake Resort', 'Paradise Resort & Spa'];
+const _typeOptions = ['All Types', 'Compliance', 'Announcement', 'General'];
+const _monthOptions = [
+  'All Months',
+  'April 2024',
+  'March 2024',
+  'February 2024',
+];
+const _businessOptions = [
+  'All Businesses',
+  'Grand Hotel San Pablo',
+  'Sampaloc Lake Resort',
+  'Paradise Resort & Spa',
+];
 
 // ─── Admin Messages Page ──────────────────────────────────────────────────────
 
@@ -69,9 +65,9 @@ class AdminMessagesPage extends StatefulWidget {
 }
 
 class _AdminMessagesPageState extends State<AdminMessagesPage> {
-  String _searchQuery  = '';
-  String _selectedType     = 'All Types';
-  String _selectedMonth    = 'All Months';
+  String _searchQuery = '';
+  String _selectedType = 'All Types';
+  String _selectedMonth = 'All Months';
   String _selectedBusiness = 'All Businesses';
 
   final _searchCtrl = TextEditingController();
@@ -85,14 +81,17 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   List<Message> get _filtered {
     return _messages.where((m) {
       final q = _searchQuery.toLowerCase();
-      final matchesSearch = q.isEmpty ||
+      final matchesSearch =
+          q.isEmpty ||
           m.subject.toLowerCase().contains(q) ||
           m.recipient.toLowerCase().contains(q);
 
-      final matchesType = _selectedType == 'All Types' ||
+      final matchesType =
+          _selectedType == 'All Types' ||
           m.type.name.toLowerCase() == _selectedType.toLowerCase();
 
-      final matchesBusiness = _selectedBusiness == 'All Businesses' ||
+      final matchesBusiness =
+          _selectedBusiness == 'All Businesses' ||
           m.recipient == _selectedBusiness;
 
       return matchesSearch && matchesType && matchesBusiness;
@@ -168,7 +167,10 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            const _ComposeButton(),
+            _ComposeButton(onMessageSent: () {
+              (context.findAncestorStateOfType<_AdminMessagesPageState>()
+                  ?.setState(() {}));
+            }),
           ],
         );
       },
@@ -177,12 +179,35 @@ class _PageHeader extends StatelessWidget {
 }
 
 class _ComposeButton extends StatelessWidget {
-  const _ComposeButton();
+  const _ComposeButton({required this.onMessageSent});
+
+  final VoidCallback onMessageSent;
+
+  String _getCurrentDate() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: () async {
+        final draft = await showComposeMessageDialog(context);
+        if (draft != null && draft.isValid) {
+          _messages = [
+            Message(
+              type: draft.messageType!,
+              subject: draft.subject,
+              recipient: draft.sendToMode == SendToMode.all 
+                  ? 'All Businesses' 
+                  : draft.selectedBusiness!,
+              date: _getCurrentDate(),
+            ),
+            ..._messages,
+          ];
+          onMessageSent();
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
@@ -351,7 +376,11 @@ class _SearchField extends StatelessWidget {
         decoration: const InputDecoration(
           hintText: 'Search...',
           hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textSubtle, size: 18),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.textSubtle,
+            size: 18,
+          ),
           border: InputBorder.none,
           contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           isDense: true,
@@ -449,23 +478,26 @@ class _TableHeader extends StatelessWidget {
       builder: (context, constraints) {
         // final isSmall = constraints.maxWidth < 700;
         final isMedium = constraints.maxWidth < 900;
-        
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: isMedium
                 ? [
-                    const Expanded(flex: 5, child: _HeaderCell('Type / Subject')),
+                    const Expanded(
+                      flex: 5,
+                      child: _HeaderCell('Type / Subject'),
+                    ),
                     const Expanded(flex: 3, child: _HeaderCell('Recipient')),
                     const Expanded(flex: 2, child: _HeaderCell('Date')),
                   ]
-                :  [
-                        const Expanded(flex: 3, child: _HeaderCell('Type')),
-                        const Expanded(flex: 6, child: _HeaderCell('Subject')),
-                        const Expanded(flex: 4, child: _HeaderCell('Recipient')),
-                        const Expanded(flex: 3, child: _HeaderCell('Date')),
-                        const Expanded(flex: 1, child: _HeaderCell('Action')),
-                      ],
+                : [
+                    const Expanded(flex: 3, child: _HeaderCell('Type')),
+                    const Expanded(flex: 6, child: _HeaderCell('Subject')),
+                    const Expanded(flex: 4, child: _HeaderCell('Recipient')),
+                    const Expanded(flex: 3, child: _HeaderCell('Date')),
+                    const Expanded(flex: 1, child: _HeaderCell('Action')),
+                  ],
           ),
         );
       },
@@ -497,12 +529,48 @@ class _MessageRow extends StatelessWidget {
 
   final Message message;
 
+  void _openMessage(BuildContext context, Message message) {
+    // Map MessageType enum → letter header string
+    final typeLabel = switch (message.type) {
+      MessageType.compliance   => 'COMPLIANCE NOTICE',
+      MessageType.announcement => 'ANNOUNCEMENT',
+      MessageType.general      => 'GENERAL NOTICE',
+    };
+
+    // Sample body per type — replace with real stored content when available
+    final body = switch (message.type) {
+      MessageType.compliance =>
+        'This is to inform you that your monthly report for '
+        '${message.date} is due. Please submit your report '
+        'before the 5th of the following month to avoid penalties.',
+      MessageType.announcement =>
+        'We are pleased to announce an upcoming event related to tourism '
+        'in San Pablo City. Please take note of the details and participate '
+        'accordingly.',
+      MessageType.general =>
+        'This is a general notice from the San Pablo City Office of Tourism. '
+        'Please review the information carefully and reach out if you have '
+        'any questions or concerns.',
+    };
+
+    showMessageViewDialog(
+      context,
+      MessageViewData(
+        subject: message.subject,
+        recipient: message.recipient,
+        date: message.date,
+        messageType: typeLabel,
+        messageContent: body,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMedium = constraints.maxWidth < 900;
-        
+
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: isMedium
@@ -525,7 +593,7 @@ class _MessageRow extends StatelessWidget {
                           ),
                         ),
                         GestureDetector(
-                          onTap: () {},
+                          onTap: () => _openMessage(context, message),
                           child: const Icon(
                             Icons.visibility_outlined,
                             color: AppColors.textGray,
@@ -539,12 +607,18 @@ class _MessageRow extends StatelessWidget {
                       children: [
                         Text(
                           message.recipient,
-                          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 13,
+                          ),
                         ),
                         const Spacer(),
                         Text(
                           message.date,
-                          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -553,12 +627,9 @@ class _MessageRow extends StatelessWidget {
               : Row(
                   spacing: 5,
                   children: [
+                    Expanded(flex: 3, child: _TypeBadge(type: message.type)),
                     Expanded(
-                      flex:  3,
-                      child: _TypeBadge(type: message.type),
-                    ),
-                    Expanded(
-                      flex:  6,
+                      flex: 6,
                       child: Text(
                         message.subject,
                         style: const TextStyle(
@@ -572,22 +643,31 @@ class _MessageRow extends StatelessWidget {
                       flex: 3,
                       child: Text(
                         message.recipient,
-                        style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     Expanded(
                       flex: 3,
                       child: Text(
                         message.date,
-                        style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                    const Expanded(
+                    Expanded(
                       flex: 1,
-                      child: Icon(
-                        Icons.visibility_outlined,
-                        color: AppColors.textGray,
-                        size: 18,
+                      child: GestureDetector(
+                        onTap: () => _openMessage(context, message),
+                        child: const Icon(
+                          Icons.visibility_outlined,
+                          color: AppColors.textGray,
+                          size: 18,
+                        ),
                       ),
                     ),
                   ],

@@ -1,28 +1,12 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../widgets/business_details_modal.dart';
+import '../models/accommodation_models.dart'; // Add this import
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+// Remove the Models section (lines 6-30) since it's now imported
 
-enum AccommodationStatus { approved, pending, rejected, warning }
-
-class Accommodation {
-  const Accommodation({
-    required this.name,
-    required this.type,
-    required this.owner,
-    required this.contact,
-    required this.rooms,
-    required this.status,
-  });
-
-  final String name;
-  final String type;
-  final String owner;
-  final String contact;
-  final int rooms;
-  final AccommodationStatus status;
-}
+// Rest of your code remains the same until _ActionButtons class
 
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
@@ -108,10 +92,63 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
 
+  // Make accommodations mutable
+  late List<Accommodation> _accommodations;
+
   @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    // Initialize with sample data
+    _accommodations = [
+      const Accommodation(
+        name: 'Grand Hotel San Pablo',
+        type: 'Hotel',
+        owner: 'Juan dela Cruz',
+        contact: '049-562-1234',
+        rooms: 45,
+        status: AccommodationStatus.approved,
+      ),
+      const Accommodation(
+        name: 'Sampaloc Lake Resort',
+        type: 'Resort',
+        owner: 'Pedro Reyes',
+        contact: '049-562-5678',
+        rooms: 30,
+        status: AccommodationStatus.approved,
+      ),
+      const Accommodation(
+        name: 'Casa San Pablo Inn',
+        type: 'Inn',
+        owner: 'Rosa Mendoza',
+        contact: '049-562-9012',
+        rooms: 20,
+        status: AccommodationStatus.pending,
+      ),
+      const Accommodation(
+        name: "Traveler's Lodge",
+        type: 'Inn',
+        owner: 'Carlos Bautista',
+        contact: '049-562-3456',
+        rooms: 15,
+        status: AccommodationStatus.rejected,
+      ),
+      const Accommodation(
+        name: 'Paradise Resort & Spa',
+        type: 'Resort',
+        owner: 'Elena Garcia',
+        contact: '049-562-7890',
+        rooms: 35,
+        status: AccommodationStatus.warning,
+      ),
+      const Accommodation(
+        name: 'Lakeview Boutique Hotel',
+        type: 'Hotel',
+        owner: 'Roberto Lim',
+        contact: '049-562-2345',
+        rooms: 25,
+        status: AccommodationStatus.pending,
+      ),
+    ];
   }
 
   List<Accommodation> get _filtered {
@@ -130,6 +167,43 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   int _countForStatus(AccommodationStatus? status) => status == null
       ? _accommodations.length
       : _accommodations.where((a) => a.status == status).length;
+
+  // Method to update accommodation status
+  void _updateAccommodationStatus(
+    Accommodation item,
+    AccommodationStatus newStatus,
+  ) {
+    setState(() {
+      final index = _accommodations.indexWhere((a) => a.name == item.name);
+      if (index != -1) {
+        _accommodations[index] = Accommodation(
+          name: item.name,
+          type: item.type,
+          owner: item.owner,
+          contact: item.contact,
+          rooms: item.rooms,
+          status: newStatus,
+        );
+      }
+    });
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${item.name} has been ${newStatus.name}'),
+        backgroundColor: newStatus == AccommodationStatus.approved
+            ? AppColors.accentGreen
+            : AppColors.accentRed,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -161,8 +235,14 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                 const SizedBox(height: 14),
                 Expanded(
                   child: isNarrow
-                      ? _AccommodationCardList(rows: _filtered)
-                      : _AccommodationTable(rows: _filtered),
+                      ? _AccommodationCardList(
+                          rows: _filtered,
+                          onStatusUpdate: _updateAccommodationStatus,
+                        )
+                      : _AccommodationTable(
+                          rows: _filtered,
+                          onStatusUpdate: _updateAccommodationStatus,
+                        ),
                 ),
               ],
             ),
@@ -172,7 +252,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
     );
   }
 }
-
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
@@ -345,9 +424,10 @@ class _SearchBar extends StatelessWidget {
 // ─── Accommodation Table (wide screens) ──────────────────────────────────────
 
 class _AccommodationTable extends StatelessWidget {
-  const _AccommodationTable({required this.rows});
+  const _AccommodationTable({required this.rows, required this.onStatusUpdate});
 
   final List<Accommodation> rows;
+  final Function(Accommodation, AccommodationStatus) onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +453,10 @@ class _AccommodationTable extends StatelessWidget {
                     itemCount: rows.length,
                     separatorBuilder: (_, __) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => _TableRow(item: rows[i]),
+                    itemBuilder: (_, i) => _TableRow(
+                      item: rows[i],
+                      onStatusUpdate: onStatusUpdate,
+                    ),
                   ),
           ),
         ],
@@ -381,7 +464,6 @@ class _AccommodationTable extends StatelessWidget {
     );
   }
 }
-
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
@@ -424,9 +506,10 @@ class _HeaderCell extends StatelessWidget {
 // ─── Table Row ────────────────────────────────────────────────────────────────
 
 class _TableRow extends StatelessWidget {
-  const _TableRow({required this.item});
+  const _TableRow({required this.item, required this.onStatusUpdate});
 
   final Accommodation item;
+  final Function(Accommodation, AccommodationStatus) onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -506,19 +589,29 @@ class _TableRow extends StatelessWidget {
 
           Expanded(flex: 2, child: _StatusBadge(status: item.status)),
 
-          Expanded(flex: 2, child: _ActionButtons(status: item.status)),
+          Expanded(
+            flex: 2,
+            child: _ActionButtons(
+              status: item.status,
+              item: item,
+              onStatusUpdate: onStatusUpdate,
+            ),
+          ),
         ],
       ),
     );
   }
 }
-
 // ─── Accommodation Card List (narrow screens) ─────────────────────────────────
 
 class _AccommodationCardList extends StatelessWidget {
-  const _AccommodationCardList({required this.rows});
+  const _AccommodationCardList({
+    required this.rows,
+    required this.onStatusUpdate,
+  });
 
   final List<Accommodation> rows;
+  final Function(Accommodation, AccommodationStatus) onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -533,15 +626,17 @@ class _AccommodationCardList extends StatelessWidget {
     return ListView.separated(
       itemCount: rows.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (_, i) => _AccommodationCard(item: rows[i]),
+      itemBuilder: (_, i) =>
+          _AccommodationCard(item: rows[i], onStatusUpdate: onStatusUpdate),
     );
   }
 }
 
 class _AccommodationCard extends StatelessWidget {
-  const _AccommodationCard({required this.item});
+  const _AccommodationCard({required this.item, required this.onStatusUpdate});
 
   final Accommodation item;
+  final Function(Accommodation, AccommodationStatus) onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -601,7 +696,11 @@ class _AccommodationCard extends StatelessWidget {
           _CardDetail(label: 'Rooms', value: '${item.rooms}'),
           const SizedBox(height: 12),
           // Actions
-          _ActionButtons(status: item.status),
+          _ActionButtons(
+            status: item.status,
+            item: item,
+            onStatusUpdate: onStatusUpdate,
+          ),
         ],
       ),
     );
@@ -729,40 +828,164 @@ class _BadgeStyle {
 
 // ─── Action Buttons ───────────────────────────────────────────────────────────
 
+// ─── Action Buttons ───────────────────────────────────────────────────────────
+
 class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({required this.status});
+  const _ActionButtons({
+    required this.status,
+    required this.item,
+    required this.onStatusUpdate,
+  });
 
   final AccommodationStatus status;
+  final Accommodation item;
+  final Function(Accommodation, AccommodationStatus) onStatusUpdate;
+
+  void _showConfirmDialog(
+    BuildContext context,
+    String action,
+    AccommodationStatus newStatus,
+  ) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0F1923),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: AppColors.cardBorder),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              action == 'Approve'
+                  ? Icons.check_circle_outline
+                  : Icons.cancel_outlined,
+              color: action == 'Approve'
+                  ? AppColors.accentGreen
+                  : AppColors.accentRed,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              '$action Accommodation',
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to $action "${item.name}"?\n\nThis action will ${action == 'Approve' ? 'approve the business license' : 'reject the application and notify the owner'}.',
+          style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textGray,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              onStatusUpdate(item, newStatus);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: action == 'Approve'
+                  ? AppColors.accentGreen
+                  : AppColors.accentRed,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            ),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final showApproveReject = status == AccommodationStatus.pending;
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _ActionIcon(icon: Icons.visibility_outlined, onTap: () {}),
-        if (showApproveReject) ...[
-          const SizedBox(width: 6),
-          _ActionIcon(icon: Icons.check_circle_outline_rounded, onTap: () {}),
-          const SizedBox(width: 6),
-          _ActionIcon(icon: Icons.cancel_outlined, onTap: () {}),
-        ],
+        // View Details button (always shown)
+        _ActionIcon(
+          icon: Icons.remove_red_eye_outlined,
+          tooltip: 'View Details',
+          onTap: () {
+            final businessDetails = BusinessDetails(
+              name: item.name,
+              type: item.type,
+              rooms: item.rooms,
+              status: item.status,
+              owner: item.owner,
+              permitNumber: 'SP-HTL-2024-006',
+              registrationNumber: 'BIR-2024-LBH006',
+              registeredDate: '2024-02-14',
+              address: 'Palakpakin Lake Shore, San Pablo City, Laguna',
+              phone: item.contact,
+              email:
+                  '${item.name.toLowerCase().replaceAll(' ', '')}@example.com',
+            );
+
+            showBusinessDetailsModal(
+              context,
+              businessDetails,
+              onApprove: showApproveReject
+                  ? () {
+                      onStatusUpdate(item, AccommodationStatus.approved);
+                    }
+                  : null,
+              onReject: showApproveReject
+                  ? () {
+                      onStatusUpdate(item, AccommodationStatus.rejected);
+                    }
+                  : null,
+            );
+          },
+        ),
       ],
     );
   }
 }
 
+// Updated _ActionIcon with tooltip and custom color support
 class _ActionIcon extends StatelessWidget {
-  const _ActionIcon({required this.icon, required this.onTap});
+  const _ActionIcon({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.color,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Icon(icon, color: AppColors.textGray, size: 18),
+    return Tooltip(
+      message: tooltip ?? '',
+      child: GestureDetector(
+        onTap: onTap,
+        child: Icon(
+          icon,
+          color: color ?? AppColors.textGray,
+          size: 20,
+        ),
+      ),
     );
   }
 }

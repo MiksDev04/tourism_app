@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../widgets/compliance_message_dialogue.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -61,12 +62,23 @@ const _records = [
   ),
 ];
 
+// Fixed: Month options without years
 const _monthOptions = [
   'All Months',
-  'April 2024',
-  'March 2024',
-  'February 2024',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];
+
 const _yearOptions = ['All Years', '2024', '2023'];
 const _businessOptions = [
   'All Businesses',
@@ -109,15 +121,28 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 
   int get _warningCount => _records.where((r) => r.warnings != null).length;
 
+  // Helper function to extract month from period string (e.g., "April 2024" -> "April")
+  String _extractMonth(String period) {
+    return period.split(' ')[0];
+  }
+
+  // Helper function to extract year from period string (e.g., "April 2024" -> "2024")
+  String _extractYear(String period) {
+    return period.split(' ')[1];
+  }
+
   List<ComplianceRecord> get _filtered {
     return _records.where((r) {
+      // Search filter
       final q = _searchQuery.toLowerCase();
       final matchesSearch = q.isEmpty || r.business.toLowerCase().contains(q);
 
+      // Business filter
       final matchesBusiness =
           _selectedBusiness == 'All Businesses' ||
           r.business == _selectedBusiness;
 
+      // Status filter
       final matchesStatus =
           _selectedStatus == 'All Statuses' ||
           (_selectedStatus == 'Compliant' &&
@@ -125,7 +150,15 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
           (_selectedStatus == 'Non-Compliant' &&
               r.status == ComplianceStatus.nonCompliant);
 
-      return matchesSearch && matchesBusiness && matchesStatus;
+      // Month filter (extract month from period, compare with selected month)
+      final recordMonth = _extractMonth(r.period);
+      final matchesMonth = _selectedMonth == 'All Months' || recordMonth == _selectedMonth;
+
+      // Year filter (extract year from period, compare with selected year)
+      final recordYear = _extractYear(r.period);
+      final matchesYear = _selectedYear == 'All Years' || recordYear == _selectedYear;
+
+      return matchesSearch && matchesBusiness && matchesStatus && matchesMonth && matchesYear;
     }).toList();
   }
 
@@ -717,7 +750,14 @@ class _ComplianceRow extends StatelessWidget {
                 ),
                 Expanded(flex: 3, child: _StatusBadge(status: record.status)),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      barrierColor: Colors.black.withOpacity(0.70),
+                      builder: (_) =>
+                          ComplianceMessageDialog(business: record.business),
+                    );
+                  },
                   child: const Icon(
                     Icons.visibility_outlined,
                     color: AppColors.textGray,
@@ -780,7 +820,14 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () {},
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      barrierColor: Colors.black.withOpacity(0.70),
+                      builder: (_) =>
+                          ComplianceMessageDialog(business: record.business),
+                    );
+                  },
                   child: const Icon(
                     Icons.visibility_outlined,
                     color: AppColors.textGray,
@@ -856,7 +903,14 @@ class _ComplianceRow extends StatelessWidget {
                 Expanded(
                   flex: 1,
                   child: GestureDetector(
-                    onTap: () {},
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        barrierColor: Colors.black.withOpacity(0.70),
+                        builder: (_) =>
+                            ComplianceMessageDialog(business: record.business),
+                      );
+                    },
                     child: const Icon(
                       Icons.visibility_outlined,
                       color: AppColors.textGray,

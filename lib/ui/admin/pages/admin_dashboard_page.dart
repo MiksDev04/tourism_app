@@ -313,8 +313,7 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               data.sub!,
-              style:
-                  const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
             ),
           ],
         ],
@@ -343,9 +342,21 @@ class _DonutChartsRow extends StatelessWidget {
             Center(
               child: _DonutChart(
                 segments: const [
-                  _Segment(value: 0.6, color: AppColors.chartCyan),
-                  _Segment(value: 0.3, color: AppColors.chartPurple),
-                  _Segment(value: 0.1, color: AppColors.chartOrange),
+                  _Segment(
+                    value: 0.6,
+                    color: AppColors.chartCyan,
+                    label: 'Male (60%)',
+                  ),
+                  _Segment(
+                    value: 0.3,
+                    color: AppColors.chartPurple,
+                    label: 'Female (30%)',
+                  ),
+                  _Segment(
+                    value: 0.1,
+                    color: AppColors.chartOrange,
+                    label: 'Other (10%)',
+                  ),
                 ],
                 size: 130,
               ),
@@ -369,11 +380,31 @@ class _DonutChartsRow extends StatelessWidget {
             Center(
               child: _DonutChart(
                 segments: const [
-                  _Segment(value: 0.40, color: AppColors.chartGreen),
-                  _Segment(value: 0.20, color: AppColors.chartBlue),
-                  _Segment(value: 0.15, color: AppColors.chartOrange),
-                  _Segment(value: 0.15, color: AppColors.chartPurple),
-                  _Segment(value: 0.10, color: AppColors.chartGray),
+                  _Segment(
+                    value: 0.40,
+                    color: AppColors.chartGreen,
+                    label: 'Philippines (40%)',
+                  ),
+                  _Segment(
+                    value: 0.20,
+                    color: AppColors.chartBlue,
+                    label: 'USA (20%)',
+                  ),
+                  _Segment(
+                    value: 0.15,
+                    color: AppColors.chartOrange,
+                    label: 'Japan (15%)',
+                  ),
+                  _Segment(
+                    value: 0.15,
+                    color: AppColors.chartPurple,
+                    label: 'Korea (15%)',
+                  ),
+                  _Segment(
+                    value: 0.10,
+                    color: AppColors.chartGray,
+                    label: 'Others (10%)',
+                  ),
                 ],
                 size: 130,
               ),
@@ -400,11 +431,31 @@ class _DonutChartsRow extends StatelessWidget {
             Center(
               child: _DonutChart(
                 segments: const [
-                  _Segment(value: 0.45, color: AppColors.chartCyan),
-                  _Segment(value: 0.20, color: AppColors.chartGreen),
-                  _Segment(value: 0.15, color: AppColors.chartBlue),
-                  _Segment(value: 0.12, color: AppColors.chartOrange),
-                  _Segment(value: 0.08, color: AppColors.chartGray),
+                  _Segment(
+                    value: 0.45,
+                    color: AppColors.chartCyan,
+                    label: 'Private Car (45%)',
+                  ),
+                  _Segment(
+                    value: 0.20,
+                    color: AppColors.chartGreen,
+                    label: 'Bus (20%)',
+                  ),
+                  _Segment(
+                    value: 0.15,
+                    color: AppColors.chartBlue,
+                    label: 'Van (15%)',
+                  ),
+                  _Segment(
+                    value: 0.12,
+                    color: AppColors.chartOrange,
+                    label: 'Motorcycle (12%)',
+                  ),
+                  _Segment(
+                    value: 0.08,
+                    color: AppColors.chartGray,
+                    label: 'Other (8%)',
+                  ),
                 ],
                 size: 130,
               ),
@@ -508,13 +559,7 @@ class _BottomChartsRow extends StatelessWidget {
     );
 
     if (isNarrow) {
-      return Column(
-        children: [
-          barCard,
-          const SizedBox(height: 14),
-          gaugeCard,
-        ],
-      );
+      return Column(children: [barCard, const SizedBox(height: 14), gaugeCard]);
     }
 
     return Row(
@@ -605,85 +650,220 @@ class _RegionData {
   final double ratio;
 }
 
-class _RegionBar extends StatelessWidget {
+class _RegionBar extends StatefulWidget {
   const _RegionBar({required this.data});
 
   final _RegionData data;
 
   @override
+  State<_RegionBar> createState() => _RegionBarState();
+}
+
+class _RegionBarState extends State<_RegionBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _widthAnimation;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _widthAnimation = Tween<double>(
+      begin: 0,
+      end: widget.data.ratio,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 70,
-          child: Text(
-            data.name,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
-          ),
-        ),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return Stack(
-                children: [
-                  Container(
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBorder,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                  ),
-                  Container(
-                    height: 10,
-                    width: constraints.maxWidth * data.ratio,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          AppColors.gradientStart,
-                          AppColors.gradientEnd,
-                        ],
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: _isHovered
+            ? Matrix4.translationValues(4, 0, 0) // FIXED: Use translationValues
+            : Matrix4.identity(),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 70,
+              child: Text(
+                widget.data.name,
+                style: TextStyle(
+                  color: _isHovered ? AppColors.textWhite : AppColors.textGray,
+                  fontSize: 12.5,
+                  fontWeight: _isHovered ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      Container(
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBorder,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(5),
-                    ),
+                      AnimatedBuilder(
+                        animation: _widthAnimation,
+                        builder: (context, child) {
+                          return Container(
+                            height: 10,
+                            width: constraints.maxWidth * _widthAnimation.value,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppColors.gradientStart,
+                                  AppColors.gradientEnd,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+            if (_isHovered) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.cardBorder),
+                ),
+                child: Text(
+                  '${(widget.data.ratio * 100).toInt()}%',
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
                   ),
-                ],
-              );
-            },
-          ),
+                ),
+              ),
+            ],
+          ],
         ),
-      ],
+      ),
     );
   }
 }
-
 // ─── Chart: Donut ─────────────────────────────────────────────────────────────
 
 class _Segment {
-  const _Segment({required this.value, required this.color});
+  const _Segment({required this.value, required this.color, this.label});
   final double value;
   final Color color;
+  final String? label;
 }
 
-class _DonutChart extends StatelessWidget {
+class _DonutChart extends StatefulWidget {
   const _DonutChart({required this.segments, required this.size});
 
   final List<_Segment> segments;
   final double size;
 
   @override
+  State<_DonutChart> createState() => _DonutChartState();
+}
+
+class _DonutChartState extends State<_DonutChart>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  int _hoveredIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: CustomPaint(painter: _DonutPainter(segments: segments)),
+    return MouseRegion(
+      onHover: (event) {
+        // Hover detection would require hit testing - simplified for demo
+      },
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: _DonutPainter(
+                    segments: widget.segments,
+                    animationValue: _controller.value,
+                    hoveredIndex: _hoveredIndex,
+                  ),
+                  size: Size(widget.size, widget.size),
+                );
+              },
+            ),
+            // Tooltip on hover - simplified tooltip display
+            if (_hoveredIndex != -1 &&
+                widget.segments[_hoveredIndex].label != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black87,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  widget.segments[_hoveredIndex].label!,
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
 
 class _DonutPainter extends CustomPainter {
-  const _DonutPainter({required this.segments});
+  const _DonutPainter({
+    required this.segments,
+    required this.animationValue,
+    required this.hoveredIndex,
+  });
 
   final List<_Segment> segments;
+  final double animationValue;
+  final int hoveredIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -696,48 +876,178 @@ class _DonutPainter extends CustomPainter {
     );
 
     double startAngle = -math.pi / 2;
-    for (final seg in segments) {
-      final sweepAngle = seg.value * 2 * math.pi;
+    for (int i = 0; i < segments.length; i++) {
+      final seg = segments[i];
+      final sweepAngle = seg.value * 2 * math.pi * animationValue;
+
+      // Adjust stroke width for hover effect
+      final currentStrokeWidth = (hoveredIndex == i)
+          ? strokeWidth + 4
+          : strokeWidth;
       final paint = Paint()
-        ..color = seg.color
+        ..color = (hoveredIndex == i) ? seg.color.withOpacity(0.9) : seg.color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth
+        ..strokeWidth = currentStrokeWidth
         ..strokeCap = StrokeCap.butt;
+
       canvas.drawArc(rect, startAngle, sweepAngle - 0.04, false, paint);
       startAngle += sweepAngle;
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DonutPainter oldDelegate) {
+    return oldDelegate.animationValue != animationValue ||
+        oldDelegate.hoveredIndex != hoveredIndex;
+  }
 }
 
 // ─── Chart: Bar ───────────────────────────────────────────────────────────────
+// ─── Chart: Bar ───────────────────────────────────────────────────────────────
 
-class _BarChart extends StatelessWidget {
+class _BarChart extends StatefulWidget {
+  const _BarChart();
+
+  @override
+  State<_BarChart> createState() => _BarChartState();
+}
+
+class _BarChartState extends State<_BarChart>
+    with SingleTickerProviderStateMixin {
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   static const _values = [
-    130.0, 140.0, 155.0, 160.0, 180.0, 210.0,
-    240.0, 250.0, 245.0, 280.0, 270.0, 360.0,
+    130.0,
+    140.0,
+    155.0,
+    160.0,
+    180.0,
+    210.0,
+    240.0,
+    250.0,
+    245.0,
+    280.0,
+    270.0,
+    360.0,
   ];
+
+  late AnimationController _controller;
+  int _hoveredBarIndex = -1;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _checkHoveredBar(Offset position, Size size) {
+    const maxVal = 360.0;
+    const leftPad = 36.0;
+    const bottomPad = 24.0;
+    final chartH = size.height - bottomPad;
+    final chartW = size.width - leftPad;
+
+    final barW = chartW / _months.length * 0.5;
+    final gap = chartW / _months.length;
+
+    for (int i = 0; i < _months.length; i++) {
+      final x = leftPad + gap * i + gap / 2 - barW / 2;
+      final barRect = Rect.fromLTWH(x, 0, barW, chartH);
+
+      if (barRect.contains(position)) {
+        if (_hoveredBarIndex != i) {
+          setState(() {
+            _hoveredBarIndex = i;
+          });
+        }
+        return;
+      }
+    }
+
+    if (_hoveredBarIndex != -1) {
+      setState(() {
+        _hoveredBarIndex = -1;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _BarPainter(months: _months, values: _values),
-      size: Size.infinite,
+    return MouseRegion(
+      onHover: (event) {
+        final renderBox = context.findRenderObject() as RenderBox?;
+        if (renderBox != null) {
+          final localPosition = renderBox.globalToLocal(event.position);
+          _checkHoveredBar(localPosition, renderBox.size);
+        }
+      },
+      onExit: (_) {
+        setState(() {
+          _hoveredBarIndex = -1;
+        });
+      },
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          return Opacity(
+            opacity: _controller.value,
+            child: Transform.scale(
+              scale: 0.95 + (_controller.value * 0.05),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return CustomPaint(
+                    painter: _BarPainter(
+                      months: _months,
+                      values: _values,
+                      animationValue: _controller.value,
+                      hoveredBarIndex: _hoveredBarIndex,
+                    ),
+                    size: Size(constraints.maxWidth, 200),
+                  );
+                },
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
 class _BarPainter extends CustomPainter {
-  const _BarPainter({required this.months, required this.values});
+  const _BarPainter({
+    required this.months,
+    required this.values,
+    required this.animationValue,
+    required this.hoveredBarIndex,
+  });
 
   final List<String> months;
   final List<double> values;
+  final double animationValue;
+  final int hoveredBarIndex;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -752,10 +1062,7 @@ class _BarPainter extends CustomPainter {
       ..color = AppColors.cardBorder
       ..strokeWidth = 0.5;
 
-    const textStyle = TextStyle(
-      color: AppColors.textSubtle,
-      fontSize: 10,
-    );
+    const textStyle = TextStyle(color: AppColors.textSubtle, fontSize: 10);
 
     // Y grid lines & labels
     for (final yv in yLabels) {
@@ -776,14 +1083,24 @@ class _BarPainter extends CustomPainter {
 
     for (int i = 0; i < months.length; i++) {
       final x = leftPad + gap * i + gap / 2 - barW / 2;
-      final barH = (values[i] / maxVal) * chartH;
-      final rect = Rect.fromLTWH(x, chartH - barH, barW, barH);
+      final animatedHeight = (values[i] / maxVal) * chartH * animationValue;
+      final rect = Rect.fromLTWH(
+        x,
+        chartH - animatedHeight,
+        barW,
+        animatedHeight,
+      );
+
+      final isHovered = hoveredBarIndex == i;
+      final barColor = isHovered ? AppColors.chartCyan : AppColors.chartBlue;
 
       final paint = Paint()
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [AppColors.chartCyan, AppColors.chartBlue.withOpacity(0.6)],
+          colors: isHovered
+              ? [AppColors.chartCyan, AppColors.chartCyan.withOpacity(0.8)]
+              : [AppColors.chartCyan, AppColors.chartBlue],
         ).createShader(rect);
 
       canvas.drawRRect(
@@ -803,6 +1120,46 @@ class _BarPainter extends CustomPainter {
         textStyle,
         size.width,
       );
+
+      // Draw tooltip if hovered
+      if (isHovered && animatedHeight > 0) {
+        final tooltipText = '${values[i].toInt()} visitors';
+        final textPainter = TextPainter(
+          text: TextSpan(
+            text: tooltipText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        final tooltipX = x + barW / 2 - textPainter.width / 2;
+        final tooltipY = chartH - animatedHeight - 22;
+
+        // Only draw if tooltip would be visible
+        if (tooltipY > 0) {
+          final tooltipRect = RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              tooltipX - 6,
+              tooltipY - 2,
+              textPainter.width + 12,
+              textPainter.height + 4,
+            ),
+            const Radius.circular(4),
+          );
+
+          final shadowPaint = Paint()..color = Colors.black.withOpacity(0.3);
+          canvas.drawRRect(tooltipRect.shift(const Offset(1, 1)), shadowPaint);
+
+          final tooltipPaint = Paint()..color = const Color(0xFF1E293B);
+          canvas.drawRRect(tooltipRect, tooltipPaint);
+
+          textPainter.paint(canvas, Offset(tooltipX, tooltipY));
+        }
+      }
     }
   }
 
@@ -821,55 +1178,130 @@ class _BarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _BarPainter oldDelegate) {
+    return oldDelegate.animationValue != animationValue ||
+        oldDelegate.hoveredBarIndex != hoveredBarIndex;
+  }
 }
 
 // ─── Chart: Gauge ─────────────────────────────────────────────────────────────
 
-class _GaugeChart extends StatelessWidget {
+class _GaugeChart extends StatefulWidget {
   const _GaugeChart({required this.value});
 
   final double value; // 0.0 - 1.0
 
   @override
+  State<_GaugeChart> createState() => _GaugeChartState();
+}
+
+class _GaugeChartState extends State<_GaugeChart>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _valueAnimation;
+  bool _isHovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _valueAnimation = Tween<double>(
+      begin: 0,
+      end: widget.value,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 130,
-      height: 130,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            painter: _GaugePainter(value: value),
-            size: const Size(130, 130),
-          ),
-          Column(
-            mainAxisSize: MainAxisSize.min,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: _isHovered
+            ? Matrix4.translationValues(4, 0, 0)
+            : Matrix4.identity(),
+        child: SizedBox(
+          width: 130,
+          height: 130,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Text(
-                '${(value * 100).toInt()}%',
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
+              AnimatedBuilder(
+                animation: _valueAnimation,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _GaugePainter(
+                      value: _valueAnimation.value,
+                      isHovered: _isHovered,
+                    ),
+                    size: const Size(130, 130),
+                  );
+                },
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: widget.value),
+                    duration: const Duration(milliseconds: 1200),
+                    builder: (context, val, child) {
+                      return Text(
+                        '${(val * 100).toInt()}%',
+                        style: TextStyle(
+                          color: _isHovered
+                              ? AppColors.chartGreen
+                              : AppColors.textWhite,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      );
+                    },
+                  ),
+                  const Text(
+                    'compliance rate',
+                    style: TextStyle(color: AppColors.textSubtle, fontSize: 10),
+                  ),
+                ],
+              ),
+              if (_isHovered)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    '71% of businesses are compliant',
+                    style: TextStyle(color: Colors.white, fontSize: 10),
+                  ),
                 ),
-              ),
-              const Text(
-                'compliance rate',
-                style: TextStyle(color: AppColors.textSubtle, fontSize: 10),
-              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _GaugePainter extends CustomPainter {
-  const _GaugePainter({required this.value});
+  const _GaugePainter({required this.value, required this.isHovered});
 
   final double value;
+  final bool isHovered;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -890,22 +1322,22 @@ class _GaugePainter extends CustomPainter {
         ..strokeWidth = strokeW,
     );
 
-    // Value arc
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      value * math.pi * 2,
-      false,
-      Paint()
-        ..color = AppColors.chartGreen
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeW
-        ..strokeCap = StrokeCap.round,
-    );
+    // Value arc with glow effect on hover
+    final valuePaint = Paint()
+      ..color = isHovered
+          ? AppColors.chartGreen.withOpacity(0.9)
+          : AppColors.chartGreen
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = isHovered ? strokeW + 2 : strokeW
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, -math.pi / 2, value * math.pi * 2, false, valuePaint);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _GaugePainter oldDelegate) {
+    return oldDelegate.value != value || oldDelegate.isHovered != isHovered;
+  }
 }
 
 // ─── Shared Card Shell ────────────────────────────────────────────────────────
