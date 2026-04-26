@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import 'package:flutter/services.dart';
 
 
 // ─── Admin Profile Page ───────────────────────────────────────────────────────
@@ -28,6 +29,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   bool _obscureNew     = true;
   bool _obscureConfirm = true;
 
+  final _formKey = GlobalKey<FormState>();
+
   @override
   void dispose() {
     for (final c in [
@@ -37,6 +40,66 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       c.dispose();
     }
     super.dispose();
+  }
+
+
+  void _showSnackbar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _saveAccountInfo() {
+    // Validate phone number
+    final phoneNumber = _phoneCtrl.text.trim();
+    final phoneRegex = RegExp(r'^[0-9]+$');
+    
+    if (!phoneRegex.hasMatch(phoneNumber)) {
+      _showSnackbar('Phone number should only contain digits', isError: true);
+      return;
+    }
+
+    // Save action with effect
+    _showSnackbar('Account information saved successfully!');
+    // Add actual save logic here
+  }
+
+  void _updatePassword() {
+    final currentPass = _currentPassCtrl.text.trim();
+    final newPass = _newPassCtrl.text.trim();
+    final confirmPass = _confirmPassCtrl.text.trim();
+
+    if (currentPass.isEmpty) {
+      _showSnackbar('Please enter current password', isError: true);
+      return;
+    }
+
+    if (newPass.isEmpty) {
+      _showSnackbar('Please enter new password', isError: true);
+      return;
+    }
+
+    if (newPass.length < 6) {
+      _showSnackbar('New password must be at least 6 characters', isError: true);
+      return;
+    }
+
+    if (newPass != confirmPass) {
+      _showSnackbar('New passwords do not match', isError: true);
+      return;
+    }
+
+    // Update password with effect
+    _showSnackbar('Password updated successfully!');
+    
+    // Clear password fields after successful update
+    _currentPassCtrl.clear();
+    _newPassCtrl.clear();
+    _confirmPassCtrl.clear();
   }
 
   @override
@@ -64,7 +127,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                     usernameCtrl: _usernameCtrl,
                     emailCtrl: _emailCtrl,
                     phoneCtrl: _phoneCtrl,
-                    onSave: () {},
+                    onSave: _saveAccountInfo,
                   ),
                   const SizedBox(height: 16),
                   _ChangePasswordCard(
@@ -80,7 +143,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                         setState(() => _obscureNew = !_obscureNew),
                     onToggleConfirm: () =>
                         setState(() => _obscureConfirm = !_obscureConfirm),
-                    onUpdate: () {},
+                    onUpdate: _updatePassword,
                   ),
                 ],
               ),
@@ -289,9 +352,8 @@ class _AccountInfoCard extends StatelessWidget {
           _LabeledField(
             label: 'Phone Number',
             icon: Icons.phone_outlined,
-            child: _InputField(
+            child: _PhoneInputField(
               controller: phoneCtrl,
-              keyboardType: TextInputType.phone,
             ),
           ),
           const SizedBox(height: 22),
@@ -484,6 +546,48 @@ class _InputField extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: AppColors.inputBackground,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide:
+              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Phone Input Field ────────────────────────────────────────────────────────
+
+class _PhoneInputField extends StatelessWidget {
+  const _PhoneInputField({
+    required this.controller,
+  });
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.phone,
+      style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+      ],
       decoration: InputDecoration(
         filled: true,
         fillColor: AppColors.inputBackground,

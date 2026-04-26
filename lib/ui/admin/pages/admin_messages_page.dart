@@ -5,7 +5,6 @@ import '../widgets/compose_message_modal.dart';
 import '../widgets/message_view_dialog.dart';
 import '../models/message_models.dart';
 
-
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
 List<Message> _messages = [
@@ -167,10 +166,21 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            _ComposeButton(onMessageSent: () {
-              (context.findAncestorStateOfType<_AdminMessagesPageState>()
-                  ?.setState(() {}));
-            }),
+            _ComposeButton(
+              onMessageSent: () {
+                (context
+                    .findAncestorStateOfType<_AdminMessagesPageState>()
+                    ?.setState(() {}));
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message sent successfully'),
+                    backgroundColor: AppColors.accentGreen,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
           ],
         );
       },
@@ -194,17 +204,15 @@ class _ComposeButton extends StatelessWidget {
       onTap: () async {
         final draft = await showComposeMessageDialog(context);
         if (draft != null && draft.isValid) {
-          _messages = [
-            Message(
-              type: draft.messageType!,
-              subject: draft.subject,
-              recipient: draft.sendToMode == SendToMode.all 
-                  ? 'All Businesses' 
-                  : draft.selectedBusiness!,
-              date: _getCurrentDate(),
-            ),
-            ..._messages,
-          ];
+          final newMessage = Message(
+            type: draft.messageType!,
+            subject: draft.subject,
+            recipient: draft.sendToMode == SendToMode.all
+                ? 'All Businesses'
+                : draft.selectedBusiness!,
+            date: _getCurrentDate(),
+          );
+          _messages = [newMessage, ..._messages];
           onMessageSent();
         }
       },
@@ -532,25 +540,25 @@ class _MessageRow extends StatelessWidget {
   void _openMessage(BuildContext context, Message message) {
     // Map MessageType enum → letter header string
     final typeLabel = switch (message.type) {
-      MessageType.compliance   => 'COMPLIANCE NOTICE',
+      MessageType.compliance => 'COMPLIANCE NOTICE',
       MessageType.announcement => 'ANNOUNCEMENT',
-      MessageType.general      => 'GENERAL NOTICE',
+      MessageType.general => 'GENERAL NOTICE',
     };
 
     // Sample body per type — replace with real stored content when available
     final body = switch (message.type) {
       MessageType.compliance =>
         'This is to inform you that your monthly report for '
-        '${message.date} is due. Please submit your report '
-        'before the 5th of the following month to avoid penalties.',
+            '${message.date} is due. Please submit your report '
+            'before the 5th of the following month to avoid penalties.',
       MessageType.announcement =>
         'We are pleased to announce an upcoming event related to tourism '
-        'in San Pablo City. Please take note of the details and participate '
-        'accordingly.',
+            'in San Pablo City. Please take note of the details and participate '
+            'accordingly.',
       MessageType.general =>
         'This is a general notice from the San Pablo City Office of Tourism. '
-        'Please review the information carefully and reach out if you have '
-        'any questions or concerns.',
+            'Please review the information carefully and reach out if you have '
+            'any questions or concerns.',
     };
 
     showMessageViewDialog(

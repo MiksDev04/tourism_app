@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
-
+import 'package:flutter/services.dart';
 // ─── Models ───────────────────────────────────────────────────────────────────
 
+// Update the DemographicRow class
 class DemographicRow {
   DemographicRow()
-      : nationality = 'Country',
-        region = 'N/A',
-        gender = 'Gender',
-        ageGroup = 'Age Group',
-        countCtrl = TextEditingController(text: '0');
+    : nationality = null, // Changed from 'Country'
+      region = null, // Changed from 'N/A'
+      gender = null, // Changed from 'Gender'
+      ageGroup = null, // Changed from 'Age Group'
+      countCtrl = TextEditingController(text: '0');
 
-  String nationality;
-  String region;
-  String gender;
-  String ageGroup;
+  String? nationality; // Made nullable
+  String? region; // Made nullable
+  String? gender; // Made nullable
+  String? ageGroup; // Made nullable
   final TextEditingController countCtrl;
 
   void dispose() => countCtrl.dispose();
@@ -24,31 +25,62 @@ class DemographicRow {
 // ─── Options ──────────────────────────────────────────────────────────────────
 
 const _purposeOptions = [
-  'Select purpose', 'Leisure', 'Business', 'Education',
-  'Medical', 'Religious', 'Others',
+  'Select purpose',
+  'Leisure',
+  'Business',
+  'Education',
+  'Medical',
+  'Religious',
+  'Others',
 ];
 
 const _transportOptions = [
-  'Select transportation', 'Private Car', 'Bus', 'Van',
-  'Motorcycle', 'Tricycle', 'Others',
+  'Select transportation',
+  'Private Car',
+  'Bus',
+  'Van',
+  'Motorcycle',
+  'Tricycle',
+  'Others',
 ];
 
 const _nationalityOptions = [
-  'Country', 'Philippines', 'USA', 'Japan',
-  'Korea', 'China', 'Others',
+  'Country',
+  'Philippines',
+  'USA',
+  'Japan',
+  'Korea',
+  'China',
+  'Others',
 ];
 
 const _regionOptions = [
-  'N/A', 'NCR', 'Laguna', 'Cavite',
-  'Batangas', 'Quezon', 'Others',
+  'N/A',
+  'NCR',
+  'Laguna',
+  'Cavite',
+  'Batangas',
+  'Quezon',
+  'Others',
 ];
 
-const _genderOptions = ['Gender', 'Male', 'Female', 'Other'];
+const _genderOptions = ['Gender', 'Male', 'Female'];
 
 const _ageGroupOptions = [
-  'Age Group', '0–17', '18–25', '26–35',
-  '36–45', '46–60', '60+',
+  'Age Group',
+  '0–17',
+  '18–25',
+  '26–35',
+  '36–45',
+  '46–60',
+  '60+',
 ];
+
+const double _inputDateHeight = 8;
+const double _inputTextHeight = 8;
+const double _inputNumberHeight = 8;
+const double _inputPassiveHeight = 8;
+const double _inputDropdownHeight = 6;
 
 // ─── Guest Entry Page ─────────────────────────────────────────────────────────
 
@@ -63,10 +95,16 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   // Stay Info
   DateTime? _checkIn;
   DateTime? _checkOut;
-  final _totalGuestsCtrl   = TextEditingController();
+  final _totalGuestsCtrl = TextEditingController();
   final _roomsOccupiedCtrl = TextEditingController();
-  String _purpose   = 'Select purpose';
-  String _transport = 'Select transportation';
+  String? _purpose;
+  String? _transport;
+
+  // Other input controllers
+  final _purposeOtherCtrl = TextEditingController();
+  final _transportOtherCtrl = TextEditingController();
+  bool _showPurposeOther = false;
+  bool _showTransportOther = false;
 
   // Demographic rows
   final List<DemographicRow> _rows = [DemographicRow()];
@@ -77,7 +115,10 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   }
 
   int get _demographicTotal {
-    return _rows.fold(0, (sum, r) => sum + (int.tryParse(r.countCtrl.text) ?? 0));
+    return _rows.fold(
+      0,
+      (sum, r) => sum + (int.tryParse(r.countCtrl.text) ?? 0),
+    );
   }
 
   int get _totalGuests => int.tryParse(_totalGuestsCtrl.text) ?? 0;
@@ -92,20 +133,129 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     });
   }
 
+  // Helper method to show snackbar// Helper method to show snackbar
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.accentRed : AppColors.primaryCyan,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _clearButton(){
+    _clearForm();
+    _showSnackBar('Clear button pressed');
+  }
+  // Update the _clearForm method
   void _clearForm() {
     setState(() {
       _checkIn = null;
       _checkOut = null;
       _totalGuestsCtrl.clear();
       _roomsOccupiedCtrl.clear();
-      _purpose   = 'Select purpose';
-      _transport = 'Select transportation';
+      _purpose = null;
+      _transport = null;
+      _purposeOtherCtrl.clear();
+      _transportOtherCtrl.clear();
+      _showPurposeOther = false;
+      _showTransportOther = false;
       for (final r in _rows) r.dispose();
       _rows
         ..clear()
         ..add(DemographicRow());
     });
   }
+  
+
+  // Add validation and save method
+  bool _validateAndSave() {
+    // Check required fields
+    if (_checkIn == null) {
+      _showSnackBar('Please select check-in date', isError: true);
+      return false;
+    }
+    if (_checkOut == null) {
+      _showSnackBar('Please select check-out date', isError: true);
+      return false;
+    }
+    if (_totalGuestsCtrl.text.isEmpty ||
+        int.tryParse(_totalGuestsCtrl.text) == 0) {
+      _showSnackBar('Please enter total number of guests', isError: true);
+      return false;
+    }
+    if (_roomsOccupiedCtrl.text.isEmpty ||
+        int.tryParse(_roomsOccupiedCtrl.text) == 0) {
+      _showSnackBar('Please enter number of rooms occupied', isError: true);
+      return false;
+    }
+    if (_purpose == null || _purpose == 'Select purpose') {
+      _showSnackBar('Please select purpose of visit', isError: true);
+      return false;
+    }
+    if (_transport == null || _transport == 'Select transportation') {
+      _showSnackBar('Please select mode of transportation', isError: true);
+      return false;
+    }
+
+    // Check demographic total matches total guests
+    final totalGuests = _totalGuests;
+    final demographicSum = _demographicTotal;
+    if (demographicSum != totalGuests) {
+      _showSnackBar(
+        'Demographic breakdown sum ($demographicSum) does not match total guests ($totalGuests)',
+        isError: true,
+      );
+      return false;
+    }
+
+    // Check if any demographic rows have missing required fields
+    for (int i = 0; i < _rows.length; i++) {
+      final row = _rows[i];
+      if (row.nationality == null || row.nationality == 'Country') {
+        _showSnackBar(
+          'Please select nationality for row ${i + 1}',
+          isError: true,
+        );
+        return false;
+      }
+      if (row.nationality == 'Philippines' &&
+          (row.region == null || row.region == 'N/A')) {
+        _showSnackBar(
+          'Please select region for Philippines entry in row ${i + 1}',
+          isError: true,
+        );
+        return false;
+      }
+      if (row.gender == null || row.gender == 'Gender') {
+        _showSnackBar('Please select gender for row ${i + 1}', isError: true);
+        return false;
+      }
+      if (row.ageGroup == null || row.ageGroup == 'Age Group') {
+        _showSnackBar(
+          'Please select age group for row ${i + 1}',
+          isError: true,
+        );
+        return false;
+      }
+      final count = int.tryParse(row.countCtrl.text) ?? 0;
+      if (count <= 0) {
+        _showSnackBar(
+          'Please enter valid guest count for row ${i + 1}',
+          isError: true,
+        );
+        return false;
+      }
+    }
+    _clearForm();
+    // If all validation passes
+    _showSnackBar('Guest entry saved successfully!');
+    // TODO: Add actual save logic here
+    return true;
+  }
+
+  // Update the _clearForm method
 
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
     final picked = await showDatePicker(
@@ -138,6 +288,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   void dispose() {
     _totalGuestsCtrl.dispose();
     _roomsOccupiedCtrl.dispose();
+    _purposeOtherCtrl.dispose();
+    _transportOtherCtrl.dispose();
     for (final r in _rows) r.dispose();
     super.dispose();
   }
@@ -163,10 +315,26 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
               roomsOccupiedCtrl: _roomsOccupiedCtrl,
               purpose: _purpose,
               transport: _transport,
+              showPurposeOther: _showPurposeOther,
+              showTransportOther: _showTransportOther,
+              purposeOtherCtrl: _purposeOtherCtrl,
+              transportOtherCtrl: _transportOtherCtrl,
               onPickCheckIn: () => _pickDate(context, true),
               onPickCheckOut: () => _pickDate(context, false),
-              onPurposeChanged: (v) => setState(() => _purpose = v!),
-              onTransportChanged: (v) => setState(() => _transport = v!),
+              onPurposeChanged: (v) {
+                setState(() {
+                  _purpose = v!;
+                  _showPurposeOther = (v == 'Others');
+                  if (!_showPurposeOther) _purposeOtherCtrl.clear();
+                });
+              },
+              onTransportChanged: (v) {
+                setState(() {
+                  _transport = v!;
+                  _showTransportOther = (v == 'Others');
+                  if (!_showTransportOther) _transportOtherCtrl.clear();
+                });
+              },
               onGuestsChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 16),
@@ -179,10 +347,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
               onRowChanged: () => setState(() {}),
             ),
             const SizedBox(height: 20),
-            _FormActions(
-              onClear: _clearForm,
-              onSave: () {},
-            ),
+            _FormActions(onClear: _clearButton, onSave: _validateAndSave),
           ],
         ),
       ),
@@ -220,6 +385,8 @@ class _PageHeader extends StatelessWidget {
 
 // ─── Stay Info Card ───────────────────────────────────────────────────────────
 
+// ─── Stay Info Card ───────────────────────────────────────────────────────────
+
 class _StayInfoCard extends StatelessWidget {
   const _StayInfoCard({
     required this.checkIn,
@@ -229,6 +396,10 @@ class _StayInfoCard extends StatelessWidget {
     required this.roomsOccupiedCtrl,
     required this.purpose,
     required this.transport,
+    required this.showPurposeOther,
+    required this.showTransportOther,
+    required this.purposeOtherCtrl,
+    required this.transportOtherCtrl,
     required this.onPickCheckIn,
     required this.onPickCheckOut,
     required this.onPurposeChanged,
@@ -241,8 +412,12 @@ class _StayInfoCard extends StatelessWidget {
   final int nights;
   final TextEditingController totalGuestsCtrl;
   final TextEditingController roomsOccupiedCtrl;
-  final String purpose;
-  final String transport;
+  final String? purpose;
+  final String? transport;
+  final bool showPurposeOther;
+  final bool showTransportOther;
+  final TextEditingController purposeOtherCtrl;
+  final TextEditingController transportOtherCtrl;
   final VoidCallback onPickCheckIn;
   final VoidCallback onPickCheckOut;
   final ValueChanged<String?> onPurposeChanged;
@@ -341,17 +516,16 @@ class _StayInfoCard extends StatelessWidget {
             ),
           const SizedBox(height: 14),
 
-          // Row 2: Total Guests / Rooms Occupied / Purpose
+          // Row 2: Total Guests / Rooms Occupied (both number-only)
           if (!isMobile)
             Row(
               children: [
                 Expanded(
                   child: _LabeledField(
                     label: 'Total Guests *',
-                    child: _InputField(
+                    child: _NumberInputField(
                       controller: totalGuestsCtrl,
                       hint: 'e.g. 10',
-                      keyboardType: TextInputType.number,
                       onChanged: onGuestsChanged,
                     ),
                   ),
@@ -360,22 +534,97 @@ class _StayInfoCard extends StatelessWidget {
                 Expanded(
                   child: _LabeledField(
                     label: 'Rooms Occupied *',
-                    child: _InputField(
+                    child: _NumberInputField(
                       controller: roomsOccupiedCtrl,
                       hint: 'e.g. 3',
-                      keyboardType: TextInputType.number,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: _LabeledField(
+                    label: 'Total Guests *',
+                    child: _NumberInputField(
+                      controller: totalGuestsCtrl,
+                      hint: 'e.g. 10',
+                      onChanged: onGuestsChanged,
                     ),
                   ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: _LabeledField(
-                    label: 'Purpose of Visit *',
-                    child: _DropdownField(
-                      value: purpose,
-                      items: _purposeOptions,
-                      onChanged: onPurposeChanged,
+                    label: 'Rooms Occupied *',
+                    child: _NumberInputField(
+                      controller: roomsOccupiedCtrl,
+                      hint: 'e.g. 3',
                     ),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 14),
+
+          // Row 3: Purpose of Visit and Mode of Transportation together
+          if (!isMobile)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _LabeledField(
+                        label: 'Purpose of Visit *',
+                        child: _DropdownField(
+                          value: purpose,
+                          items: _purposeOptions,
+                          hint: 'Select Purpose',
+                          onChanged: (v) {
+                            onPurposeChanged(v);
+                          },
+                        ),
+                      ),
+                      if (showPurposeOther) ...[
+                        const SizedBox(height: 8),
+                        _InputField(
+                          controller: purposeOtherCtrl,
+                          hint: 'Please specify other purpose',
+                          keyboardType: TextInputType.text,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _LabeledField(
+                        label: 'Mode of Transportation *',
+                        child: _DropdownField(
+                          value: transport,
+                          items: _transportOptions,
+                          hint: 'Select Transportation',
+                          onChanged: (v) {
+                            onTransportChanged(v);
+                          },
+                        ),
+                      ),
+                      if (showTransportOther) ...[
+                        const SizedBox(height: 8),
+                        _InputField(
+                          controller: transportOtherCtrl,
+                          hint: 'Please specify other transportation',
+                          keyboardType: TextInputType.text,
+                        ),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -383,73 +632,52 @@ class _StayInfoCard extends StatelessWidget {
           else
             Column(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: _LabeledField(
-                        label: 'Total Guests *',
-                        child: _InputField(
-                          controller: totalGuestsCtrl,
-                          hint: 'e.g. 10',
-                          keyboardType: TextInputType.number,
-                          onChanged: onGuestsChanged,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _LabeledField(
-                        label: 'Rooms Occupied *',
-                        child: _InputField(
-                          controller: roomsOccupiedCtrl,
-                          hint: 'e.g. 3',
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
                 _LabeledField(
                   label: 'Purpose of Visit *',
                   child: _DropdownField(
                     value: purpose,
                     items: _purposeOptions,
-                    onChanged: onPurposeChanged,
+                    hint: 'Select Purpose',
+                    onChanged: (v) {
+                      onPurposeChanged(v);
+                    },
                   ),
                 ),
-              ],
-            ),
-          const SizedBox(height: 14),
-
-          // Mode of Transportation - full width on mobile
-          if (!isMobile)
-            SizedBox(
-              width: 480,
-              child: _LabeledField(
-                label: 'Mode of Transportation *',
-                child: _DropdownField(
-                  value: transport,
-                  items: _transportOptions,
-                  onChanged: onTransportChanged,
+                if (showPurposeOther) ...[
+                  const SizedBox(height: 8),
+                  _InputField(
+                    controller: purposeOtherCtrl,
+                    hint: 'Please specify other purpose',
+                    keyboardType: TextInputType.text,
+                  ),
+                ],
+                const SizedBox(height: 14),
+                _LabeledField(
+                  label: 'Mode of Transportation *',
+                  child: _DropdownField(
+                    value: transport,
+                    items: _transportOptions,
+                    hint: 'Select Transportation',
+                    onChanged: (v) {
+                      onTransportChanged(v);
+                    },
+                  ),
                 ),
-              ),
-            )
-          else
-            _LabeledField(
-              label: 'Mode of Transportation *',
-              child: _DropdownField(
-                value: transport,
-                items: _transportOptions,
-                onChanged: onTransportChanged,
-              ),
+                if (showTransportOther) ...[
+                  const SizedBox(height: 8),
+                  _InputField(
+                    controller: transportOtherCtrl,
+                    hint: 'Please specify other transportation',
+                    keyboardType: TextInputType.text,
+                  ),
+                ],
+              ],
             ),
         ],
       ),
     );
   }
 }
-
 // ─── Demographic Card ─────────────────────────────────────────────────────────
 
 class _DemographicCard extends StatelessWidget {
@@ -517,11 +745,16 @@ class _DemographicCard extends StatelessWidget {
                 GestureDetector(
                   onTap: onAddRow,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryCyan.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: AppColors.primaryCyan.withOpacity(0.4)),
+                      border: Border.all(
+                        color: AppColors.primaryCyan.withOpacity(0.4),
+                      ),
                     ),
                     child: const Row(
                       children: [
@@ -578,11 +811,16 @@ class _DemographicCard extends StatelessWidget {
                 GestureDetector(
                   onTap: onAddRow,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppColors.primaryCyan.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(7),
-                      border: Border.all(color: AppColors.primaryCyan.withOpacity(0.4)),
+                      border: Border.all(
+                        color: AppColors.primaryCyan.withOpacity(0.4),
+                      ),
                     ),
                     child: const Row(
                       children: [
@@ -624,9 +862,12 @@ class _DemographicCard extends StatelessWidget {
               ),
             ),
 
-          // Rows - mobile: gender, age, count in one row
+          // Rows
+          // Update the _DemographicCard to handle null values when checking if Philippines
           ...List.generate(rows.length, (i) {
             final row = rows[i];
+            final isPhilippines = row.nationality == 'Philippines';
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: isMobile
@@ -638,22 +879,30 @@ class _DemographicCard extends StatelessWidget {
                               child: _DropdownField(
                                 value: row.nationality,
                                 items: _nationalityOptions,
+                                hint: 'Select Country',
                                 onChanged: (v) {
-                                  row.nationality = v!;
+                                  row.nationality = v;
+                                  // Reset region if not Philippines
+                                  if (row.nationality != 'Philippines') {
+                                    row.region = null;
+                                  }
                                   onRowChanged();
                                 },
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: _DropdownField(
-                                value: row.region,
-                                items: _regionOptions,
-                                onChanged: (v) {
-                                  row.region = v!;
-                                  onRowChanged();
-                                },
-                              ),
+                              child: isPhilippines
+                                  ? _DropdownField(
+                                      value: row.region,
+                                      items: _regionOptions,
+                                      hint: 'Select Region',
+                                      onChanged: (v) {
+                                        row.region = v;
+                                        onRowChanged();
+                                      },
+                                    )
+                                  : _ReadOnlyField(value: row.region ?? 'N/A'),
                             ),
                             SizedBox(
                               width: 24,
@@ -677,8 +926,9 @@ class _DemographicCard extends StatelessWidget {
                               child: _DropdownField(
                                 value: row.gender,
                                 items: _genderOptions,
+                                hint: 'Select Gender',
                                 onChanged: (v) {
-                                  row.gender = v!;
+                                  row.gender = v;
                                   onRowChanged();
                                 },
                               ),
@@ -688,18 +938,18 @@ class _DemographicCard extends StatelessWidget {
                               child: _DropdownField(
                                 value: row.ageGroup,
                                 items: _ageGroupOptions,
+                                hint: 'Select Age Group',
                                 onChanged: (v) {
-                                  row.ageGroup = v!;
+                                  row.ageGroup = v;
                                   onRowChanged();
                                 },
                               ),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: _InputField(
+                              child: _NumberInputField(
                                 controller: row.countCtrl,
                                 hint: '0',
-                                keyboardType: TextInputType.number,
                                 onChanged: (_) => onRowChanged(),
                               ),
                             ),
@@ -711,6 +961,7 @@ class _DemographicCard extends StatelessWidget {
                   : _DemographicRowWidget(
                       row: row,
                       showDelete: rows.length > 1,
+                      isPhilippines: isPhilippines,
                       onDelete: () => onRemoveRow(i),
                       onChanged: onRowChanged,
                     ),
@@ -743,16 +994,19 @@ class _DemographicCard extends StatelessWidget {
   }
 }
 
+// Update _DemographicRowWidget
 class _DemographicRowWidget extends StatelessWidget {
   const _DemographicRowWidget({
     required this.row,
     required this.showDelete,
+    required this.isPhilippines,
     required this.onDelete,
     required this.onChanged,
   });
 
   final DemographicRow row;
   final bool showDelete;
+  final bool isPhilippines;
   final VoidCallback onDelete;
   final VoidCallback onChanged;
 
@@ -765,8 +1019,13 @@ class _DemographicRowWidget extends StatelessWidget {
           child: _DropdownField(
             value: row.nationality,
             items: _nationalityOptions,
+            hint: 'Select Country',
             onChanged: (v) {
-              row.nationality = v!;
+              row.nationality = v;
+              // Reset region if not Philippines
+              if (row.nationality != 'Philippines') {
+                row.region = null;
+              }
               onChanged();
             },
           ),
@@ -774,14 +1033,17 @@ class _DemographicRowWidget extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           flex: 3,
-          child: _DropdownField(
-            value: row.region,
-            items: _regionOptions,
-            onChanged: (v) {
-              row.region = v!;
-              onChanged();
-            },
-          ),
+          child: isPhilippines
+              ? _DropdownField(
+                  value: row.region,
+                  items: _regionOptions,
+                  hint: 'Select Region',
+                  onChanged: (v) {
+                    row.region = v;
+                    onChanged();
+                  },
+                )
+              : _ReadOnlyField(value: row.region ?? 'N/A'),
         ),
         const SizedBox(width: 10),
         Expanded(
@@ -789,8 +1051,9 @@ class _DemographicRowWidget extends StatelessWidget {
           child: _DropdownField(
             value: row.gender,
             items: _genderOptions,
+            hint: 'Select Gender',
             onChanged: (v) {
-              row.gender = v!;
+              row.gender = v;
               onChanged();
             },
           ),
@@ -801,8 +1064,9 @@ class _DemographicRowWidget extends StatelessWidget {
           child: _DropdownField(
             value: row.ageGroup,
             items: _ageGroupOptions,
+            hint: 'Select Age Group',
             onChanged: (v) {
-              row.ageGroup = v!;
+              row.ageGroup = v;
               onChanged();
             },
           ),
@@ -810,10 +1074,9 @@ class _DemographicRowWidget extends StatelessWidget {
         const SizedBox(width: 10),
         Expanded(
           flex: 1,
-          child: _InputField(
+          child: _NumberInputField(
             controller: row.countCtrl,
             hint: '0',
-            keyboardType: TextInputType.number,
             onChanged: (_) => onChanged(),
           ),
         ),
@@ -824,8 +1087,8 @@ class _DemographicRowWidget extends StatelessWidget {
               ? GestureDetector(
                   onTap: onDelete,
                   child: const Icon(
-                    Icons.close_rounded,
-                    color: AppColors.textSubtle,
+                    Icons.delete_rounded,
+                    color: AppColors.accentRed,
                     size: 16,
                   ),
                 )
@@ -835,7 +1098,6 @@ class _DemographicRowWidget extends StatelessWidget {
     );
   }
 }
-
 // ─── Form Actions ─────────────────────────────────────────────────────────────
 
 class _FormActions extends StatelessWidget {
@@ -889,8 +1151,11 @@ class _FormActions extends StatelessWidget {
                 ),
                 child: ElevatedButton.icon(
                   onPressed: onSave,
-                  icon: const Icon(Icons.person_add_rounded,
-                      size: 17, color: Colors.white),
+                  icon: const Icon(
+                    Icons.person_add_rounded,
+                    size: 17,
+                    color: Colors.white,
+                  ),
                   label: const Text(
                     'Save Guest Entry',
                     style: TextStyle(
@@ -953,8 +1218,11 @@ class _FormActions extends StatelessWidget {
               ),
               child: ElevatedButton.icon(
                 onPressed: onSave,
-                icon: const Icon(Icons.person_add_rounded,
-                    size: 17, color: Colors.white),
+                icon: const Icon(
+                  Icons.person_add_rounded,
+                  size: 17,
+                  color: Colors.white,
+                ),
                 label: const Text(
                   'Save Guest Entry',
                   style: TextStyle(
@@ -1025,6 +1293,58 @@ class _LabeledField extends StatelessWidget {
   }
 }
 
+// Number-only input field that prevents text input
+class _NumberInputField extends StatelessWidget {
+  const _NumberInputField({
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      inputFormatters: <TextInputFormatter>[
+        FilteringTextInputFormatter.digitsOnly,
+      ],
+      onChanged: onChanged,
+      style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+        filled: true,
+        fillColor: AppColors.inputBackground,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _InputField extends StatelessWidget {
   const _InputField({
     required this.controller,
@@ -1051,8 +1371,10 @@ class _InputField extends StatelessWidget {
         filled: true,
         fillColor: AppColors.inputBackground,
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -1063,8 +1385,10 @@ class _InputField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -1079,7 +1403,10 @@ class _ReadOnlyField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: _inputPassiveHeight,
+      ),
       decoration: BoxDecoration(
         color: AppColors.inputBackground,
         borderRadius: BorderRadius.circular(8),
@@ -1104,8 +1431,10 @@ class _DatePickerField extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: _inputDateHeight,
+        ),
         decoration: BoxDecoration(
           color: AppColors.inputBackground,
           borderRadius: BorderRadius.circular(8),
@@ -1124,8 +1453,11 @@ class _DatePickerField extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(Icons.calendar_today_outlined,
-                color: AppColors.textSubtle, size: 15),
+            const Icon(
+              Icons.calendar_today_outlined,
+              color: AppColors.textSubtle,
+              size: 15,
+            ),
           ],
         ),
       ),
@@ -1133,35 +1465,46 @@ class _DatePickerField extends StatelessWidget {
   }
 }
 
+// Replace the _DropdownField widget with this updated version that shows hint when value is null
 class _DropdownField extends StatelessWidget {
   const _DropdownField({
     required this.value,
     required this.items,
     required this.onChanged,
+    this.hint = 'Select option',
   });
 
-  final String value;
+  final String? value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
+  final String hint;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: _inputDropdownHeight,
+      ),
       decoration: BoxDecoration(
         color: AppColors.inputBackground,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: AppColors.inputBorder),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
+        child: DropdownButton<String?>(
+          isDense: true,
           value: value,
           isExpanded: true,
+          hint: Text(
+            hint,
+            style: const TextStyle(color: AppColors.textSubtle, fontSize: 13),
+          ),
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
           style: const TextStyle(color: AppColors.textGray, fontSize: 13),
           items: items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map((e) => DropdownMenuItem<String?>(value: e, child: Text(e)))
               .toList(),
           onChanged: onChanged,
         ),

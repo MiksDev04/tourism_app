@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
-import '../widgets/compliance_message_dialogue.dart';
+import '../widgets/compliance_message_dialog.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
