@@ -35,6 +35,7 @@ Future<void> showReviewReportModal(
   return showDialog(
     context: context,
     barrierColor: Colors.black.withOpacity(0.6),
+    barrierDismissible: true,
     builder: (_) => ReviewReportModal(
       report: report,
       onApprove: onApprove,
@@ -45,7 +46,7 @@ Future<void> showReviewReportModal(
 
 // ─── Modal Widget ─────────────────────────────────────────────────────────────
 
-class ReviewReportModal extends StatelessWidget {
+class ReviewReportModal extends StatefulWidget {
   const ReviewReportModal({
     super.key,
     required this.report,
@@ -57,92 +58,137 @@ class ReviewReportModal extends StatelessWidget {
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
 
+  @override
+  State<ReviewReportModal> createState() => _ReviewReportModalState();
+}
+
+class _ReviewReportModalState extends State<ReviewReportModal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+
   static const _modalMaxWidth = 420.0;
 
-  bool get _showActions => report.status == ReportStatus.submitted;
+  bool get _showActions => widget.report.status == ReportStatus.submitted;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F1923),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 40,
-                  offset: const Offset(0, 16),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // ── Header ──
-                _ModalHeader(onClose: () => Navigator.of(context).pop()),
-
-                // ── Divider ──
-                const Divider(color: AppColors.cardBorder, height: 1),
-
-                // ── Body ──
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Business + Period row
-                      _DetailsGrid(
-                        topLeft: _DetailField(
-                          label: 'Business',
-                          value: report.business,
-                        ),
-                        topRight: _DetailField(
-                          label: 'Period',
-                          value: report.period,
-                        ),
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          child: GestureDetector(
+            onTap: () {}, // Prevents tap from bubbling to the outer GestureDetector
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _slideAnim,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F1923),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.cardBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 40,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
-                      // Total Guests + Check-ins row
-                      _DetailsGrid(
-                        topLeft: _DetailField(
-                          label: 'Total Guests',
-                          value: '${report.totalGuests}',
-                          valueLarge: true,
-                        ),
-                        topRight: _DetailField(
-                          label: 'Check-ins',
-                          value: '${report.checkIns}',
-                          valueLarge: true,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // ── Header ──
+                          _ModalHeader(onClose: () => Navigator.of(context).pop()),
+
+                          // ── Divider ──
+                          const Divider(color: AppColors.cardBorder, height: 1),
+
+                          // ── Body ──
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Business + Period row
+                                _DetailsGrid(
+                                  topLeft: _DetailField(
+                                    label: 'Business',
+                                    value: widget.report.business,
+                                  ),
+                                  topRight: _DetailField(
+                                    label: 'Period',
+                                    value: widget.report.period,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                // Total Guests + Check-ins row
+                                _DetailsGrid(
+                                  topLeft: _DetailField(
+                                    label: 'Total Guests',
+                                    value: '${widget.report.totalGuests}',
+                                    valueLarge: true,
+                                  ),
+                                  topRight: _DetailField(
+                                    label: 'Check-ins',
+                                    value: '${widget.report.checkIns}',
+                                    valueLarge: true,
+                                  ),
+                                ),
+                                if (widget.report.submitted != null) ...[
+                                  const SizedBox(height: 16),
+                                  _SubmittedChip(date: widget.report.submitted!),
+                                ],
+                              ],
+                            ),
+                          ),
+
+                          // ── Action Buttons ──
+                          if (_showActions) ...[
+                            const Divider(color: AppColors.cardBorder, height: 1),
+                            _ActionRow(
+                              onApprove: () {
+                                widget.onApprove?.call();
+                              },
+                              onReject: () {
+                                widget.onReject?.call();
+                              },
+                            ),
+                          ],
+                        ],
                       ),
-                      if (report.submitted != null) ...[
-                        const SizedBox(height: 16),
-                        _SubmittedChip(date: report.submitted!),
-                      ],
-                    ],
+                    ),
                   ),
                 ),
-
-                // ── Action Buttons ──
-                if (_showActions) ...[
-                  const Divider(color: AppColors.cardBorder, height: 1),
-                  _ActionRow(
-                    onApprove: () {
-                      onApprove?.call();
-                    },
-                    onReject: () {
-                      onReject?.call();
-                    },
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
@@ -282,8 +328,6 @@ class _SubmittedChip extends StatelessWidget {
     );
   }
 }
-
-// ─── Action Row (Reject / Approve - NO CONFIRMATION) ────────────────────────────
 
 // ─── Action Row (Reject / Approve - NO CONFIRMATION) ────────────────────────────
 

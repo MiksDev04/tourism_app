@@ -326,6 +326,7 @@ class _FilterRow extends StatelessWidget {
             : Row(
                 children: [
                   SizedBox(
+                    height: 38,
                     width: 220,
                     child: _SearchField(
                       controller: searchCtrl,
@@ -412,7 +413,7 @@ class _DropdownFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
@@ -421,6 +422,7 @@ class _DropdownFilter extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: value,
+          isDense: true,
           isExpanded: true,
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
@@ -502,8 +504,8 @@ class _TableHeader extends StatelessWidget {
                 : [
                     const Expanded(flex: 3, child: _HeaderCell('Type')),
                     const Expanded(flex: 6, child: _HeaderCell('Subject')),
-                    const Expanded(flex: 4, child: _HeaderCell('Recipient')),
-                    const Expanded(flex: 3, child: _HeaderCell('Date')),
+                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
+                    const Expanded(flex: 2, child: _HeaderCell('Date')),
                     const Expanded(flex: 1, child: _HeaderCell('Action')),
                   ],
           ),
@@ -658,7 +660,7 @@ class _MessageRow extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      flex: 3,
+                      flex: 2,
                       child: Text(
                         message.date,
                         style: const TextStyle(

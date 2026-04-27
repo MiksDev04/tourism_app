@@ -4,62 +4,7 @@ import '../../shared/layouts/admin_layout.dart';
 import '../widgets/business_details_modal.dart';
 import '../models/accommodation_models.dart'; // Add this import
 
-// Remove the Models section (lines 6-30) since it's now imported
-
-// Rest of your code remains the same until _ActionButtons class
-
 // ─── Sample Data ──────────────────────────────────────────────────────────────
-
-const _accommodations = [
-  Accommodation(
-    name: 'Grand Hotel San Pablo',
-    type: 'Hotel',
-    owner: 'Juan dela Cruz',
-    contact: '049-562-1234',
-    rooms: 45,
-    status: AccommodationStatus.approved,
-  ),
-  Accommodation(
-    name: 'Sampaloc Lake Resort',
-    type: 'Resort',
-    owner: 'Pedro Reyes',
-    contact: '049-562-5678',
-    rooms: 30,
-    status: AccommodationStatus.approved,
-  ),
-  Accommodation(
-    name: 'Casa San Pablo Inn',
-    type: 'Inn',
-    owner: 'Rosa Mendoza',
-    contact: '049-562-9012',
-    rooms: 20,
-    status: AccommodationStatus.pending,
-  ),
-  Accommodation(
-    name: "Traveler's Lodge",
-    type: 'Inn',
-    owner: 'Carlos Bautista',
-    contact: '049-562-3456',
-    rooms: 15,
-    status: AccommodationStatus.rejected,
-  ),
-  Accommodation(
-    name: 'Paradise Resort & Spa',
-    type: 'Resort',
-    owner: 'Elena Garcia',
-    contact: '049-562-7890',
-    rooms: 35,
-    status: AccommodationStatus.warning,
-  ),
-  Accommodation(
-    name: 'Lakeview Boutique Hotel',
-    type: 'Hotel',
-    owner: 'Roberto Lim',
-    contact: '049-562-2345',
-    rooms: 25,
-    status: AccommodationStatus.pending,
-  ),
-];
 
 // ─── Tab Filter Model ─────────────────────────────────────────────────────────
 
@@ -479,7 +424,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 3, child: _HeaderCell('Contact')),
           Expanded(flex: 1, child: _HeaderCell('Rooms')),
           Expanded(flex: 2, child: _HeaderCell('Status')),
-          Expanded(flex: 2, child: _HeaderCell('Actions')),
+          Expanded(flex: 1, child: _HeaderCell('Actions')),
         ],
       ),
     );
@@ -588,13 +533,15 @@ class _TableRow extends StatelessWidget {
           ),
 
           Expanded(flex: 2, child: _StatusBadge(status: item.status)),
-
           Expanded(
-            flex: 2,
-            child: _ActionButtons(
-              status: item.status,
-              item: item,
-              onStatusUpdate: onStatusUpdate,
+            flex: 1,
+            child: Align(
+              alignment: Alignment.center,
+              child: _ActionButtons(
+                status: item.status,
+                item: item,
+                onStatusUpdate: onStatusUpdate,
+              ),
             ),
           ),
         ],
@@ -841,77 +788,6 @@ class _ActionButtons extends StatelessWidget {
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus) onStatusUpdate;
 
-  void _showConfirmDialog(
-    BuildContext context,
-    String action,
-    AccommodationStatus newStatus,
-  ) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F1923),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: AppColors.cardBorder),
-        ),
-        title: Row(
-          children: [
-            Icon(
-              action == 'Approve'
-                  ? Icons.check_circle_outline
-                  : Icons.cancel_outlined,
-              color: action == 'Approve'
-                  ? AppColors.accentGreen
-                  : AppColors.accentRed,
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              '$action Accommodation',
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Are you sure you want to $action "${item.name}"?\n\nThis action will ${action == 'Approve' ? 'approve the business license' : 'reject the application and notify the owner'}.',
-          style: const TextStyle(
-            color: AppColors.textGray,
-            fontSize: 14,
-            height: 1.4,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: AppColors.textGray,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              onStatusUpdate(item, newStatus);
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: action == 'Approve'
-                  ? AppColors.accentGreen
-                  : AppColors.accentRed,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            ),
-            child: Text(action),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final showApproveReject = status == AccommodationStatus.pending;
@@ -980,20 +856,8 @@ class _ActionIcon extends StatelessWidget {
       message: tooltip ?? '',
       child: GestureDetector(
         onTap: onTap,
-        child: Icon(
-          icon,
-          color: color ?? AppColors.textGray,
-          size: 20,
-        ),
+        child: Icon(icon, color: color ?? AppColors.textGray, size: 20),
       ),
     );
   }
-}
-
-// ─── Convenience re-exports for AppColors used in this file ──────────────────
-
-extension _Colors on AppColors {
-  static const accentGreen = Color(0xFF00C48C);
-  static const accentOrange = Color(0xFFFFB020);
-  static const accentRed = Color(0xFFFF4D6A);
 }

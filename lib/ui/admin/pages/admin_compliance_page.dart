@@ -152,13 +152,19 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 
       // Month filter (extract month from period, compare with selected month)
       final recordMonth = _extractMonth(r.period);
-      final matchesMonth = _selectedMonth == 'All Months' || recordMonth == _selectedMonth;
+      final matchesMonth =
+          _selectedMonth == 'All Months' || recordMonth == _selectedMonth;
 
       // Year filter (extract year from period, compare with selected year)
       final recordYear = _extractYear(r.period);
-      final matchesYear = _selectedYear == 'All Years' || recordYear == _selectedYear;
+      final matchesYear =
+          _selectedYear == 'All Years' || recordYear == _selectedYear;
 
-      return matchesSearch && matchesBusiness && matchesStatus && matchesMonth && matchesYear;
+      return matchesSearch &&
+          matchesBusiness &&
+          matchesStatus &&
+          matchesMonth &&
+          matchesYear;
     }).toList();
   }
 
@@ -475,6 +481,7 @@ class _FilterRow extends StatelessWidget {
           return Row(
             children: [
               SizedBox(
+                height: 38,
                 width: 200,
                 child: _SearchField(
                   controller: searchCtrl,
@@ -570,7 +577,7 @@ class _DropdownFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
@@ -580,6 +587,7 @@ class _DropdownFilter extends StatelessWidget {
         child: DropdownButton<String>(
           value: value,
           isExpanded: true,
+          isDense: true,
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
           style: const TextStyle(color: AppColors.textGray, fontSize: 13),
@@ -640,29 +648,28 @@ class _TableHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 700) {
-          // Mobile: Show fewer columns
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Expanded(flex: 5, child: _HeaderCell('Business')),
-                Expanded(flex: 3, child: _HeaderCell('Period')),
-                Expanded(flex: 3, child: _HeaderCell('Status')),
-                const SizedBox(width: 40), // Space for history icon
-              ],
-            ),
-          );
-        } else if (constraints.maxWidth < 900) {
-          // Small tablet: Show all columns except maybe one
+        // In _TableHeader, replace the mobile branch (constraints.maxWidth < 700)
+        if (constraints.maxWidth < 900) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Expanded(flex: 4, child: _HeaderCell('Business')),
-                Expanded(flex: 2, child: _HeaderCell('Period')),
+                Expanded(child: _HeaderCell('Business / Details')),
+                SizedBox(width: 28), // aligns with the eye icon
+              ],
+            ),
+          );
+        } else if (constraints.maxWidth < 1000) {
+          // Small tablet: Show all columns except maybe one
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              spacing: 5, 
+              children: [
+                Expanded(flex: 2, child: _HeaderCell('Business')),
+                Expanded(flex: 1, child: _HeaderCell('Period')),
                 Expanded(flex: 2, child: _HeaderCell('Status')),
-                Expanded(flex: 2, child: _HeaderCell('Warnings')),
+                Expanded(flex: 1, child: _HeaderCell('Warnings')),
                 Expanded(flex: 3, child: _HeaderCell('Notes')),
                 Expanded(flex: 1, child: _HeaderCell('')),
               ],
@@ -674,8 +681,8 @@ class _TableHeader extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
               children: [
-                Expanded(flex: 4, child: _HeaderCell('Business')),
-                Expanded(flex: 3, child: _HeaderCell('Period')),
+                Expanded(flex: 3, child: _HeaderCell('Business')),
+                Expanded(flex: 2, child: _HeaderCell('Period')),
                 Expanded(flex: 3, child: _HeaderCell('Status')),
                 Expanded(flex: 2, child: _HeaderCell('Warnings')),
                 Expanded(flex: 3, child: _HeaderCell('Last Notice')),
@@ -718,18 +725,19 @@ class _ComplianceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 850) {
-          // Mobile: Compact card-like row
+        // Replace the mobile branch (constraints.maxWidth < 900) in _ComplianceRow
+
+        if (constraints.maxWidth < 900) {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 5,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
                         record.business,
                         style: const TextStyle(
                           color: AppColors.textWhite,
@@ -737,31 +745,67 @@ class _ComplianceRow extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        record.period,
-                        style: const TextStyle(
-                          color: AppColors.textGray,
-                          fontSize: 11,
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          barrierColor: Colors.black.withOpacity(0.70),
+                          builder: (_) => ComplianceMessageDialog(
+                            business: record.business,
+                          ),
+                        );
+                      },
+                      child: const Icon(
+                        Icons.visibility_outlined,
+                        color: AppColors.textGray,
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Text(
+                      record.period,
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _StatusBadge(status: record.status),
+                    const SizedBox(width: 10),
+                    if (record.warnings != null)
+                      _WarningBadge(count: record.warnings!)
+                    else
+                      const Text(
+                        '—',
+                        style: TextStyle(
+                          color: AppColors.textSubtle,
+                          fontSize: 13,
                         ),
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                Expanded(flex: 3, child: _StatusBadge(status: record.status)),
-                GestureDetector(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      barrierColor: Colors.black.withOpacity(0.70),
-                      builder: (_) =>
-                          ComplianceMessageDialog(business: record.business),
-                    );
-                  },
-                  child: const Icon(
-                    Icons.visibility_outlined,
+                if (record.lastNotice != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Last Notice: ${record.lastNotice}',
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 4),
+                Text(
+                  record.notes,
+                  style: const TextStyle(
                     color: AppColors.textGray,
-                    size: 20,
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -772,9 +816,10 @@ class _ComplianceRow extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
+              spacing: 5, 
               children: [
                 Expanded(
-                  flex: 4,
+                  flex: 2,
                   child: Text(
                     record.business,
                     style: const TextStyle(
@@ -785,7 +830,7 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 2,
+                  flex: 1,
                   child: Text(
                     record.period,
                     style: const TextStyle(
@@ -796,7 +841,7 @@ class _ComplianceRow extends StatelessWidget {
                 ),
                 Expanded(flex: 2, child: _StatusBadge(status: record.status)),
                 Expanded(
-                  flex: 2,
+                  flex: 1,
                   child: record.warnings != null
                       ? _WarningBadge(count: record.warnings!)
                       : const Text(
@@ -807,6 +852,17 @@ class _ComplianceRow extends StatelessWidget {
                           ),
                         ),
                 ),
+                if (record.lastNotice != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '${record?.lastNotice}',
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+
                 Expanded(
                   flex: 3,
                   child: Text(
@@ -844,7 +900,7 @@ class _ComplianceRow extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  flex: 4,
+                  flex: 3,
                   child: Text(
                     record.business,
                     style: const TextStyle(
@@ -855,7 +911,7 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 3,
+                  flex: 2,
                   child: Text(
                     record.period,
                     style: const TextStyle(

@@ -1,12 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
-import '../pages/business_guest_records_page.dart'; // for GuestRecord / GuestRecordStatus
+import '../pages/business_guest_records_page.dart';
 
-// ─── Edit Guest Dialog ────────────────────────────────────────────────────────
+// ─── Public model for one demographic row ────────────────────────────────────
 
-/// Opens the edit dialog pre-populated with [record].
-/// Returns the updated [GuestRecord] on save, or `null` on cancel.
+class DemographicEntry {
+  DemographicEntry({
+    this.nationality = '',
+    this.region = 'N/A',
+    this.gender = '',
+    this.ageGroup = '',
+    this.count = 0,
+  });
+
+  String nationality;
+  String region;
+  String gender;
+  String ageGroup;
+  int count;
+
+  DemographicEntry copyWith({
+    String? nationality,
+    String? region,
+    String? gender,
+    String? ageGroup,
+    int? count,
+  }) => DemographicEntry(
+    nationality: nationality ?? this.nationality,
+    region: region ?? this.region,
+    gender: gender ?? this.gender,
+    ageGroup: ageGroup ?? this.ageGroup,
+    count: count ?? this.count,
+  );
+}
+
+// ─── Show helper ─────────────────────────────────────────────────────────────
+
 Future<GuestRecord?> showEditGuestDialog(
   BuildContext context, {
   required GuestRecord record,
@@ -18,7 +48,7 @@ Future<GuestRecord?> showEditGuestDialog(
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Dialog widget ────────────────────────────────────────────────────────────
 
 class _EditGuestDialog extends StatefulWidget {
   const _EditGuestDialog({required this.record});
@@ -29,29 +59,18 @@ class _EditGuestDialog extends StatefulWidget {
 }
 
 class _EditGuestDialogState extends State<_EditGuestDialog> {
-  // ── Controllers ──────────────────────────────────────────────────────────
+  final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _checkInCtrl;
   late final TextEditingController _checkOutCtrl;
-  late final TextEditingController _nightsCtrl;
   late final TextEditingController _guestsCtrl;
   late final TextEditingController _roomsCtrl;
-
   late String _purpose;
   late String _transport;
+  String _lengthOfStay = '0 nights';
 
-  // ── Demographic breakdown ─────────────────────────────────────────────────
-  // Percentages (0-100); must sum to ≤ 100.
-  late final TextEditingController _demoMaleCtrl;
-  late final TextEditingController _demoFemaleCtrl;
-  late final TextEditingController _demoOtherCtrl;
+  late List<DemographicEntry> _demoRows;
 
-  // Age groups
-  late final TextEditingController _demoUnder18Ctrl;
-  late final TextEditingController _demo18to35Ctrl;
-  late final TextEditingController _demo36to60Ctrl;
-  late final TextEditingController _demoOver60Ctrl;
-
-  // ── Options ───────────────────────────────────────────────────────────────
   static const _purposes = ['Leisure', 'Business', 'Event', 'Other'];
   static const _transports = [
     'Private Car',
@@ -61,9 +80,45 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     'Taxi',
     'Other',
   ];
+  // Replace your current static lists with these corrected ones:
 
-  // ── Validation ────────────────────────────────────────────────────────────
-  final _formKey = GlobalKey<FormState>();
+  static const _genderOptions = ['Male', 'Female', 'Other'];
+
+  static const _ageGroupOptions = ['18-25', '26-35', '36-45', '46-60', '60+'];
+
+  static const _countries = [
+    'Philippines',
+    'USA',
+    'Japan',
+    'South Korea',
+    'Australia',
+    'UK', // Changed from 'United Kingdom' to match error message
+    'Canada',
+    'Germany',
+    'France',
+    'China',
+    'Other',
+  ];
+  static const _phRegions = [
+    'N/A',
+    'NCR',
+    'Ilocos',
+    'Cagayan Valley',
+    'Central Luzon',
+    'CALABARZON',
+    'MIMAROPA',
+    'Bicol',
+    'Western Visayas',
+    'Central Visayas',
+    'Eastern Visayas',
+    'Zamboanga Peninsula',
+    'Northern Mindanao',
+    'Davao',
+    'SOCCSKSARGEN',
+    'Caraga',
+    'BARMM',
+    'CAR',
+  ];
 
   @override
   void initState() {
@@ -71,339 +126,405 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     final r = widget.record;
     _checkInCtrl = TextEditingController(text: r.checkIn);
     _checkOutCtrl = TextEditingController(text: r.checkOut);
-    _nightsCtrl = TextEditingController(text: r.nights);
     _guestsCtrl = TextEditingController(text: r.guests.toString());
     _roomsCtrl = TextEditingController(text: r.rooms.toString());
     _purpose = _purposes.contains(r.purpose) ? r.purpose : _purposes.first;
     _transport = _transports.contains(r.transport)
         ? r.transport
         : _transports.first;
+    _lengthOfStay = r.nights;
 
-    // Demographic defaults (blank = not yet filled in)
-    _demoMaleCtrl = TextEditingController();
-    _demoFemaleCtrl = TextEditingController();
-    _demoOtherCtrl = TextEditingController();
-    _demoUnder18Ctrl = TextEditingController();
-    _demo18to35Ctrl = TextEditingController();
-    _demo36to60Ctrl = TextEditingController();
-    _demoOver60Ctrl = TextEditingController();
+    // Convert GuestDemographics back to List<DemographicEntry> for editing
+    if (r.demographics != null) {
+      _demoRows = _convertFromGuestDemographics(r.demographics!);
+    } else {
+      _demoRows = [DemographicEntry()];
+    }
+  }
+
+  // ✅ FIXED: Properly convert GuestDemographics to List<DemographicEntry>
+  List<DemographicEntry> _convertFromGuestDemographics(GuestDemographics demo) {
+    final rows = <DemographicEntry>[];
+
+    // Get the maximum number of rows from all maps
+    final maxRows = [
+      demo.countries.length,
+      demo.genderDistribution.length,
+      demo.ageGroups.length,
+    ].reduce((a, b) => a > b ? a : b);
+
+    if (maxRows == 0) return [DemographicEntry()];
+
+    // Convert countries map to list of entries
+    final countryEntries = demo.countries.entries.toList();
+    final genderEntries = demo.genderDistribution.entries.toList();
+    final ageEntries = demo.ageGroups.entries.toList();
+
+    for (int i = 0; i < maxRows; i++) {
+      String nationality = 'Other';
+      String region = 'N/A';
+
+      // Get country info if available
+      if (i < countryEntries.length) {
+        final countryEntry = countryEntries[i];
+        final country = countryEntry.key;
+
+        // Parse Philippines with region
+        if (country.startsWith('Philippines')) {
+          nationality = 'Philippines';
+          final regionMatch = RegExp(r'\((.+?)\)').firstMatch(country);
+          region = regionMatch?.group(1) ?? 'N/A';
+        } else {
+          nationality = country;
+          region = 'N/A';
+        }
+      }
+
+      // Get counts - use the maximum count from available data
+      int count = 0;
+      if (i < countryEntries.length) count = countryEntries[i].value;
+      if (i < genderEntries.length && genderEntries[i].value > count)
+        count = genderEntries[i].value;
+      if (i < ageEntries.length && ageEntries[i].value > count)
+        count = ageEntries[i].value;
+
+      rows.add(
+        DemographicEntry(
+          nationality: nationality,
+          region: region,
+          gender: i < genderEntries.length ? genderEntries[i].key : '',
+          ageGroup: i < ageEntries.length ? ageEntries[i].key : '',
+          count: count,
+        ),
+      );
+    }
+
+    return rows.isEmpty ? [DemographicEntry()] : rows;
   }
 
   @override
   void dispose() {
-    for (final c in [
-      _checkInCtrl,
-      _checkOutCtrl,
-      _nightsCtrl,
-      _guestsCtrl,
-      _roomsCtrl,
-      _demoMaleCtrl,
-      _demoFemaleCtrl,
-      _demoOtherCtrl,
-      _demoUnder18Ctrl,
-      _demo18to35Ctrl,
-      _demo36to60Ctrl,
-      _demoOver60Ctrl,
-    ]) {
-      c.dispose();
-    }
+    _checkInCtrl.dispose();
+    _checkOutCtrl.dispose();
+    _guestsCtrl.dispose();
+    _roomsCtrl.dispose();
     super.dispose();
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  void _recalcNights() {
+    final checkIn = DateTime.tryParse(_checkInCtrl.text);
+    final checkOut = DateTime.tryParse(_checkOutCtrl.text);
+    if (checkIn != null && checkOut != null && checkOut.isAfter(checkIn)) {
+      final nights = checkOut.difference(checkIn).inDays;
+      setState(() => _lengthOfStay = '$nights night${nights == 1 ? '' : 's'}');
+    } else {
+      setState(() => _lengthOfStay = '0 nights');
+    }
+  }
+
+  int get _demoTotal => _demoRows.fold(0, (sum, e) => sum + e.count);
+  int get _totalGuests => int.tryParse(_guestsCtrl.text.trim()) ?? 0;
+
+  void _addRow() => setState(() => _demoRows.add(DemographicEntry()));
+  void _removeRow(int i) => setState(() => _demoRows.removeAt(i));
+
   void _save() {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    final List<GuestRecord> updated = [
-      GuestRecord(
-        checkIn: '2024-04-01',
-        checkOut: '2024-04-03',
-        nights: '2 nights',
-        guests: 10,
-        rooms: 4,
-        purpose: 'Leisure',
-        transport: 'Private Car',
-        status: GuestRecordStatus.active,
-        demographics: const GuestDemographics(
-          ageGroups: {'18-25': 2, '26-35': 5, '36-50': 3},
-          genderDistribution: {'Male': 6, 'Female': 4},
-          countries: {'USA': 5, 'Canada': 3, 'UK': 2},
+    // Verify demographic total matches guest count
+    if (_demoTotal != _totalGuests) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Demographic breakdown total ($_demoTotal) must equal total guests ($_totalGuests)',
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
-      ),
-      // ... other records with demographics
-    ];
+      );
+      return;
+    }
 
-    Navigator.of(context).pop(updated);
+    // Convert List<DemographicEntry> to GuestDemographics
+    final demographics = _convertToGuestDemographics(_demoRows);
+
+    final updated = GuestRecord(
+      checkIn: _checkInCtrl.text.trim(),
+      checkOut: _checkOutCtrl.text.trim(),
+      nights: _lengthOfStay,
+      guests: _totalGuests,
+      rooms: int.tryParse(_roomsCtrl.text.trim()) ?? widget.record.rooms,
+      purpose: _purpose,
+      transport: _transport,
+      status: widget.record.status,
+      demographics: demographics,
+    );
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✓ Guest record updated successfully'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    // Close dialog after showing snackbar
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        Navigator.of(context).pop(updated);
+      }
+    });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
+  GuestDemographics _convertToGuestDemographics(List<DemographicEntry> rows) {
+    final ageGroups = <String, int>{};
+    final genderDistribution = <String, int>{};
+    final countries = <String, int>{};
+
+    for (final row in rows) {
+      // Age groups
+      final ageGroup = row.ageGroup;
+      if (ageGroup.isNotEmpty) {
+        ageGroups[ageGroup] = (ageGroups[ageGroup] ?? 0) + row.count;
+      }
+
+      // Gender distribution
+      final gender = row.gender;
+      if (gender.isNotEmpty) {
+        genderDistribution[gender] =
+            (genderDistribution[gender] ?? 0) + row.count;
+      }
+
+      // Countries (with region info if Philippines)
+      String country = row.nationality;
+      if (country == 'Philippines' && row.region != 'N/A') {
+        country = 'Philippines (${row.region})';
+      }
+      if (country.isNotEmpty && country != 'Other') {
+        countries[country] = (countries[country] ?? 0) + row.count;
+      }
+    }
+
+    return GuestDemographics(
+      ageGroups: ageGroups,
+      genderDistribution: genderDistribution,
+      countries: countries,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isNarrow = MediaQuery.of(context).size.width < 500;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 600;
 
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.symmetric(
-        horizontal: isNarrow ? 16 : 24,
-        vertical: 40,
+        horizontal: isNarrow ? 12 : 24,
+        vertical: 24,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 560),
+        constraints: const BoxConstraints(maxWidth: 700),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.cardBackground,
-            borderRadius: BorderRadius.circular(16),
+            color: const Color(0xFF0F1A2A),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.cardBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.45),
-                blurRadius: 36,
-                offset: const Offset(0, 14),
+                color: Colors.black.withOpacity(0.5),
+                blurRadius: 40,
+                offset: const Offset(0, 16),
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Header ──────────────────────────────────────────────────
-              _Header(onClose: () => Navigator.of(context).pop()),
-
-              // ── Scrollable body ─────────────────────────────────────────
+              _TitleBar(onClose: () => Navigator.of(context).pop()),
               Flexible(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                  padding: EdgeInsets.all(isNarrow ? 14 : 20),
                   child: Form(
                     key: _formKey,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ── Stay details ────────────────────────────────
-                        _SectionLabel('Stay Details'),
-                        const SizedBox(height: 12),
-                        if (isNarrow) ...[
-                          _DateField(
-                            label: 'Check-in',
-                            controller: _checkInCtrl,
-                          ),
-                          const SizedBox(height: 10),
-                          _DateField(
-                            label: 'Check-out',
-                            controller: _checkOutCtrl,
-                          ),
-                        ] else
-                          Row(
+                        // ── Stay Information ─────────────────────────────
+                        _SectionCard(
+                          title: 'Stay Information',
+                          child: Column(
                             children: [
-                              Expanded(
-                                child: _DateField(
-                                  label: 'Check-in',
-                                  controller: _checkInCtrl,
-                                ),
+                              _ResponsiveRow(
+                                isNarrow: isNarrow,
+                                children: [
+                                  _FieldCol(
+                                    label: 'Check-in Date *',
+                                    child: _DateField(
+                                      controller: _checkInCtrl,
+                                      hint: 'yyyy-mm-dd',
+                                      onPicked: _recalcNights,
+                                    ),
+                                  ),
+                                  _FieldCol(
+                                    label: 'Check-out Date *',
+                                    child: _DateField(
+                                      controller: _checkOutCtrl,
+                                      hint: 'yyyy-mm-dd',
+                                      onPicked: _recalcNights,
+                                    ),
+                                  ),
+                                  _FieldCol(
+                                    label: 'Length of Stay',
+                                    child: _ReadOnlyField(value: _lengthOfStay),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _DateField(
-                                  label: 'Check-out',
-                                  controller: _checkOutCtrl,
-                                ),
+                              const SizedBox(height: 14),
+                              _ResponsiveRow(
+                                isNarrow: isNarrow,
+                                children: [
+                                  _FieldCol(
+                                    label: 'Total Guests *',
+                                    child: _NumberField(
+                                      controller: _guestsCtrl,
+                                      hint: 'e.g. 10',
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                  _FieldCol(
+                                    label: 'Rooms Occupied *',
+                                    child: _NumberField(
+                                      controller: _roomsCtrl,
+                                      hint: 'e.g. 3',
+                                    ),
+                                  ),
+                                  _FieldCol(
+                                    label: 'Purpose of Visit *',
+                                    child: _DropdownField(
+                                      value: _purpose,
+                                      hint: 'Select purpose',
+                                      items: _purposes,
+                                      onChanged: (v) => setState(
+                                        () => _purpose = v ?? _purpose,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        const SizedBox(height: 10),
-                        if (isNarrow) ...[
-                          _NumberField(
-                            label: 'Guests',
-                            controller: _guestsCtrl,
-                          ),
-                          const SizedBox(height: 10),
-                          _NumberField(label: 'Rooms', controller: _roomsCtrl),
-                        ] else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _NumberField(
-                                  label: 'Guests',
-                                  controller: _guestsCtrl,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _NumberField(
-                                  label: 'Rooms',
-                                  controller: _roomsCtrl,
-                                ),
-                              ),
-                            ],
-                          ),
-                        const SizedBox(height: 10),
-                        if (isNarrow) ...[
-                          _DropdownField<String>(
-                            label: 'Purpose',
-                            value: _purpose,
-                            items: _purposes,
-                            onChanged: (v) =>
-                                setState(() => _purpose = v ?? _purpose),
-                          ),
-                          const SizedBox(height: 10),
-                          _DropdownField<String>(
-                            label: 'Transport',
-                            value: _transport,
-                            items: _transports,
-                            onChanged: (v) =>
-                                setState(() => _transport = v ?? _transport),
-                          ),
-                        ] else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _DropdownField<String>(
-                                  label: 'Purpose',
-                                  value: _purpose,
-                                  items: _purposes,
-                                  onChanged: (v) =>
-                                      setState(() => _purpose = v ?? _purpose),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _DropdownField<String>(
-                                  label: 'Transport',
-                                  value: _transport,
-                                  items: _transports,
-                                  onChanged: (v) => setState(
-                                    () => _transport = v ?? _transport,
+                              const SizedBox(height: 14),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  width: isNarrow ? double.infinity : 210,
+                                  child: _FieldCol(
+                                    label: 'Mode of Transportation *',
+                                    child: _DropdownField(
+                                      value: _transport,
+                                      hint: 'Select transportation',
+                                      items: _transports,
+                                      onChanged: (v) => setState(
+                                        () => _transport = v ?? _transport,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ],
                           ),
-
-                        const SizedBox(height: 22),
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                        const SizedBox(height: 22),
-
-                        // ── Demographic breakdown ────────────────────────
-                        _SectionLabel('Guest Demographic Breakdown'),
-                        const SizedBox(height: 6),
-                        const Text(
-                          'All values are percentages (%). Gender & Age groups each '
-                          'should ideally sum to 100%.',
-                          style: TextStyle(
-                            color: AppColors.textSubtle,
-                            fontSize: 11.5,
-                          ),
                         ),
-                        const SizedBox(height: 14),
-
-                        // Gender row
-                        _SubLabel('Gender'),
-                        const SizedBox(height: 8),
-                        if (isNarrow) ...[
-                          _PercentField(
-                            label: 'Male',
-                            controller: _demoMaleCtrl,
-                          ),
-                          const SizedBox(height: 8),
-                          _PercentField(
-                            label: 'Female',
-                            controller: _demoFemaleCtrl,
-                          ),
-                          const SizedBox(height: 8),
-                          _PercentField(
-                            label: 'Other / Prefer not to say',
-                            controller: _demoOtherCtrl,
-                          ),
-                        ] else
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _PercentField(
-                                  label: 'Male',
-                                  controller: _demoMaleCtrl,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PercentField(
-                                  label: 'Female',
-                                  controller: _demoFemaleCtrl,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PercentField(
-                                  label: 'Other / Prefer not to say',
-                                  controller: _demoOtherCtrl,
-                                ),
-                              ),
-                            ],
-                          ),
-
                         const SizedBox(height: 16),
 
-                        // Age groups
-                        _SubLabel('Age Groups'),
-                        const SizedBox(height: 8),
-                        if (isNarrow) ...[
-                          _PercentField(
-                            label: 'Under 18',
-                            controller: _demoUnder18Ctrl,
-                          ),
-                          const SizedBox(height: 8),
-                          _PercentField(
-                            label: '18 – 35',
-                            controller: _demo18to35Ctrl,
-                          ),
-                          const SizedBox(height: 8),
-                          _PercentField(
-                            label: '36 – 60',
-                            controller: _demo36to60Ctrl,
-                          ),
-                          const SizedBox(height: 8),
-                          _PercentField(
-                            label: 'Over 60',
-                            controller: _demoOver60Ctrl,
-                          ),
-                        ] else
-                          Row(
+                        // ── Demographic Breakdown ────────────────────────
+                        _SectionCard(
+                          title: 'Guest Demographic Breakdown',
+                          subtitle:
+                              'Breakdown must sum to $_totalGuests total guests',
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: _PercentField(
-                                  label: 'Under 18',
-                                  controller: _demoUnder18Ctrl,
+                              Text(
+                                '$_demoTotal / $_totalGuests',
+                                style: TextStyle(
+                                  color: _demoTotal == _totalGuests
+                                      ? Colors.green
+                                      : AppColors.textGray,
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(width: 10),
-                              Expanded(
-                                child: _PercentField(
-                                  label: '18 – 35',
-                                  controller: _demo18to35Ctrl,
+                              _AddRowButton(onTap: _addRow),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              _DemoTableHeader(isNarrow: isNarrow),
+                              const SizedBox(height: 8),
+                              ..._demoRows.asMap().entries.map(
+                                (e) => _DemoEntryRow(
+                                  key: ValueKey(e.key),
+                                  index: e.key,
+                                  entry: e.value,
+                                  isNarrow: isNarrow,
+                                  countries: _countries,
+                                  phRegions: _phRegions,
+                                  genderOptions: _genderOptions,
+                                  ageGroupOptions: _ageGroupOptions,
+                                  onChanged: (u) =>
+                                      setState(() => _demoRows[e.key] = u),
+                                  onRemove: _demoRows.length > 1
+                                      ? () => _removeRow(e.key)
+                                      : null,
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PercentField(
-                                  label: '36 – 60',
-                                  controller: _demo36to60Ctrl,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PercentField(
-                                  label: 'Over 60',
-                                  controller: _demoOver60Ctrl,
-                                ),
+                              const SizedBox(height: 10),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.lightbulb_outline,
+                                    color: Color(0xFFD4A017),
+                                    size: 13,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Expanded(
+                                    child: Text(
+                                      'Example: For 10 guests — add rows like: '
+                                      '5 Philippines (NCR) / Male / 26–35 = 3, '
+                                      'Philippines (NCR) / Female / 26–35 = 2, '
+                                      'USA / Male / 36–45 = 5',
+                                      style: TextStyle(
+                                        color: AppColors.textSubtle,
+                                        fontSize: 11,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
+                        ),
                       ],
                     ),
                   ),
                 ),
               ),
-
-              // ── Footer actions ─────────────────────────────────────────
               _Footer(
-                onCancel: () => Navigator.of(context).pop(),
+                onClear: () {
+                  _checkInCtrl.clear();
+                  _checkOutCtrl.clear();
+                  _guestsCtrl.clear();
+                  _roomsCtrl.clear();
+                  setState(() {
+                    _purpose = _purposes.first;
+                    _transport = _transports.first;
+                    _lengthOfStay = '0 nights';
+                    _demoRows = [DemographicEntry()];
+                  });
+                },
                 onSave: _save,
               ),
             ],
@@ -414,16 +535,16 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
   }
 }
 
-// ─── Header ───────────────────────────────────────────────────────────────────
+// ─── Title bar ────────────────────────────────────────────────────────────────
 
-class _Header extends StatelessWidget {
-  const _Header({required this.onClose});
+class _TitleBar extends StatelessWidget {
+  const _TitleBar({required this.onClose});
   final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 22, 16, 16),
+      padding: const EdgeInsets.fromLTRB(22, 20, 16, 14),
       child: Row(
         children: [
           const Expanded(
@@ -431,17 +552,16 @@ class _Header extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Edit Guest Record',
+                  'Edit Guest Entry',
                   style: TextStyle(
                     color: AppColors.textWhite,
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: -0.2,
                   ),
                 ),
-                SizedBox(height: 3),
+                SizedBox(height: 2),
                 Text(
-                  'Update stay details and demographic breakdown.',
+                  'Edit tourist demographic data',
                   style: TextStyle(color: AppColors.textGray, fontSize: 12.5),
                 ),
               ],
@@ -449,20 +569,398 @@ class _Header extends StatelessWidget {
           ),
           GestureDetector(
             onTap: onClose,
-            child: Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: AppColors.cardBorder.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(
-                Icons.close_rounded,
-                color: AppColors.textGray,
-                size: 16,
-              ),
+            child: const Icon(
+              Icons.close_rounded,
+              color: AppColors.textGray,
+              size: 20,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Section card ─────────────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.child,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF132035),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          color: AppColors.textSubtle,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null) trailing!,
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Responsive row ───────────────────────────────────────────────────────────
+
+class _ResponsiveRow extends StatelessWidget {
+  const _ResponsiveRow({required this.children, required this.isNarrow});
+  final List<Widget> children;
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isNarrow) {
+      return Column(
+        children:
+            children.expand((w) => [w, const SizedBox(height: 12)]).toList()
+              ..removeLast(),
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children:
+          children
+              .expand((w) => [Expanded(child: w), const SizedBox(width: 12)])
+              .toList()
+            ..removeLast(),
+    );
+  }
+}
+
+// ─── Field column ─────────────────────────────────────────────────────────────
+
+class _FieldCol extends StatelessWidget {
+  const _FieldCol({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+// ─── Demographic table header ─────────────────────────────────────────────────
+
+class _DemoTableHeader extends StatelessWidget {
+  const _DemoTableHeader({required this.isNarrow});
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isNarrow) return const SizedBox.shrink();
+    return const Row(
+      children: [
+        Expanded(flex: 3, child: _ColHead('Nationality')),
+        SizedBox(width: 8),
+        Expanded(flex: 3, child: _ColHead('Region (If PH)')),
+        SizedBox(width: 8),
+        Expanded(flex: 2, child: _ColHead('Gender')),
+        SizedBox(width: 8),
+        Expanded(flex: 2, child: _ColHead('Age Group')),
+        SizedBox(width: 8),
+        SizedBox(width: 60, child: _ColHead('Count')),
+        SizedBox(width: 28),
+      ],
+    );
+  }
+}
+
+class _ColHead extends StatelessWidget {
+  const _ColHead(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppColors.textSubtle,
+        fontSize: 11.5,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+// ─── Demographic entry row ────────────────────────────────────────────────────
+
+class _DemoEntryRow extends StatelessWidget {
+  const _DemoEntryRow({
+    super.key,
+    required this.index,
+    required this.entry,
+    required this.isNarrow,
+    required this.countries,
+    required this.phRegions,
+    required this.genderOptions,
+    required this.ageGroupOptions,
+    required this.onChanged,
+    this.onRemove,
+  });
+
+  final int index;
+  final DemographicEntry entry;
+  final bool isNarrow;
+  final List<String> countries;
+  final List<String> phRegions;
+  final List<String> genderOptions;
+  final List<String> ageGroupOptions;
+  final ValueChanged<DemographicEntry> onChanged;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final countCtrl = TextEditingController(
+      text: entry.count == 0 ? '' : '${entry.count}',
+    );
+    countCtrl.selection = TextSelection.collapsed(
+      offset: countCtrl.text.length,
+    );
+
+    final deleteBtn = GestureDetector(
+      onTap: onRemove,
+      child: Icon(
+        Icons.delete_rounded,
+        size: 16,
+        color: onRemove != null
+            ? AppColors.accentRed
+            : AppColors.textSubtle.withOpacity(0.3),
+      ),
+    );
+
+    if (isNarrow) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundDark,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _CompactDrop(
+                    hint: 'Country',
+                    value: entry.nationality.isEmpty ? null : entry.nationality,
+                    items: countries,
+                    onChanged: (v) =>
+                        onChanged(entry.copyWith(nationality: v ?? '')),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (onRemove != null) deleteBtn,
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _CompactDrop(
+                    hint: 'Region',
+                    value: entry.region,
+                    items: phRegions,
+                    onChanged: (v) =>
+                        onChanged(entry.copyWith(region: v ?? 'N/A')),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _CompactDrop(
+                    hint: 'Gender',
+                    value: entry.gender.isEmpty ? null : entry.gender,
+                    items: genderOptions,
+                    onChanged: (v) =>
+                        onChanged(entry.copyWith(gender: v ?? '')),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _CompactDrop(
+                    hint: 'Age Group',
+                    value: entry.ageGroup.isEmpty ? null : entry.ageGroup,
+                    items: ageGroupOptions,
+                    onChanged: (v) =>
+                        onChanged(entry.copyWith(ageGroup: v ?? '')),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                SizedBox(
+                  width: 64,
+                  child: _CountField(
+                    controller: countCtrl,
+                    onChanged: (v) =>
+                        onChanged(entry.copyWith(count: int.tryParse(v) ?? 0)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 3,
+            child: _CompactDrop(
+              hint: 'Country',
+              value: entry.nationality.isEmpty ? null : entry.nationality,
+              items: countries,
+              onChanged: (v) => onChanged(entry.copyWith(nationality: v ?? '')),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: _CompactDrop(
+              hint: 'N/A',
+              value: entry.region,
+              items: phRegions,
+              onChanged: (v) => onChanged(entry.copyWith(region: v ?? 'N/A')),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: _CompactDrop(
+              hint: 'Gender',
+              value: entry.gender.isEmpty ? null : entry.gender,
+              items: genderOptions,
+              onChanged: (v) => onChanged(entry.copyWith(gender: v ?? '')),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: _CompactDrop(
+              hint: 'Age Group',
+              value: entry.ageGroup.isEmpty ? null : entry.ageGroup,
+              items: ageGroupOptions,
+              onChanged: (v) => onChanged(entry.copyWith(ageGroup: v ?? '')),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 60,
+            child: _CountField(
+              controller: countCtrl,
+              onChanged: (v) =>
+                  onChanged(entry.copyWith(count: int.tryParse(v) ?? 0)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(width: 20, child: deleteBtn),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Add Row button ───────────────────────────────────────────────────────────
+
+class _AddRowButton extends StatelessWidget {
+  const _AddRowButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E3A5F),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, color: Color(0xFF3B82F6), size: 14),
+            SizedBox(width: 4),
+            Text(
+              '+ Add Row',
+              style: TextStyle(
+                color: Color(0xFF3B82F6),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -471,28 +969,52 @@ class _Header extends StatelessWidget {
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 class _Footer extends StatelessWidget {
-  const _Footer({required this.onCancel, required this.onSave});
-  final VoidCallback onCancel;
+  const _Footer({required this.onClear, required this.onSave});
+  final VoidCallback onClear;
   final VoidCallback onSave;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
       child: Row(
         children: [
-          Expanded(
-            child: _ActionBtn(label: 'Cancel', onTap: onCancel, filled: false),
+          OutlinedButton(
+            onPressed: onClear,
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: AppColors.cardBorder),
+              foregroundColor: AppColors.textGray,
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Clear Form',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _ActionBtn(
-              label: 'Save Changes',
-              onTap: onSave,
-              filled: true,
+            child: ElevatedButton.icon(
+              onPressed: onSave,
+              icon: const Icon(Icons.save_outlined, size: 16),
+              label: const Text(
+                'Save Changes',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3B82F6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 0,
+              ),
             ),
           ),
         ],
@@ -501,88 +1023,12 @@ class _Footer extends StatelessWidget {
   }
 }
 
-class _ActionBtn extends StatelessWidget {
-  const _ActionBtn({
-    required this.label,
-    required this.onTap,
-    required this.filled,
-  });
+// ─── Shared input decoration ──────────────────────────────────────────────────
 
-  final String label;
-  final VoidCallback onTap;
-  final bool filled;
-
-  @override
-  Widget build(BuildContext context) {
-    // Teal/blue accent for save — matches existing app accent colours.
-    const accent = Color(0xFF3B82F6);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 42,
-        decoration: BoxDecoration(
-          color: filled ? accent : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: filled ? accent : AppColors.cardBorder),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            color: filled ? Colors.white : AppColors.textGray,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Form Field Widgets ───────────────────────────────────────────────────────
-
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textWhite,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.1,
-      ),
-    );
-  }
-}
-
-class _SubLabel extends StatelessWidget {
-  const _SubLabel(this.text);
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: AppColors.textGray,
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-      ),
-    );
-  }
-}
-
-// ── Shared input decoration ───────────────────────────────────────────────────
-
-InputDecoration _inputDecoration(String label) {
+InputDecoration _fieldDecoration({String? hint}) {
   return InputDecoration(
-    labelText: label,
-    labelStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
+    hintText: hint,
+    hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
     filled: true,
     fillColor: AppColors.backgroundDark,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -609,12 +1055,17 @@ InputDecoration _inputDecoration(String label) {
   );
 }
 
-// ── Date field ────────────────────────────────────────────────────────────────
+// ─── Date field ───────────────────────────────────────────────────────────────
 
 class _DateField extends StatelessWidget {
-  const _DateField({required this.label, required this.controller});
-  final String label;
+  const _DateField({
+    required this.controller,
+    required this.hint,
+    this.onPicked,
+  });
   final TextEditingController controller;
+  final String hint;
+  final VoidCallback? onPicked;
 
   @override
   Widget build(BuildContext context) {
@@ -622,11 +1073,11 @@ class _DateField extends StatelessWidget {
       controller: controller,
       readOnly: true,
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
-      decoration: _inputDecoration(label).copyWith(
+      decoration: _fieldDecoration(hint: hint).copyWith(
         suffixIcon: const Icon(
           Icons.calendar_today_outlined,
           color: AppColors.textSubtle,
-          size: 15,
+          size: 14,
         ),
       ),
       onTap: () async {
@@ -650,6 +1101,7 @@ class _DateField extends StatelessWidget {
               '${picked.year.toString().padLeft(4, '0')}-'
               '${picked.month.toString().padLeft(2, '0')}-'
               '${picked.day.toString().padLeft(2, '0')}';
+          onPicked?.call();
         }
       },
       validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
@@ -657,12 +1109,42 @@ class _DateField extends StatelessWidget {
   }
 }
 
-// ── Number field ──────────────────────────────────────────────────────────────
+// ─── Read-only field ──────────────────────────────────────────────────────────
+
+class _ReadOnlyField extends StatelessWidget {
+  const _ReadOnlyField({required this.value});
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.backgroundDark,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      alignment: Alignment.centerLeft,
+      child: Text(
+        value,
+        style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+      ),
+    );
+  }
+}
+
+// ─── Number field ─────────────────────────────────────────────────────────────
 
 class _NumberField extends StatelessWidget {
-  const _NumberField({required this.label, required this.controller});
-  final String label;
+  const _NumberField({
+    required this.controller,
+    required this.hint,
+    this.onChanged,
+  });
   final TextEditingController controller;
+  final String hint;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -671,7 +1153,8 @@ class _NumberField extends StatelessWidget {
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
-      decoration: _inputDecoration(label),
+      decoration: _fieldDecoration(hint: hint),
+      onChanged: onChanged,
       validator: (v) {
         if (v == null || v.isEmpty) return 'Required';
         final n = int.tryParse(v);
@@ -682,28 +1165,31 @@ class _NumberField extends StatelessWidget {
   }
 }
 
-// ── Dropdown field ────────────────────────────────────────────────────────────
+// ─── Dropdown field ───────────────────────────────────────────────────────────
 
-class _DropdownField<T> extends StatelessWidget {
+class _DropdownField extends StatelessWidget {
   const _DropdownField({
-    required this.label,
     required this.value,
+    required this.hint,
     required this.items,
     required this.onChanged,
   });
-
-  final String label;
-  final T value;
-  final List<T> items;
-  final ValueChanged<T?> onChanged;
+  final String value;
+  final String hint;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value,
+    return DropdownButtonFormField<String>(
+      value: value.isEmpty ? null : value,
+      hint: Text(
+        hint,
+        style: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
+      ),
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
-      dropdownColor: AppColors.cardBackground,
-      decoration: _inputDecoration(label),
+      dropdownColor: const Color(0xFF132035),
+      decoration: _fieldDecoration(),
       icon: const Icon(
         Icons.keyboard_arrow_down_rounded,
         color: AppColors.textSubtle,
@@ -711,46 +1197,122 @@ class _DropdownField<T> extends StatelessWidget {
       ),
       items: items
           .map(
-            (e) => DropdownMenuItem<T>(
+            (e) => DropdownMenuItem(
               value: e,
               child: Text(
-                e.toString(),
-                style: const TextStyle(color: AppColors.textGray),
+                e,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
               ),
             ),
           )
           .toList(),
       onChanged: onChanged,
+      validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
     );
   }
 }
 
-// ── Percentage field ──────────────────────────────────────────────────────────
+// ─── Compact dropdown (demo rows) ────────────────────────────────────────────
 
-class _PercentField extends StatelessWidget {
-  const _PercentField({required this.label, required this.controller});
-  final String label;
-  final TextEditingController controller;
+class _CompactDrop extends StatelessWidget {
+  const _CompactDrop({
+    required this.hint,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+  final String hint;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d{0,3}(\.\d{0,1})?')),
-      ],
-      style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
-      decoration: _inputDecoration(label).copyWith(
-        suffixText: '%',
-        suffixStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12),
+    // Ensure the value exists in items, otherwise use null
+    final effectiveValue = (value != null && items.contains(value))
+        ? value
+        : null;
+
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: AppColors.backgroundDark,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: AppColors.cardBorder),
       ),
-      validator: (v) {
-        if (v == null || v.isEmpty) return null; // optional
-        final n = double.tryParse(v);
-        if (n == null || n < 0 || n > 100) return '0–100';
-        return null;
-      },
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: effectiveValue,
+          hint: Text(
+            hint,
+            style: const TextStyle(color: AppColors.textSubtle, fontSize: 12),
+          ),
+          style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+          dropdownColor: const Color(0xFF132035),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textSubtle,
+            size: 16,
+          ),
+          isExpanded: true,
+          items: items.map((e) {
+            return DropdownMenuItem<String>(
+              value: e,
+              child: Text(
+                e,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Count field ──────────────────────────────────────────────────────────────
+
+class _CountField extends StatelessWidget {
+  const _CountField({required this.controller, required this.onChanged});
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+        decoration: InputDecoration(
+          hintText: '0',
+          hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12),
+          filled: true,
+          fillColor: AppColors.backgroundDark,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 8,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(7),
+            borderSide: const BorderSide(color: AppColors.cardBorder),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(7),
+            borderSide: const BorderSide(color: AppColors.cardBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(7),
+            borderSide: const BorderSide(color: Color(0xFF3B82F6), width: 1.4),
+          ),
+        ),
+        onChanged: onChanged,
+      ),
     );
   }
 }

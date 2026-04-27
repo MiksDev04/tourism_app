@@ -45,6 +45,7 @@ Future<void> showBusinessDetailsModal(
   return showDialog(
     context: context,
     barrierColor: Colors.black.withOpacity(0.6),
+    barrierDismissible: true,
     builder: (_) => BusinessDetailsModal(
       details: details,
       onApprove: onApprove,
@@ -55,7 +56,7 @@ Future<void> showBusinessDetailsModal(
 
 // ─── Modal Widget ─────────────────────────────────────────────────────────────
 
-class BusinessDetailsModal extends StatelessWidget {
+class BusinessDetailsModal extends StatefulWidget {
   const BusinessDetailsModal({
     super.key,
     required this.details,
@@ -67,73 +68,118 @@ class BusinessDetailsModal extends StatelessWidget {
   final VoidCallback? onApprove;
   final VoidCallback? onReject;
 
+  @override
+  State<BusinessDetailsModal> createState() => _BusinessDetailsModalState();
+}
+
+class _BusinessDetailsModalState extends State<BusinessDetailsModal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _animCtrl;
+  late final Animation<double> _fadeAnim;
+  late final Animation<Offset> _slideAnim;
+
   static const _modalMaxWidth = 460.0;
 
   @override
-  Widget build(BuildContext context) {
-    final showActions = details.status == AccommodationStatus.pending;
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _animCtrl.forward();
+  }
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F1923),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 40,
-                  offset: const Offset(0, 16),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ModalHeader(onClose: () => Navigator.of(context).pop()),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                Flexible(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _BusinessIdentity(details: details),
-                        const SizedBox(height: 20),
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                        const SizedBox(height: 20),
-                        _DetailsGrid(details: details),
-                        const SizedBox(height: 20),
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                        const SizedBox(height: 20),
-                        _ContactInfo(details: details),
-                        const SizedBox(height: 20),
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                        const SizedBox(height: 20),
-                        _DocumentsSection(documents: details.documents),
-                      ],
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final showActions = widget.details.status == AccommodationStatus.pending;
+
+    return Center(
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          child: GestureDetector(
+            onTap: () {}, // Prevents tap from bubbling to the outer GestureDetector
+            child: FadeTransition(
+              opacity: _fadeAnim,
+              child: SlideTransition(
+                position: _slideAnim,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F1923),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.cardBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 40,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ModalHeader(onClose: () => Navigator.of(context).pop()),
+                          const Divider(color: AppColors.cardBorder, height: 1),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _BusinessIdentity(details: widget.details),
+                                  const SizedBox(height: 20),
+                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const SizedBox(height: 20),
+                                  _DetailsGrid(details: widget.details),
+                                  const SizedBox(height: 20),
+                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const SizedBox(height: 20),
+                                  _ContactInfo(details: widget.details),
+                                  const SizedBox(height: 20),
+                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const SizedBox(height: 20),
+                                  _DocumentsSection(documents: widget.details.documents),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (showActions) ...[
+                            const Divider(color: AppColors.cardBorder, height: 1),
+                            _ActionRow(
+                              onApprove: () {
+                                Navigator.of(context).pop();
+                                widget.onApprove?.call();
+                              },
+                              onReject: () {
+                                Navigator.of(context).pop();
+                                widget.onReject?.call();
+                              },
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-                if (showActions) ...[
-                  const Divider(color: AppColors.cardBorder, height: 1),
-                  _ActionRow(
-                    onApprove: () {
-                      Navigator.of(context).pop();
-                      onApprove?.call();
-                    },
-                    onReject: () {
-                      Navigator.of(context).pop();
-                      onReject?.call();
-                    },
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),

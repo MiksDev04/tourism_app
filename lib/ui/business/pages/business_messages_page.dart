@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-
+import '../widgets/message_view_dialog.dart';
 import '../../shared/layouts/business_layout.dart';
-
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -64,16 +63,18 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   int get _unreadCount => _messages.where((m) => !m.isRead).length;
 
   List<BizMessage> get _filtered => _messages.where((m) {
-        return switch (_activeFilter) {
-          _Filter.all          => true,
-          _Filter.compliance   => m.type == MessageType.compliance,
-          _Filter.announcement => m.type == MessageType.announcement,
-          _Filter.general      => m.type == MessageType.general,
-        };
-      }).toList();
+    return switch (_activeFilter) {
+      _Filter.all => true,
+      _Filter.compliance => m.type == MessageType.compliance,
+      _Filter.announcement => m.type == MessageType.announcement,
+      _Filter.general => m.type == MessageType.general,
+    };
+  }).toList();
 
-  void _markAsRead(BizMessage msg) {
+  // REPLACE _markAsRead with this:
+  void _openMessage(BizMessage msg) {
     if (!msg.isRead) setState(() => msg.isRead = true);
+    showMessageViewDialog(context, msg);
   }
 
   @override
@@ -101,14 +102,16 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
                     ? _EmptyState()
                     : Column(
                         children: _filtered
-                            .map((msg) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: _MessageCard(
-                                    message: msg,
-                                    isNarrow: isNarrow,
-                                    onTap: () => _markAsRead(msg),
-                                  ),
-                                ))
+                            .map(
+                              (msg) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _MessageCard(
+                                  message: msg,
+                                  isNarrow: isNarrow,
+                                  onTap: () => _openMessage(msg),
+                                ),
+                              ),
+                            )
                             .toList(),
                       ),
               ],
@@ -227,7 +230,8 @@ class _FilterChip extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: isActive
               ? const LinearGradient(
-                  colors: [AppColors.gradientStart, AppColors.gradientEnd])
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                )
               : null,
           color: isActive ? null : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(20),
@@ -280,9 +284,7 @@ class _MessageCard extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isUnread
-              ? AppColors.activeNavBg
-              : AppColors.cardBackground,
+          color: isUnread ? AppColors.activeNavBg : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isUnread
@@ -332,8 +334,7 @@ class _WideLayout extends StatelessWidget {
                     style: TextStyle(
                       color: AppColors.textWhite,
                       fontSize: 14,
-                      fontWeight:
-                          isUnread ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
                     ),
                   ),
                   if (isUnread) ...[
@@ -374,7 +375,9 @@ class _WideLayout extends StatelessWidget {
             Text(
               message.date,
               style: const TextStyle(
-                  color: AppColors.textSubtle, fontSize: 11.5),
+                color: AppColors.textSubtle,
+                fontSize: 11.5,
+              ),
             ),
           ],
         ),
@@ -409,7 +412,9 @@ class _NarrowLayout extends StatelessWidget {
             Text(
               message.date,
               style: const TextStyle(
-                  color: AppColors.textSubtle, fontSize: 11.5),
+                color: AppColors.textSubtle,
+                fontSize: 11.5,
+              ),
             ),
           ],
         ),
@@ -424,8 +429,7 @@ class _NarrowLayout extends StatelessWidget {
                 style: TextStyle(
                   color: AppColors.textWhite,
                   fontSize: 13.5,
-                  fontWeight:
-                      isUnread ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
             ),
@@ -523,8 +527,11 @@ class _EmptyState extends StatelessWidget {
       alignment: Alignment.center,
       child: Column(
         children: [
-          Icon(Icons.inbox_rounded,
-              color: AppColors.textSubtle.withOpacity(0.4), size: 48),
+          Icon(
+            Icons.inbox_rounded,
+            color: AppColors.textSubtle.withOpacity(0.4),
+            size: 48,
+          ),
           const SizedBox(height: 12),
           const Text(
             'No messages found.',

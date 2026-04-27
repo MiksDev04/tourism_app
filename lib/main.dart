@@ -11,7 +11,7 @@ void main() async {
   await windowManager.ensureInitialized();
 
   // 3. Define your constraints here
-  await windowManager.setMinimumSize(const Size(700, 500));
+  await windowManager.setMinimumSize(const Size(375, 500));
   await windowManager.setMaximumSize(const Size(1440, 900));
   
   

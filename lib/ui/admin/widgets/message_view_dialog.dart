@@ -28,6 +28,7 @@ Future<void> showMessageViewDialog(
   return showDialog(
     context: context,
     barrierColor: Colors.black.withOpacity(0.65),
+    barrierDismissible: true,
     builder: (_) => MessageViewDialog(data: data),
   );
 }
@@ -75,41 +76,84 @@ Reference No.: $ref''';
 
 // ─── Main Dialog Widget ───────────────────────────────────────────────────────
 
-class MessageViewDialog extends StatelessWidget {
+class MessageViewDialog extends StatefulWidget {
   const MessageViewDialog({super.key, required this.data});
 
   final MessageViewData data;
 
   @override
+  State<MessageViewDialog> createState() => _MessageViewDialogState();
+}
+
+class _MessageViewDialogState extends State<MessageViewDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _animCtrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 580),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F1923),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.55),
-                  blurRadius: 48,
-                  offset: const Offset(0, 18),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: GestureDetector(
+          onTap: () {},
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: SlideTransition(
+              position: _slideAnim,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 580),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F1923),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.55),
+                          blurRadius: 48,
+                          offset: const Offset(0, 18),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _Header(data: widget.data),
+                        const Divider(color: AppColors.cardBorder, height: 1),
+                        Flexible(
+                          child: _LetterBody(text: _buildLetter(widget.data)),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _Header(data: data),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                Flexible(
-                  child: _LetterBody(text: _buildLetter(data)),
-                ),
-              ],
+              ),
             ),
           ),
         ),

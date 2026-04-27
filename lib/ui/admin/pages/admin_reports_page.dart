@@ -799,7 +799,7 @@ class _TableRow extends StatelessWidget {
                   onTap: () => _showReportModal(context),
                   child: const Icon(
                     Icons.remove_red_eye_outlined,
-                    color: AppColors.primaryCyan,
+                    color: AppColors.textGray,
                     size: 20,
                   ),
                 ),
@@ -883,7 +883,7 @@ class _TableRow extends StatelessWidget {
               onTap: () => _showReportModal(context),
               child: const Icon(
                 Icons.remove_red_eye_outlined,
-                color: AppColors.primaryCyan,
+                color: AppColors.textGray,
                 size: 20,
               ),
             ),

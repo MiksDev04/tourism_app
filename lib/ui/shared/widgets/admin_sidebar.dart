@@ -61,12 +61,6 @@ class AdminSidebar extends StatelessWidget {
       index: 4,
       route: AppRoutes.adminCompliance,
     ),
-    NavItem(
-      icon: Icons.person_outline_rounded,
-      label: 'Profile',
-      index: 5,
-      route: AppRoutes.adminProfile,
-    ),
   ];
 
   @override

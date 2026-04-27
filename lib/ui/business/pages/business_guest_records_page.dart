@@ -744,24 +744,147 @@ class _ExpandedDetails extends StatelessWidget {
           const SizedBox(height: 12),
 
           if (demographics != null) ...[
-            // Age Groups
-            _DemographicSection(
-              title: 'Age Groups',
-              data: demographics.ageGroups,
-            ),
-            const SizedBox(height: 12),
-
-            // Gender Distribution
-            _DemographicSection(
-              title: 'Gender',
-              data: demographics.genderDistribution,
-            ),
-            const SizedBox(height: 12),
-
-            // Countries
-            _DemographicSection(
-              title: 'Countries of Origin',
-              data: demographics.countries,
+            // Small table format
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: AppColors.cardBorder),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Table(
+                border: TableBorder.all(
+                  color: AppColors.cardBorder,
+                  width: 0.5,
+                ),
+                columnWidths: const {
+                  0: FlexColumnWidth(2),
+                  1: FlexColumnWidth(3),
+                },
+                children: [
+                  // Header row
+                  TableRow(
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                    ),
+                    children: const [
+                      Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          'Category',
+                          style: TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          'Details',
+                          style: TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Age Groups row
+                  TableRow(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          'Age Groups',
+                          style: TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: demographics.ageGroups.entries.map((entry) {
+                            return Text(
+                              '${entry.key}: ${entry.value}',
+                              style: const TextStyle(
+                                color: AppColors.textWhite,
+                                fontSize: 11,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Gender row
+                  TableRow(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          'Gender',
+                          style: TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: demographics.genderDistribution.entries.map((entry) {
+                            return Text(
+                              '${entry.key}: ${entry.value}',
+                              style: const TextStyle(
+                                color: AppColors.textWhite,
+                                fontSize: 11,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Countries row
+                  TableRow(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text(
+                          'Countries',
+                          style: TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: demographics.countries.entries.map((entry) {
+                            return Text(
+                              '${entry.key}: ${entry.value}',
+                              style: const TextStyle(
+                                color: AppColors.textWhite,
+                                fontSize: 11,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ] else ...[
             const Text(
@@ -775,41 +898,6 @@ class _ExpandedDetails extends StatelessWidget {
   }
 }
 
-class _DemographicSection extends StatelessWidget {
-  const _DemographicSection({required this.title, required this.data});
-
-  final String title;
-  final Map<String, int> data;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: AppColors.textGray,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 12,
-          runSpacing: 4,
-          children: data.entries.map((entry) {
-            return Text(
-              '${entry.key}: ${entry.value}',
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 12),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-// ─── Status Badge ─────────────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});

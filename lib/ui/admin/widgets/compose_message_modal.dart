@@ -62,7 +62,7 @@ Future<ComposeMessageDraft?> showComposeMessageDialog(
   return showDialog<ComposeMessageDraft>(
     context: context,
     barrierColor: Colors.black.withOpacity(0.65),
-    barrierDismissible: false,
+    barrierDismissible: true,
     builder: (_) => ComposeMessageDialog(initialDraft: initialDraft),
   );
 }
@@ -127,7 +127,12 @@ class ComposeMessageDialog extends StatefulWidget {
   State<ComposeMessageDialog> createState() => _ComposeMessageDialogState();
 }
 
-class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
+class _ComposeMessageDialogState extends State<ComposeMessageDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+  
   late ComposeMessageDraft _draft;
   bool _previewMode = false;
   bool _sending = false;
@@ -138,6 +143,17 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
   @override
   void initState() {
     super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.05),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
+    _animCtrl.forward();
+    
     _draft = widget.initialDraft ??
         ComposeMessageDraft(
           sendToMode: SendToMode.specific,
@@ -149,6 +165,7 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
 
   @override
   void dispose() {
+    _animCtrl.dispose();
     _subjectCtrl.dispose();
     _contentCtrl.dispose();
     super.dispose();
@@ -178,59 +195,71 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F1923),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.cardBorder),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.55),
-                  blurRadius: 48,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _Header(
-                  previewMode: _previewMode,
-                  onToggle: _togglePreview,
-                  onClose: () => Navigator.of(context).pop(),
-                ),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                Flexible(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: _previewMode
-                        ? _LetterPreview(
-                            key: const ValueKey('preview'),
-                            text: _buildLetter(_draft),
-                          )
-                        : _Form(
-                            key: const ValueKey('form'),
-                            draft: _draft,
-                            subjectCtrl: _subjectCtrl,
-                            contentCtrl: _contentCtrl,
-                            onChanged: (d) => setState(() => _draft = d),
+    return GestureDetector(
+      onTap: () => Navigator.of(context).pop(),
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        child: GestureDetector(
+          onTap: () {},
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: SlideTransition(
+              position: _slideAnim,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F1923),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.cardBorder),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.55),
+                          blurRadius: 48,
+                          offset: const Offset(0, 18),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _Header(
+                          previewMode: _previewMode,
+                          onToggle: _togglePreview,
+                          onClose: () => Navigator.of(context).pop(),
+                        ),
+                        const Divider(color: AppColors.cardBorder, height: 1),
+                        Flexible(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            child: _previewMode
+                                ? _LetterPreview(
+                                    key: const ValueKey('preview'),
+                                    text: _buildLetter(_draft),
+                                  )
+                                : _Form(
+                                    key: const ValueKey('form'),
+                                    draft: _draft,
+                                    subjectCtrl: _subjectCtrl,
+                                    contentCtrl: _contentCtrl,
+                                    onChanged: (d) => setState(() => _draft = d),
+                                  ),
                           ),
+                        ),
+                        const Divider(color: AppColors.cardBorder, height: 1),
+                        _Footer(
+                          canSend: _draft.isValid && !_sending,
+                          sending: _sending,
+                          onCancel: () => Navigator.of(context).pop(),
+                          onSend: _send,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                _Footer(
-                  canSend: _draft.isValid && !_sending,
-                  sending: _sending,
-                  onCancel: () => Navigator.of(context).pop(),
-                  onSend: _send,
-                ),
-              ],
+              ),
             ),
           ),
         ),

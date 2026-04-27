@@ -64,12 +64,7 @@ class BusinessSidebar extends StatelessWidget {
       badge: 1,
       route: AppRoutes.businessMessages,
     ),
-    BizNavItem(
-      icon: Icons.person_outline_rounded,
-      label: 'Profile',
-      index: 5,
-      route: AppRoutes.businessProfile,
-    ),
+ 
   ];
 
   @override
