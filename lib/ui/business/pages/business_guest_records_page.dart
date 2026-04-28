@@ -18,7 +18,7 @@ class GuestRecord {
     required this.purpose,
     required this.transport,
     required this.status,
-    required this.demographics, // Add this
+    required this.demographics,
   });
 
   final String checkIn;
@@ -29,10 +29,9 @@ class GuestRecord {
   final String purpose;
   final String transport;
   final GuestRecordStatus status;
-  final GuestDemographics? demographics; // New field
+  final GuestDemographics? demographics;
 }
 
-// Add a demographics model
 class GuestDemographics {
   const GuestDemographics({
     required this.ageGroups,
@@ -40,12 +39,10 @@ class GuestDemographics {
     required this.countries,
   });
 
-  final Map<String, int> ageGroups; // e.g., {"18-25": 2, "26-35": 5}
-  final Map<String, int> genderDistribution; // e.g., {"Male": 4, "Female": 6}
-  final Map<String, int> countries; // e.g., {"USA": 5, "Canada": 3}
+  final Map<String, int> ageGroups;
+  final Map<String, int> genderDistribution;
+  final Map<String, int> countries;
 }
-
-// ─── Sample Data ──────────────────────────────────────────────────────────────
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
@@ -78,11 +75,124 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
         countries: {'USA': 5, 'Canada': 3, 'UK': 2},
       ),
     ),
-    // ... other records with demographics
+    GuestRecord(
+      checkIn: '2024-04-05',
+      checkOut: '2024-04-07',
+      nights: '2 nights',
+      guests: 5,
+      rooms: 2,
+      purpose: 'Business',
+      transport: 'Airport Shuttle',
+      status: GuestRecordStatus.active,
+      demographics: const GuestDemographics(
+        ageGroups: {'18-25': 1, '26-35': 3, '36-50': 1},
+        genderDistribution: {'Male': 3, 'Female': 2},
+        countries: {'USA': 3, 'Canada': 2},
+      ),
+    ),
+    GuestRecord(
+      checkIn: '2024-04-10',
+      checkOut: '2024-04-12',
+      nights: '2 nights',
+      guests: 8,
+      rooms: 3,
+      purpose: 'Leisure',
+      transport: 'Private Car',
+      status: GuestRecordStatus.archived,
+      demographics: const GuestDemographics(
+        ageGroups: {'18-25': 3, '26-35': 4, '36-50': 1},
+        genderDistribution: {'Male': 5, 'Female': 3},
+        countries: {'USA': 4, 'Canada': 4},
+      ),
+    ),
+    GuestRecord(
+      checkIn: '2024-04-15',
+      checkOut: '2024-04-18',
+      nights: '3 nights',
+      guests: 20,
+      rooms: 8,
+      purpose: 'Conference',
+      transport: 'Bus',
+      status: GuestRecordStatus.active,
+      demographics: const GuestDemographics(
+        ageGroups: {'18-25': 5, '26-35': 10, '36-50': 5},
+        genderDistribution: {'Male': 12, 'Female': 8},
+        countries: {'USA': 10, 'Canada': 6, 'UK': 4},
+      ),
+    ),
   ];
+
   _Filter _activeFilter = _Filter.all;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
+
+  // Filter values
+  DateTime? _checkInFrom;
+  DateTime? _checkOutTo;
+  String? _selectedCountry;
+  String? _selectedPurpose;
+  String? _selectedTransport;
+
+  // Available options
+  final List<String> _countryOptions = ['All', 'USA', 'Canada', 'UK'];
+  final List<String> _purposeOptions = ['All', 'Leisure', 'Business', 'Conference'];
+  final List<String> _transportOptions = ['All', 'Private Car', 'Airport Shuttle', 'Bus'];
+
+  Future<void> _selectCheckInFrom(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _checkInFrom ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.accentGreen,
+              onPrimary: Colors.black,
+              surface: AppColors.cardBackground,
+              onSurface: AppColors.textWhite,
+            ),
+            dialogBackgroundColor: AppColors.cardBackground,
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _checkInFrom = picked;
+      });
+    }
+  }
+
+  Future<void> _selectCheckOutTo(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _checkOutTo ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppColors.accentGreen,
+              onPrimary: Colors.black,
+              surface: AppColors.cardBackground,
+              onSurface: AppColors.textWhite,
+            ),
+            dialogBackgroundColor: AppColors.cardBackground,
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        _checkOutTo = picked;
+      });
+    }
+  }
 
   Future<void> _onArchive(GuestRecord record) async {
     final confirmed = await showArchiveGuestDialog(context);
@@ -99,12 +209,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
         rooms: record.rooms,
         purpose: record.purpose,
         transport: record.transport,
-        status: GuestRecordStatus.archived, // ← only this changes
-        demographics: const GuestDemographics(
-          ageGroups: {'18-25': 2, '26-35': 5, '36-50': 3},
-          genderDistribution: {'Male': 6, 'Female': 4},
-          countries: {'USA': 5, 'Canada': 3, 'UK': 2},
-        ),
+        status: GuestRecordStatus.archived,
+        demographics: record.demographics,
       );
     });
   }
@@ -116,8 +222,61 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     setState(() {
       final idx = _records.indexOf(record);
       if (idx == -1) return;
-      _records[idx] = updated; // replace in-place with edited version
+      _records[idx] = updated;
     });
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _checkInFrom = null;
+      _checkOutTo = null;
+      _selectedCountry = null;
+      _selectedPurpose = null;
+      _selectedTransport = null;
+      _searchQuery = '';
+      _activeFilter = _Filter.all;
+      _searchCtrl.clear();
+    });
+  }
+
+  bool _matchesFilters(GuestRecord record) {
+    // Check-in From filter
+    if (_checkInFrom != null) {
+      try {
+        final recordCheckIn = DateTime.parse(record.checkIn);
+        if (recordCheckIn.isBefore(_checkInFrom!)) return false;
+      } catch (e) {
+        // If date parsing fails, skip this filter
+      }
+    }
+
+    // Check-out To filter
+    if (_checkOutTo != null) {
+      try {
+        final recordCheckOut = DateTime.parse(record.checkOut);
+        if (recordCheckOut.isAfter(_checkOutTo!)) return false;
+      } catch (e) {
+        // If date parsing fails, skip this filter
+      }
+    }
+
+    // Country filter
+    if (_selectedCountry != null && _selectedCountry != 'All') {
+      final hasCountry = record.demographics?.countries.containsKey(_selectedCountry) ?? false;
+      if (!hasCountry) return false;
+    }
+
+    // Purpose filter
+    if (_selectedPurpose != null && _selectedPurpose != 'All') {
+      if (record.purpose != _selectedPurpose) return false;
+    }
+
+    // Transport filter
+    if (_selectedTransport != null && _selectedTransport != 'All') {
+      if (record.transport != _selectedTransport) return false;
+    }
+
+    return true;
   }
 
   @override
@@ -139,7 +298,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
           r.checkIn.contains(q) ||
           r.purpose.toLowerCase().contains(q) ||
           r.transport.toLowerCase().contains(q);
-      return matchesFilter && matchesSearch;
+      return matchesFilter && matchesSearch && _matchesFilters(r);
     }).toList();
   }
 
@@ -168,11 +327,30 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
                 const SizedBox(height: 14),
+                // Filters Section
+                _FiltersSection(
+                  checkInFrom: _checkInFrom,
+                  checkOutTo: _checkOutTo,
+                  selectedCountry: _selectedCountry,
+                  selectedPurpose: _selectedPurpose,
+                  selectedTransport: _selectedTransport,
+                  countryOptions: _countryOptions,
+                  purposeOptions: _purposeOptions,
+                  transportOptions: _transportOptions,
+                  onCheckInFromTap: () => _selectCheckInFrom(context),
+                  onCheckOutToTap: () => _selectCheckOutTo(context),
+                  onCountryChanged: (value) => setState(() => _selectedCountry = value),
+                  onPurposeChanged: (value) => setState(() => _selectedPurpose = value),
+                  onTransportChanged: (value) => setState(() => _selectedTransport = value),
+                  onClearAll: _clearAllFilters,
+                  isNarrow: isNarrow,
+                ),
+                const SizedBox(height: 14),
                 _GuestTable(
                   records: _filtered,
                   isNarrow: isNarrow,
-                  onEdit: _onEdit, // ← add
-                  onArchive: _onArchive, // ← add
+                  onEdit: _onEdit,
+                  onArchive: _onArchive,
                 ),
               ],
             ),
@@ -183,8 +361,348 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   }
 }
 
-// ─── Page Header ──────────────────────────────────────────────────────────────
+// ─── Filters Section ──────────────────────────────────────────────────────────
 
+class _FiltersSection extends StatelessWidget {
+  const _FiltersSection({
+    required this.checkInFrom,
+    required this.checkOutTo,
+    required this.selectedCountry,
+    required this.selectedPurpose,
+    required this.selectedTransport,
+    required this.countryOptions,
+    required this.purposeOptions,
+    required this.transportOptions,
+    required this.onCheckInFromTap,
+    required this.onCheckOutToTap,
+    required this.onCountryChanged,
+    required this.onPurposeChanged,
+    required this.onTransportChanged,
+    required this.onClearAll,
+    required this.isNarrow,
+  });
+
+  final DateTime? checkInFrom;
+  final DateTime? checkOutTo;
+  final String? selectedCountry;
+  final String? selectedPurpose;
+  final String? selectedTransport;
+  final List<String> countryOptions;
+  final List<String> purposeOptions;
+  final List<String> transportOptions;
+  final VoidCallback onCheckInFromTap;
+  final VoidCallback onCheckOutToTap;
+  final ValueChanged<String?> onCountryChanged;
+  final ValueChanged<String?> onPurposeChanged;
+  final ValueChanged<String?> onTransportChanged;
+  final VoidCallback onClearAll;
+  final bool isNarrow;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasActiveFilters = checkInFrom != null ||
+        checkOutTo != null ||
+        (selectedCountry != null && selectedCountry != 'All') ||
+        (selectedPurpose != null && selectedPurpose != 'All') ||
+        (selectedTransport != null && selectedTransport != 'All');
+
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Check-in From and Check-out To
+          Row(
+            children: [
+              Expanded(
+                child: _buildDatePicker(
+                  label: 'Check-in From',
+                  date: checkInFrom,
+                  onTap: onCheckInFromTap,
+                  hint: 'mm/dd/yyyy',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDatePicker(
+                  label: 'Check-out To',
+                  date: checkOutTo,
+                  onTap: onCheckOutToTap,
+                  hint: 'mm/dd/yyyy',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Row 2: Country and Purpose
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdownWithLabel(
+                  label: 'Country',
+                  value: selectedCountry,
+                  items: countryOptions,
+                  onChanged: onCountryChanged,
+                  hint: 'All',
+                  icon: Icons.public,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDropdownWithLabel(
+                  label: 'Purpose',
+                  value: selectedPurpose,
+                  items: purposeOptions,
+                  onChanged: onPurposeChanged,
+                  hint: 'All',
+                  icon: Icons.work_outline,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Row 3: Transportation
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdownWithLabel(
+                  label: 'Transportation',
+                  value: selectedTransport,
+                  items: transportOptions,
+                  onChanged: onTransportChanged,
+                  hint: 'All',
+                  icon: Icons.directions_car_outlined,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (hasActiveFilters)
+                Expanded(
+                  child: _buildClearButton(),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildDatePicker(
+                label: 'Check-in From',
+                date: checkInFrom,
+                onTap: onCheckInFromTap,
+                hint: 'mm/dd/yyyy',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDatePicker(
+                label: 'Check-out To',
+                date: checkOutTo,
+                onTap: onCheckOutToTap,
+                hint: 'mm/dd/yyyy',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDropdownWithLabel(
+                label: 'Country',
+                value: selectedCountry,
+                items: countryOptions,
+                onChanged: onCountryChanged,
+                hint: 'All',
+                icon: Icons.public,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDropdownWithLabel(
+                label: 'Purpose',
+                value: selectedPurpose,
+                items: purposeOptions,
+                onChanged: onPurposeChanged,
+                hint: 'All',
+                icon: Icons.work_outline,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildDropdownWithLabel(
+                label: 'Transportation',
+                value: selectedTransport,
+                items: transportOptions,
+                onChanged: onTransportChanged,
+                hint: 'All',
+                icon: Icons.directions_car_outlined,
+              ),
+            ),
+            if (hasActiveFilters) ...[
+              const SizedBox(width: 16),
+              _buildClearButton(),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDatePicker({
+    required String label,
+    required DateTime? date,
+    required VoidCallback onTap,
+    required String hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.cardBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, color: AppColors.textSubtle, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    date != null
+                        ? '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}'
+                        : hint,
+                    style: TextStyle(
+                      color: date != null ? AppColors.textWhite : AppColors.textSubtle,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownWithLabel({
+    required String label,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required String hint,
+    required IconData icon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric( vertical: 8),
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isDense: true,
+              hint: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    Icon(icon, color: AppColors.textSubtle, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      hint,
+                      style: const TextStyle(
+                        color: AppColors.textSubtle,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              isExpanded: true,
+              icon: const Icon(Icons.arrow_drop_down, color: AppColors.textGray, size: 20),
+              dropdownColor: AppColors.cardBackground,
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 12.5,
+              ),
+              items: items.map((item) {
+                return DropdownMenuItem(
+                  value: item,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(item),
+                  ),
+                );
+              }).toList(),
+              onChanged: onChanged,
+              underline: const SizedBox(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClearButton() {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onClearAll,
+          borderRadius: BorderRadius.circular(8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.clear_all, color: AppColors.textGray, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                'Clear All',
+                style: TextStyle(color: AppColors.textGray, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Page Header ──────────────────────────────────────────────────────────────
 class _PageHeader extends StatelessWidget {
   const _PageHeader({
     required this.activeFilter,
@@ -359,8 +877,6 @@ class _SearchBar extends StatelessWidget {
 
 // ─── Guest Table ──────────────────────────────────────────────────────────────
 
-// ─── Guest Table ──────────────────────────────────────────────────────────────
-
 class _GuestTable extends StatelessWidget {
   const _GuestTable({
     required this.records,
@@ -423,6 +939,7 @@ class _GuestTable extends StatelessWidget {
     );
   }
 }
+
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
@@ -463,8 +980,6 @@ class _HeaderCell extends StatelessWidget {
     );
   }
 }
-
-// ─── Table Row (wide screens) ─────────────────────────────────────────────────
 
 // ─── Table Row (wide screens) ─────────────────────────────────────────────────
 
@@ -592,13 +1107,13 @@ class _RecordRowState extends State<_RecordRow> {
 class _RecordCard extends StatefulWidget {
   const _RecordCard({
     required this.record,
-    required this.onEdit, // ← add
-    required this.onArchive, // ← add
+    required this.onEdit,
+    required this.onArchive,
   });
 
   final GuestRecord record;
-  final ValueChanged<GuestRecord> onEdit; // ← add
-  final ValueChanged<GuestRecord> onArchive; // ← add
+  final ValueChanged<GuestRecord> onEdit;
+  final ValueChanged<GuestRecord> onArchive;
 
   @override
   _RecordCardState createState() => _RecordCardState();
@@ -745,7 +1260,6 @@ class _ExpandedDetails extends StatelessWidget {
           const SizedBox(height: 12),
 
           if (demographics != null) ...[
-            // Small table format
             Container(
               decoration: BoxDecoration(
                 border: Border.all(color: AppColors.cardBorder),
@@ -761,11 +1275,8 @@ class _ExpandedDetails extends StatelessWidget {
                   1: FlexColumnWidth(3),
                 },
                 children: [
-                  // Header row
                   TableRow(
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                    ),
+                    decoration: BoxDecoration(color: AppColors.cardBackground),
                     children: const [
                       Padding(
                         padding: EdgeInsets.all(8.0),
@@ -791,7 +1302,6 @@ class _ExpandedDetails extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // Age Groups row
                   TableRow(
                     children: [
                       const Padding(
@@ -822,7 +1332,6 @@ class _ExpandedDetails extends StatelessWidget {
                       ),
                     ],
                   ),
-                  // Gender row
                   TableRow(
                     children: [
                       const Padding(
@@ -840,20 +1349,21 @@ class _ExpandedDetails extends StatelessWidget {
                         child: Wrap(
                           spacing: 8,
                           runSpacing: 4,
-                          children: demographics.genderDistribution.entries.map((entry) {
-                            return Text(
-                              '${entry.key}: ${entry.value}',
-                              style: const TextStyle(
-                                color: AppColors.textWhite,
-                                fontSize: 11,
-                              ),
-                            );
-                          }).toList(),
+                          children: demographics.genderDistribution.entries.map(
+                            (entry) {
+                              return Text(
+                                '${entry.key}: ${entry.value}',
+                                style: const TextStyle(
+                                  color: AppColors.textWhite,
+                                  fontSize: 11,
+                                ),
+                              );
+                            },
+                          ).toList(),
                         ),
                       ),
                     ],
                   ),
-                  // Countries row
                   TableRow(
                     children: [
                       const Padding(
@@ -899,7 +1409,6 @@ class _ExpandedDetails extends StatelessWidget {
   }
 }
 
-
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final GuestRecordStatus status;
@@ -936,27 +1445,24 @@ class _ActionButtons extends StatelessWidget {
     required this.status,
     required this.expanded,
     required this.onToggleExpand,
-    required this.onEdit, // ← add
-    required this.onArchive, // ← add
+    required this.onEdit,
+    required this.onArchive,
   });
 
   final GuestRecordStatus status;
   final bool expanded;
   final VoidCallback onToggleExpand;
-  final VoidCallback onEdit; // ← add
-  final VoidCallback onArchive; // ← add
+  final VoidCallback onEdit;
+  final VoidCallback onArchive;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         if (status == GuestRecordStatus.active) ...[
-          _IconBtn(icon: Icons.edit_outlined, onTap: onEdit), // ← was () {}
+          _IconBtn(icon: Icons.edit_outlined, onTap: onEdit),
           const SizedBox(width: 8),
-          _IconBtn(
-            icon: Icons.archive_outlined,
-            onTap: onArchive,
-          ), // ← was () {}
+          _IconBtn(icon: Icons.archive_outlined, onTap: onArchive),
           const SizedBox(width: 8),
         ],
         _IconBtn(
