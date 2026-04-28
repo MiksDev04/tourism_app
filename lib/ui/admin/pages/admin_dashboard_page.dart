@@ -195,6 +195,8 @@ class _PillTab extends StatelessWidget {
 
 // ─── Stat Cards ───────────────────────────────────────────────────────────────
 
+// ─── Stat Cards ───────────────────────────────────────────────────────────────
+
 class _StatCards extends StatelessWidget {
   const _StatCards({required this.isNarrow, required this.isMedium});
 
@@ -237,6 +239,7 @@ class _StatCards extends StatelessWidget {
       return Column(
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _StatCard(data: _cards[0])),
               const SizedBox(width: 12),
@@ -245,6 +248,7 @@ class _StatCards extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _StatCard(data: _cards[2])),
               const SizedBox(width: 12),
@@ -256,6 +260,7 @@ class _StatCards extends StatelessWidget {
     }
     // Single row on medium/wide
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: _cards
           .expand(
             (d) => [
@@ -291,37 +296,48 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DashCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(data.icon, color: data.iconColor, size: 22),
-          const SizedBox(height: 14),
-          Text(
-            data.value,
-            style: const TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            data.label,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
-          ),
-          if (data.sub != null) ...[
-            const SizedBox(height: 2),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(data.icon, color: data.iconColor, size: 22),
+            const SizedBox(height: 14),
             Text(
-              data.sub!,
-              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+              data.value,
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+              ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              data.label,
+              style: const TextStyle(
+                color: AppColors.textGray,
+                fontSize: 12.5,
+              ),
+            ),
+            if (data.sub != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                data.sub!,
+                style: const TextStyle(
+                  color: AppColors.textSubtle,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+            // Add an empty SizedBox as placeholder for cards without sub
+            if (data.sub == null) const SizedBox(height: 17),
           ],
-        ],
+        ),
       ),
     );
   }
 }
-
 // ─── Donut Charts Row ─────────────────────────────────────────────────────────
 
 class _DonutChartsRow extends StatelessWidget {
@@ -790,7 +806,7 @@ class _DonutChart extends StatefulWidget {
 class _DonutChartState extends State<_DonutChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  final int _hoveredIndex = -1;
+  int _hoveredIndex = -1;
 
   @override
   void initState() {

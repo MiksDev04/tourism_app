@@ -289,7 +289,6 @@ class _NavTile extends StatelessWidget {
 }
 
 // ─── Sidebar Footer ───────────────────────────────────────────────────────────
-
 class _SidebarFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -298,53 +297,31 @@ class _SidebarFooter extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: AppColors.accentPurple,
-            child: const Text(
-              'J',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+      child: Center(
+        child: GestureDetector(
+          onTap: () {
+            Navigator.pushReplacementNamed(context, AppRoutes.login);
+          },
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.logout_rounded,
+                color: AppColors.textGray,
+                size: 16,
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Juan dela Cruz',
-                  style: TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+              SizedBox(width: 8),
+              Text(
+                'Logout',
+                style: TextStyle(
+                  color: AppColors.textGray,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
                 ),
-                Text(
-                  'grandhotel@sanpablo.com',
-                  style: TextStyle(color: AppColors.textGray, fontSize: 10),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () {
-              Navigator.pushReplacementNamed(context, AppRoutes.login);
-            },
-            child: const Icon(
-              Icons.logout_rounded,
-              color: AppColors.textGray,
-              size: 16,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

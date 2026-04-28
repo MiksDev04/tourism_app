@@ -91,7 +91,7 @@ class _NotificationBell extends StatelessWidget {
   }
 }
 
-class _ProfileButton extends StatelessWidget {
+class _ProfileButton extends StatefulWidget {
   const _ProfileButton({
     this.displayName = 'Juan Dela Cruz',
     this.businessName = 'grandhotel',
@@ -103,53 +103,74 @@ class _ProfileButton extends StatelessWidget {
   final String initials;
 
   @override
+  State<_ProfileButton> createState() => _ProfileButtonState();
+}
+
+class _ProfileButtonState extends State<_ProfileButton> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () =>
           Navigator.pushReplacementNamed(context, AppRoutes.businessProfile),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: const BoxDecoration(
-              color: AppColors.primaryCyan,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: _isHovered 
+                ? AppColors.cardBorder.withOpacity(0.3)
+                : Colors.transparent,
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
-              Text(
-                displayName,
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+              Container(
+                width: 30,  
+                height: 30,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryCyan,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  widget.initials,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              Text(
-                businessName,
-                style: const TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 9,
-                  fontWeight: FontWeight.w300,
-                ),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.displayName,
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    widget.businessName,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

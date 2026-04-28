@@ -65,6 +65,8 @@ class _HotelHeader extends StatelessWidget {
 
 // ─── Stat Cards ───────────────────────────────────────────────────────────────
 
+// ─── Stat Cards ───────────────────────────────────────────────────────────────
+
 class _StatCards extends StatelessWidget {
   const _StatCards();
 
@@ -73,10 +75,12 @@ class _StatCards extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 600) {
+          // On narrow devices - stack in 2x2 grid with equal heights
           return Column(
             children: [
               Row(
-                children: const [
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Expanded(
                     child: _StatCard(
                       icon: Icons.people_alt_rounded,
@@ -85,7 +89,7 @@ class _StatCards extends StatelessWidget {
                       label: 'Guests This Month',
                     ),
                   ),
-                  SizedBox(width: 14),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: _StatCard(
                       icon: Icons.trending_up_rounded,
@@ -98,7 +102,8 @@ class _StatCards extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Row(
-                children: const [
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Expanded(
                     child: _StatCard(
                       icon: Icons.schedule_rounded,
@@ -107,7 +112,7 @@ class _StatCards extends StatelessWidget {
                       label: 'Avg. Length of Stay',
                     ),
                   ),
-                  SizedBox(width: 14),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: _StatCard(
                       icon: Icons.bed_rounded,
@@ -122,6 +127,7 @@ class _StatCards extends StatelessWidget {
           );
         } else {
           return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
               Expanded(
                 child: _StatCard(
@@ -166,33 +172,6 @@ class _StatCards extends StatelessWidget {
   }
 }
 
-class _ResponsiveStatCard extends StatelessWidget {
-  const _ResponsiveStatCard({
-    required this.icon,
-    required this.iconColor,
-    required this.value,
-    required this.label,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: (MediaQuery.of(context).size.width - 62) / 2,
-      child: _StatCard(
-        icon: icon,
-        iconColor: iconColor,
-        value: value,
-        label: label,
-      ),
-    );
-  }
-}
-
 class _StatCard extends StatelessWidget {
   const _StatCard({
     required this.icon,
@@ -209,25 +188,32 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DashCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(height: 14),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(height: 14),
+            Text(
+              value,
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppColors.textGray,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -242,7 +228,19 @@ class _DonutChartsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 900) {
+        // For small devices - stack all charts in one column
+        if (constraints.maxWidth < 600) {
+          return Column(
+            children: const [
+              _DonutChartCard1(),
+              SizedBox(height: 14),
+              _DonutChartCard2(),
+              SizedBox(height: 14),
+              _DonutChartCard3(),
+            ],
+          );
+        } else if (constraints.maxWidth < 900) {
+          // For medium devices - two in first row, one below
           return Column(
             children: [
               Row(
@@ -256,17 +254,8 @@ class _DonutChartsRow extends StatelessWidget {
               const _DonutChartCard3(),
             ],
           );
-        } else if (constraints.maxWidth < 600) {
-          return Column(
-            children: const [
-              _DonutChartCard1(),
-              SizedBox(height: 14),
-              _DonutChartCard2(),
-              SizedBox(height: 14),
-              _DonutChartCard3(),
-            ],
-          );
         } else {
+          // For large devices - all three in a row
           return Row(
             children: const [
               Expanded(child: _DonutChartCard1()),
@@ -281,7 +270,6 @@ class _DonutChartsRow extends StatelessWidget {
     );
   }
 }
-
 class _DonutChartCard1 extends StatelessWidget {
   const _DonutChartCard1();
 

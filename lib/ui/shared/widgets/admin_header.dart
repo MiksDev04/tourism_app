@@ -83,63 +83,71 @@ class _NotificationBell extends StatelessWidget {
   }
 }
 
-class _ProfileButton extends StatelessWidget {
+class _ProfileButton extends StatefulWidget {
+  const _ProfileButton({
+    this.displayName = 'Tourism Office',
+    this.initials = 'A',
+  });
+
+  final String displayName;
+  final String initials;
+
+  @override
+  State<_ProfileButton> createState() => _ProfileButtonState();
+}
+
+class _ProfileButtonState extends State<_ProfileButton> {
+  bool _isHovered = false;
+
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent, // Make background transparent
-      child: Column(
-        children: [
-          Row(
+    return GestureDetector(
+      onTap: () =>
+          Navigator.pushReplacementNamed(context, AppRoutes.adminProfile),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: _isHovered 
+                ? AppColors.cardBorder.withOpacity(0.3)
+                : Colors.transparent,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: InkWell(
-                  onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.adminProfile),
-                  borderRadius: BorderRadius.circular(8),
-                  hoverColor: AppColors.cardBorder.withOpacity(0.3),
-                  splashColor: AppColors.primaryCyan.withOpacity(0.2),
-                  highlightColor: AppColors.textGray.withOpacity(0.1),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 30,
-                          height: 30,
-                          decoration: const BoxDecoration(
-                            color: AppColors.primaryCyan,
-                            shape: BoxShape.circle,
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'A',
-                            style: TextStyle(
-                              color: AppColors.textWhite,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: const Text(
-                            'Tourism Office',
-                            style: TextStyle(
-                              color: AppColors.textWhite,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+              Container(
+                width: 30,  
+                height: 30,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryCyan,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  widget.initials,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                widget.displayName,
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
