@@ -13,7 +13,6 @@ class AdminDashboardPage extends StatefulWidget {
 }
 
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
-  bool _isMonthly = true;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +30,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _DashboardHeader(
-                  isMonthly: _isMonthly,
-                  onToggle: (v) => setState(() => _isMonthly = v),
                   isNarrow: isNarrow,
                 ),
                 const SizedBox(height: 20),
@@ -56,13 +53,9 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({
-    required this.isMonthly,
-    required this.onToggle,
     required this.isNarrow,
   });
 
-  final bool isMonthly;
-  final ValueChanged<bool> onToggle;
   final bool isNarrow;
 
   @override
@@ -90,7 +83,6 @@ class _DashboardHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _TogglePill(isMonthly: isMonthly, onToggle: onToggle),
         ],
       );
     }
@@ -116,84 +108,13 @@ class _DashboardHeader extends StatelessWidget {
           ],
         ),
         const Spacer(),
-        _TogglePill(isMonthly: isMonthly, onToggle: onToggle),
       ],
     );
   }
 }
 
-class _TogglePill extends StatelessWidget {
-  const _TogglePill({required this.isMonthly, required this.onToggle});
 
-  final bool isMonthly;
-  final ValueChanged<bool> onToggle;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        children: [
-          _PillTab(
-            label: 'Monthly',
-            isActive: isMonthly,
-            onTap: () => onToggle(true),
-          ),
-          _PillTab(
-            label: 'Annually',
-            isActive: !isMonthly,
-            onTap: () => onToggle(false),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PillTab extends StatelessWidget {
-  const _PillTab({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          gradient: isActive
-              ? const LinearGradient(
-                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
-                )
-              : null,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive ? Colors.white : AppColors.textGray,
-            fontSize: 12.5,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Stat Cards ───────────────────────────────────────────────────────────────
 
 // ─── Stat Cards ───────────────────────────────────────────────────────────────
 
@@ -224,11 +145,11 @@ class _StatCards extends StatelessWidget {
       label: 'Pending Registrations',
     ),
     _StatCardData(
-      icon: Icons.trending_up_rounded,
+      icon: Icons.groups_rounded,
       iconColor: AppColors.accentGreen,
-      value: '71%',
-      label: 'Submission Compliance',
-      sub: 'of businesses',
+      value: '1,842',
+      label: 'Total Tourists This Year',
+      sub: 'Jan – Apr 2024',
     ),
   ];
 
@@ -364,14 +285,9 @@ class _DonutChartsRow extends StatelessWidget {
                     label: 'Male (60%)',
                   ),
                   _Segment(
-                    value: 0.3,
+                    value: 0.4,
                     color: AppColors.chartPurple,
-                    label: 'Female (30%)',
-                  ),
-                  _Segment(
-                    value: 0.1,
-                    color: AppColors.chartOrange,
-                    label: 'Other (10%)',
+                    label: 'Female (40%)',
                   ),
                 ],
                 size: 130,
@@ -709,7 +625,7 @@ class _RegionBarState extends State<_RegionBar>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         transform: _isHovered
-            ? Matrix4.translationValues(4, 0, 0) // FIXED: Use translationValues
+            ? Matrix4.translationValues(4, 0, 0)
             : Matrix4.identity(),
         child: Row(
           children: [
@@ -849,7 +765,6 @@ class _DonutChartState extends State<_DonutChart>
                 );
               },
             ),
-            // Tooltip on hover - simplified tooltip display
             if (_hoveredIndex != -1 &&
                 widget.segments[_hoveredIndex].label != null)
               Container(
@@ -896,7 +811,6 @@ class _DonutPainter extends CustomPainter {
       final seg = segments[i];
       final sweepAngle = seg.value * 2 * math.pi * animationValue;
 
-      // Adjust stroke width for hover effect
       final currentStrokeWidth = (hoveredIndex == i)
           ? strokeWidth + 4
           : strokeWidth;
@@ -919,7 +833,6 @@ class _DonutPainter extends CustomPainter {
 }
 
 // ─── Chart: Bar ───────────────────────────────────────────────────────────────
-// ─── Chart: Bar ───────────────────────────────────────────────────────────────
 
 class _BarChart extends StatefulWidget {
   const _BarChart();
@@ -931,32 +844,12 @@ class _BarChart extends StatefulWidget {
 class _BarChartState extends State<_BarChart>
     with SingleTickerProviderStateMixin {
   static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
   static const _values = [
-    130.0,
-    140.0,
-    155.0,
-    160.0,
-    180.0,
-    210.0,
-    240.0,
-    250.0,
-    245.0,
-    280.0,
-    270.0,
-    360.0,
+    130.0, 140.0, 155.0, 160.0, 180.0, 210.0,
+    240.0, 250.0, 245.0, 280.0, 270.0, 360.0,
   ];
 
   late AnimationController _controller;
@@ -1080,35 +973,21 @@ class _BarPainter extends CustomPainter {
 
     const textStyle = TextStyle(color: AppColors.textSubtle, fontSize: 10);
 
-    // Y grid lines & labels
     for (final yv in yLabels) {
       final y = chartH - (yv / maxVal) * chartH;
       canvas.drawLine(Offset(leftPad, y), Offset(size.width, y), gridPaint);
-      _drawText(
-        canvas,
-        '${yv.toInt()}',
-        Offset(0, y - 6),
-        textStyle,
-        size.width,
-      );
+      _drawText(canvas, '${yv.toInt()}', Offset(0, y - 6), textStyle, size.width);
     }
 
-    // Bars
     final barW = chartW / months.length * 0.5;
     final gap = chartW / months.length;
 
     for (int i = 0; i < months.length; i++) {
       final x = leftPad + gap * i + gap / 2 - barW / 2;
       final animatedHeight = (values[i] / maxVal) * chartH * animationValue;
-      final rect = Rect.fromLTWH(
-        x,
-        chartH - animatedHeight,
-        barW,
-        animatedHeight,
-      );
+      final rect = Rect.fromLTWH(x, chartH - animatedHeight, barW, animatedHeight);
 
       final isHovered = hoveredBarIndex == i;
-      final barColor = isHovered ? AppColors.chartCyan : AppColors.chartBlue;
 
       final paint = Paint()
         ..shader = LinearGradient(
@@ -1128,16 +1007,8 @@ class _BarPainter extends CustomPainter {
         paint,
       );
 
-      // Month label
-      _drawText(
-        canvas,
-        months[i],
-        Offset(x - 4, size.height - 14),
-        textStyle,
-        size.width,
-      );
+      _drawText(canvas, months[i], Offset(x - 4, size.height - 14), textStyle, size.width);
 
-      // Draw tooltip if hovered
       if (isHovered && animatedHeight > 0) {
         final tooltipText = '${values[i].toInt()} visitors';
         final textPainter = TextPainter(
@@ -1155,7 +1026,6 @@ class _BarPainter extends CustomPainter {
         final tooltipX = x + barW / 2 - textPainter.width / 2;
         final tooltipY = chartH - animatedHeight - 22;
 
-        // Only draw if tooltip would be visible
         if (tooltipY > 0) {
           final tooltipRect = RRect.fromRectAndRadius(
             Rect.fromLTWH(
@@ -1179,13 +1049,7 @@ class _BarPainter extends CustomPainter {
     }
   }
 
-  void _drawText(
-    Canvas canvas,
-    String text,
-    Offset offset,
-    TextStyle style,
-    double maxWidth,
-  ) {
+  void _drawText(Canvas canvas, String text, Offset offset, TextStyle style, double maxWidth) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
@@ -1205,7 +1069,7 @@ class _BarPainter extends CustomPainter {
 class _GaugeChart extends StatefulWidget {
   const _GaugeChart({required this.value});
 
-  final double value; // 0.0 - 1.0
+  final double value;
 
   @override
   State<_GaugeChart> createState() => _GaugeChartState();
@@ -1292,10 +1156,7 @@ class _GaugeChartState extends State<_GaugeChart>
               ),
               if (_isHovered)
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.black87,
                     borderRadius: BorderRadius.circular(4),
@@ -1326,7 +1187,6 @@ class _GaugePainter extends CustomPainter {
     const strokeW = 20.0;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    // Background track
     canvas.drawArc(
       rect,
       0,
@@ -1338,7 +1198,6 @@ class _GaugePainter extends CustomPainter {
         ..strokeWidth = strokeW,
     );
 
-    // Value arc with glow effect on hover
     final valuePaint = Paint()
       ..color = isHovered
           ? AppColors.chartGreen.withOpacity(0.9)

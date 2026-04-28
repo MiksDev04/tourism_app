@@ -13,6 +13,8 @@ import '../../../router/app_router.dart';
 //     child: YourPageContent(),
 //   )
 
+
+
 class AdminLayout extends StatelessWidget {
   const AdminLayout({
     super.key,
@@ -95,6 +97,7 @@ class AdminBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
 
+
   // Reuse the same nav items from AdminSidebar
   static const _navItems = [
     NavItem(
@@ -131,6 +134,7 @@ class AdminBottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.sidebarBg,
@@ -171,6 +175,9 @@ class _BottomNavTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -189,7 +196,7 @@ class _BottomNavTile extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                item.label,
+                (item.label == 'Accommodations' && isMobile) ? 'Accom' : item.label,
                 style: TextStyle(
                   color: isSelected
                       ? AppColors.primaryCyan

@@ -171,7 +171,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
-      title: 'Compliance Tracker',
+      title: 'Compliance',
       selectedIndex: 4,
       onNavSelected: (_) {},
       child: Padding(

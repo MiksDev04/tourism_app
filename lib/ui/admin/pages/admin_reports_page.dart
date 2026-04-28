@@ -499,6 +499,51 @@ class _PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMediumScreen = screenWidth < 900;
+    final isSmallScreen = screenWidth <= 700;
+
+    if (isSmallScreen) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Monthly Reports',
+                style: TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Review and approve accommodation reports',
+                style: TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _HeaderButton(
+                icon: Icons.filter_list_rounded,
+                label: null,
+                isActive: showFilters,
+                onTap: onFilterTap,
+              ),
+              SizedBox(width: 10),
+              _HeaderButton(
+                icon: Icons.download_rounded,
+                label: null,
+                onTap: () {},
+              ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -686,6 +731,7 @@ class _ReportsTable extends StatelessWidget {
     );
   }
 }
+
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
@@ -695,6 +741,7 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Medium screen: compact card-style rows, no column header needed beyond key fields
     if (isMediumScreen) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -702,24 +749,25 @@ class _TableHeader extends StatelessWidget {
           children: [
             Expanded(flex: 3, child: _HeaderCell('Business')),
             Expanded(flex: 2, child: _HeaderCell('Period')),
-            Expanded(flex: 1, child: _HeaderCell('Status')),
-            Expanded(flex: 1, child: _HeaderCell('Actions')),
+            Expanded(flex: 2, child: _HeaderCell('Status')),
+            SizedBox(width: 32), // space for action icon
           ],
         ),
       );
     }
 
+    // Large screen: full column layout
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
-          Expanded(flex: 4, child: _HeaderCell('Business')),
+          Expanded(flex: 5, child: _HeaderCell('Business')),
           Expanded(flex: 3, child: _HeaderCell('Period')),
           Expanded(flex: 2, child: _HeaderCell('Total Guests')),
           Expanded(flex: 2, child: _HeaderCell('Check-ins')),
           Expanded(flex: 3, child: _HeaderCell('Submitted')),
-          Expanded(flex: 2, child: _HeaderCell('Status')),
-          Expanded(flex: 1, child: _HeaderCell('Actions')),
+          Expanded(flex: 3, child: _HeaderCell('Status')),
+          SizedBox(width: 36), // space for action icon
         ],
       ),
     );
@@ -744,8 +792,6 @@ class _HeaderCell extends StatelessWidget {
 }
 
 // ─── Table Row ────────────────────────────────────────────────────────────────
-// Replace the existing _TableRow class with this updated version:
-
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.report,
@@ -768,6 +814,7 @@ class _TableRow extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Business + period stacked
                 Expanded(
                   flex: 3,
                   child: Column(
@@ -780,6 +827,8 @@ class _TableRow extends StatelessWidget {
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -792,15 +841,23 @@ class _TableRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                Expanded(flex: 1, child: _StatusBadge(status: report.status)),
-                const SizedBox(width: 12),
-                // Always show action button for all statuses
+                const SizedBox(width: 8),
+                // Status badge
+                Expanded(
+                  flex: 2,
+                  child: _StatusBadge(status: report.status),
+                ),
+                const SizedBox(width: 8),
+                // Action icon — fixed width, always visible
                 GestureDetector(
                   onTap: () => _showReportModal(context),
-                  child: const Icon(
-                    Icons.remove_red_eye_outlined,
-                    color: AppColors.textGray,
-                    size: 20,
+                  child: const SizedBox(
+                    width: 24,
+                    child: Icon(
+                      Icons.remove_red_eye_outlined,
+                      color: AppColors.textGray,
+                      size: 20,
+                    ),
                   ),
                 ),
               ],
@@ -824,12 +881,13 @@ class _TableRow extends StatelessWidget {
       );
     }
 
+    // Large screen: single-row layout with fixed icon width (no Expanded for icon)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
           Expanded(
-            flex: 4,
+            flex: 5,
             child: Text(
               report.business,
               style: const TextStyle(
@@ -837,6 +895,8 @@ class _TableRow extends StatelessWidget {
                 fontSize: 13.5,
                 fontWeight: FontWeight.w500,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ),
           Expanded(
@@ -844,6 +904,7 @@ class _TableRow extends StatelessWidget {
             child: Text(
               report.period,
               style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           Expanded(
@@ -874,14 +935,19 @@ class _TableRow extends StatelessWidget {
                     : AppColors.textSubtle,
                 fontSize: 13,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(flex: 2, child: _StatusBadge(status: report.status)),
           Expanded(
-            flex: 1,
-            child: GestureDetector(
-              onTap: () => _showReportModal(context),
-              child: const Icon(
+            flex: 3,
+            child: _StatusBadge(status: report.status),
+          ),
+          // Fixed-width action icon — never shrinks or overflows
+          GestureDetector(
+            onTap: () => _showReportModal(context),
+            child: const SizedBox(
+              width: 36,
+              child: Icon(
                 Icons.remove_red_eye_outlined,
                 color: AppColors.textGray,
                 size: 20,
