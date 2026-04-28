@@ -667,7 +667,7 @@ class _ReportsTable extends StatelessWidget {
                   )
                 : ListView.separated(
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
                     itemBuilder: (_, i) => LayoutBuilder(
                       builder: (context, constraints) {

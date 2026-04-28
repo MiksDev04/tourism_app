@@ -98,7 +98,7 @@ class _ReviewReportModalState extends State<ReviewReportModal>
     return Center(
       child: GestureDetector(
         onTap: () => Navigator.of(context).pop(),
-        child: Container(
+        child: SizedBox(
           width: double.infinity,
           height: double.infinity,
           child: GestureDetector(

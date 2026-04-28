@@ -55,7 +55,7 @@ class _LoginScreenState extends State<LoginScreen> {
     text: 'grandhotel@sanpablo.com',
   );
   final _passwordController = TextEditingController(text: '••••••••••');
-  bool _obscurePassword = true;
+  final bool _obscurePassword = true;
 
   @override
   void dispose() {

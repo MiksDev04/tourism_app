@@ -597,12 +597,12 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Business Name',
+                error: _isEmpty(businessNameCtrl) ? 'Required' : null,
                 child: _Input(
                   controller: businessNameCtrl,
                   hint: 'Hotel / Resort Name',
                   hasError: _isEmpty(businessNameCtrl),
                 ),
-                error: _isEmpty(businessNameCtrl) ? 'Required' : null,
               ),
             ),
             const SizedBox(width: 12),
@@ -631,25 +631,25 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Owner Name',
+                error: _isEmpty(ownerNameCtrl) ? 'Required' : null,
                 child: _Input(
                   controller: ownerNameCtrl,
                   hint: 'Full name of owner',
                   hasError: _isEmpty(ownerNameCtrl),
                 ),
-                error: _isEmpty(ownerNameCtrl) ? 'Required' : null,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _LabeledField(
                 label: 'Total Rooms/Units',
+                error: _invalidRooms ? 'Valid number required' : null,
                 child: _Input(
                   controller: totalRoomsCtrl,
                   hint: 'e.g. 30',
                   keyboardType: TextInputType.number,
                   hasError: _invalidRooms,
                 ),
-                error: _invalidRooms ? 'Valid number required' : null,
               ),
             ),
           ],
@@ -661,24 +661,24 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Permit Number',
+                error: _isEmpty(permitNumberCtrl) ? 'Required' : null,
                 child: _Input(
                   controller: permitNumberCtrl,
                   hint: 'SP-HTL-2024-XXX',
                   hasError: _isEmpty(permitNumberCtrl),
                 ),
-                error: _isEmpty(permitNumberCtrl) ? 'Required' : null,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _LabeledField(
                 label: 'Registration Number',
+                error: _isEmpty(registrationCtrl) ? 'Required' : null,
                 child: _Input(
                   controller: registrationCtrl,
                   hint: 'BIR-2024-XXXXX',
                   hasError: _isEmpty(registrationCtrl),
                 ),
-                error: _isEmpty(registrationCtrl) ? 'Required' : null,
               ),
             ),
           ],
@@ -686,23 +686,23 @@ class _Step2Form extends StatelessWidget {
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Business Address',
+          error: _isEmpty(businessAddrCtrl) ? 'Required' : null,
           child: _Input(
             controller: businessAddrCtrl,
             hint: 'Complete address in San Pablo City',
             hasError: _isEmpty(businessAddrCtrl),
           ),
-          error: _isEmpty(businessAddrCtrl) ? 'Required' : null,
         ),
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Contact Number',
+          error: _isEmpty(contactNumberCtrl) ? 'Required' : null,
           child: _Input(
             controller: contactNumberCtrl,
             hint: '049-XXX-XXXX',
             keyboardType: TextInputType.phone,
             hasError: _isEmpty(contactNumberCtrl),
           ),
-          error: _isEmpty(contactNumberCtrl) ? 'Required' : null,
         ),
         const SizedBox(height: 16),
         _WarningBanner(),

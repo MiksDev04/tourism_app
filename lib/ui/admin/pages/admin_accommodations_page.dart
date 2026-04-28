@@ -396,7 +396,7 @@ class _AccommodationTable extends StatelessWidget {
                   )
                 : ListView.separated(
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
                     itemBuilder: (_, i) => _TableRow(
                       item: rows[i],
@@ -572,7 +572,7 @@ class _AccommodationCardList extends StatelessWidget {
     }
     return ListView.separated(
       itemCount: rows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) =>
           _AccommodationCard(item: rows[i], onStatusUpdate: onStatusUpdate),
     );

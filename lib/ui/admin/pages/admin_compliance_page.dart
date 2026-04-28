@@ -630,7 +630,7 @@ class _ComplianceTable extends StatelessWidget {
                   )
                 : ListView.separated(
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
                     itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
                   ),
@@ -855,7 +855,7 @@ class _ComplianceRow extends StatelessWidget {
                 if (record.lastNotice != null) ...[
                   const SizedBox(height: 4),
                   Text(
-                    '${record?.lastNotice}',
+                    '${record.lastNotice}',
                     style: const TextStyle(
                       color: AppColors.textGray,
                       fontSize: 11,

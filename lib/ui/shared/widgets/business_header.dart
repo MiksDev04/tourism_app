@@ -128,7 +128,7 @@ class _ProfileButton extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(

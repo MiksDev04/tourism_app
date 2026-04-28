@@ -133,7 +133,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     });
   }
 
-  // Helper method to show snackbar// Helper method to show snackbar
+  // Helper method to show snackbar
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -148,6 +148,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     _clearForm();
     _showSnackBar('Clear button pressed');
   }
+  
   // Update the _clearForm method
   void _clearForm() {
     setState(() {
@@ -161,7 +162,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       _transportOtherCtrl.clear();
       _showPurposeOther = false;
       _showTransportOther = false;
-      for (final r in _rows) r.dispose();
+      for (final r in _rows) {
+        r.dispose();
+      }
       _rows
         ..clear()
         ..add(DemographicRow());
@@ -255,8 +258,6 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     return true;
   }
 
-  // Update the _clearForm method
-
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
     final picked = await showDatePicker(
       context: context,
@@ -290,7 +291,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     _roomsOccupiedCtrl.dispose();
     _purposeOtherCtrl.dispose();
     _transportOtherCtrl.dispose();
-    for (final r in _rows) r.dispose();
+    for (final r in _rows) {
+      r.dispose();
+    }
     super.dispose();
   }
 
@@ -382,8 +385,6 @@ class _PageHeader extends StatelessWidget {
     );
   }
 }
-
-// ─── Stay Info Card ───────────────────────────────────────────────────────────
 
 // ─── Stay Info Card ───────────────────────────────────────────────────────────
 
@@ -678,6 +679,7 @@ class _StayInfoCard extends StatelessWidget {
     );
   }
 }
+
 // ─── Demographic Card ─────────────────────────────────────────────────────────
 
 class _DemographicCard extends StatelessWidget {
@@ -863,7 +865,6 @@ class _DemographicCard extends StatelessWidget {
             ),
 
           // Rows
-          // Update the _DemographicCard to handle null values when checking if Philippines
           ...List.generate(rows.length, (i) {
             final row = rows[i];
             final isPhilippines = row.nationality == 'Philippines';
@@ -1098,6 +1099,7 @@ class _DemographicRowWidget extends StatelessWidget {
     );
   }
 }
+
 // ─── Form Actions ─────────────────────────────────────────────────────────────
 
 class _FormActions extends StatelessWidget {

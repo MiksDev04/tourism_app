@@ -127,7 +127,7 @@ class _ComplianceMessageDialogState extends State<ComplianceMessageDialog>
                           : ListView.separated(
                               shrinkWrap: true,
                               itemCount: widget.messages.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (_, _) =>
                                   const SizedBox(height: 10),
                               itemBuilder: (_, i) =>
                                   _MessageCard(message: widget.messages[i]),

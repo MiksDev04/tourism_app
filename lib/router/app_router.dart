@@ -89,8 +89,8 @@ abstract final class AppRouter {
   ) =>
       PageRouteBuilder(
         settings: settings,
-        pageBuilder: (_, __, ___) => page,
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
+        pageBuilder: (_, _, _) => page,
+        transitionsBuilder: (_, animation, _, child) => FadeTransition(
           opacity: animation,
           child: child,
         ),

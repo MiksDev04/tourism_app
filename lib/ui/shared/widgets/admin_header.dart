@@ -88,45 +88,58 @@ class _ProfileButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent, // Make background transparent
-      child: InkWell(
-        onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.adminProfile),
-        borderRadius: BorderRadius.circular(8),
-        hoverColor: AppColors.cardBorder.withOpacity(0.3),
-        splashColor: AppColors.primaryCyan.withOpacity(0.2),
-        highlightColor: AppColors.textGray.withOpacity(0.1),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
+      child: Column(
+        children: [
+          Row(
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryCyan,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: const Text(
-                  'A',
-                  style: TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+              Center(
+                child: InkWell(
+                  onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.adminProfile),
+                  borderRadius: BorderRadius.circular(8),
+                  hoverColor: AppColors.cardBorder.withOpacity(0.3),
+                  splashColor: AppColors.primaryCyan.withOpacity(0.2),
+                  highlightColor: AppColors.textGray.withOpacity(0.1),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryCyan,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'A',
+                            style: TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: const Text(
+                            'Tourism Office',
+                            style: TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Tourism Office',
-                style: TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

@@ -466,7 +466,7 @@ class _MessagesTable extends StatelessWidget {
                   )
                 : ListView.separated(
                     itemCount: rows.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(color: AppColors.cardBorder, height: 1),
                     itemBuilder: (_, i) => _MessageRow(message: rows[i]),
                   ),

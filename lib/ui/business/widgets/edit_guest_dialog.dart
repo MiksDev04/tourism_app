@@ -183,10 +183,12 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       // Get counts - use the maximum count from available data
       int count = 0;
       if (i < countryEntries.length) count = countryEntries[i].value;
-      if (i < genderEntries.length && genderEntries[i].value > count)
+      if (i < genderEntries.length && genderEntries[i].value > count) {
         count = genderEntries[i].value;
-      if (i < ageEntries.length && ageEntries[i].value > count)
+      }
+      if (i < ageEntries.length && ageEntries[i].value > count) {
         count = ageEntries[i].value;
+      }
 
       rows.add(
         DemographicEntry(
@@ -636,7 +638,7 @@ class _SectionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing != null) trailing!,
+              ?trailing,
             ],
           ),
           const SizedBox(height: 16),
@@ -1182,7 +1184,7 @@ class _DropdownField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
-      value: value.isEmpty ? null : value,
+      initialValue: value.isEmpty ? null : value,
       hint: Text(
         hint,
         style: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
