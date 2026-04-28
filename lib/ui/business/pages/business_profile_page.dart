@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
+import '../../../router/app_router.dart';
 
 // ─── Business Profile Page ────────────────────────────────────────────────────
 
@@ -15,16 +16,21 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   // Account Info controllers
   final _fullNameCtrl = TextEditingController(text: 'Juan dela Cruz');
   final _usernameCtrl = TextEditingController(text: 'grandhotel');
-  final _emailCtrl    = TextEditingController(text: 'grandhotel@sanpablo.com');
-  final _phoneCtrl    = TextEditingController(text: '09281234567');
+  final _emailCtrl = TextEditingController(text: 'grandhotel@sanpablo.com');
+  final _phoneCtrl = TextEditingController(text: '09281234567');
 
   // Business Info controllers
-  final _businessNameCtrl  = TextEditingController(text: 'Grand Hotel San Pablo');
-  final _ownerNameCtrl     = TextEditingController(text: 'Juan dela Cruz');
-  final _totalRoomsCtrl    = TextEditingController(text: '45');
-  final _addressCtrl       = TextEditingController(text: 'Maharlika Highway, San Pablo City, Laguna');
-  final _descriptionCtrl   = TextEditingController(
-    text: 'A premier hotel located along Maharlika Highway offering comfortable accommodations and excellent service.',
+  final _businessNameCtrl = TextEditingController(
+    text: 'Grand Hotel San Pablo',
+  );
+  final _ownerNameCtrl = TextEditingController(text: 'Juan dela Cruz');
+  final _totalRoomsCtrl = TextEditingController(text: '45');
+  final _addressCtrl = TextEditingController(
+    text: 'Maharlika Highway, San Pablo City, Laguna',
+  );
+  final _descriptionCtrl = TextEditingController(
+    text:
+        'A premier hotel located along Maharlika Highway offering comfortable accommodations and excellent service.',
   );
 
   String _selectedBusinessType = 'Hotel';
@@ -32,9 +38,15 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   @override
   void dispose() {
     for (final c in [
-      _fullNameCtrl, _usernameCtrl, _emailCtrl, _phoneCtrl,
-      _businessNameCtrl, _ownerNameCtrl, _totalRoomsCtrl,
-      _addressCtrl, _descriptionCtrl,
+      _fullNameCtrl,
+      _usernameCtrl,
+      _emailCtrl,
+      _phoneCtrl,
+      _businessNameCtrl,
+      _ownerNameCtrl,
+      _totalRoomsCtrl,
+      _addressCtrl,
+      _descriptionCtrl,
     ]) {
       c.dispose();
     }
@@ -79,8 +91,9 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                         addressCtrl: _addressCtrl,
                         descriptionCtrl: _descriptionCtrl,
                         selectedBusinessType: _selectedBusinessType,
-                        onBusinessTypeChanged: (val) =>
-                            setState(() => _selectedBusinessType = val ?? 'Hotel'),
+                        onBusinessTypeChanged: (val) => setState(
+                          () => _selectedBusinessType = val ?? 'Hotel',
+                        ),
                         onSave: () {},
                         isNarrow: isNarrow,
                       ),
@@ -101,27 +114,61 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 class _PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    return Row(
       children: [
-        Text(
-          'Profile & Settings',
-          style: TextStyle(
-            color: AppColors.textWhite,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'Manage your account and business information',
-          style: TextStyle(color: AppColors.textGray, fontSize: 13),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Profile & Settings',
+              style: TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Manage your account and business information',
+              style: TextStyle(color: AppColors.textGray, fontSize: 13),
+            ),
+            if (screenWidth <= 600)
+              GestureDetector(
+                onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: AppColors.cardBorder)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.logout_rounded,
+                        color: AppColors.textGray,
+                        size: 16,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );
   }
 }
-
 // ─── Business Card (top identity card) ────────────────────────────────────────
 
 class _BusinessCard extends StatelessWidget {
@@ -244,8 +291,11 @@ class _AccountInfoCard extends StatelessWidget {
           // Section title
           const Row(
             children: [
-              Icon(Icons.person_outline_rounded,
-                  color: AppColors.primaryCyan, size: 18),
+              Icon(
+                Icons.person_outline_rounded,
+                color: AppColors.primaryCyan,
+                size: 18,
+              ),
               SizedBox(width: 8),
               Text(
                 'Account Information',
@@ -368,8 +418,11 @@ class _BusinessInfoCard extends StatelessWidget {
           // Section title
           const Row(
             children: [
-              Icon(Icons.store_outlined,
-                  color: AppColors.primaryCyan, size: 18),
+              Icon(
+                Icons.store_outlined,
+                color: AppColors.primaryCyan,
+                size: 18,
+              ),
               SizedBox(width: 8),
               Text(
                 'Business Information',
@@ -513,11 +566,7 @@ class _SectionCard extends StatelessWidget {
 // ─── Labeled Field ────────────────────────────────────────────────────────────
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.icon,
-  });
+  const _LabeledField({required this.label, required this.child, this.icon});
 
   final String label;
   final Widget child;
@@ -572,8 +621,10 @@ class _InputField extends StatelessWidget {
         filled: true,
         fillColor: _ProfileColors.inputBackground,
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _ProfileColors.inputBorder),
@@ -584,8 +635,10 @@ class _InputField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -609,8 +662,10 @@ class _MultilineField extends StatelessWidget {
         filled: true,
         fillColor: _ProfileColors.inputBackground,
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _ProfileColors.inputBorder),
@@ -621,8 +676,10 @@ class _MultilineField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -648,15 +705,20 @@ class _DropdownField extends StatelessWidget {
       initialValue: value,
       onChanged: onChanged,
       dropdownColor: AppColors.cardBackground,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded,
-          color: AppColors.textGray, size: 20),
+      icon: const Icon(
+        Icons.keyboard_arrow_down_rounded,
+        color: AppColors.textGray,
+        size: 20,
+      ),
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         filled: true,
         fillColor: _ProfileColors.inputBackground,
         isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _ProfileColors.inputBorder),
@@ -667,17 +729,14 @@ class _DropdownField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
       ),
       items: items
-          .map(
-            (t) => DropdownMenuItem(
-              value: t,
-              child: Text(t),
-            ),
-          )
+          .map((t) => DropdownMenuItem(value: t, child: Text(t)))
           .toList(),
     );
   }
@@ -742,5 +801,5 @@ class _ActionButton extends StatelessWidget {
 
 class _ProfileColors {
   static const inputBackground = Color(0xFF0D1B2E);
-  static const inputBorder     = Color(0xFF1C3050);
+  static const inputBorder = Color(0xFF1C3050);
 }

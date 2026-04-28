@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import 'package:flutter/services.dart';
+import '../../../router/app_router.dart';
+
 
 
 // ─── Admin Profile Page ───────────────────────────────────────────────────────
@@ -160,10 +162,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 class _PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    final screenWidth = MediaQuery.of(context).size.width;
+    
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
+        const Text(
           'Profile Settings',
           style: TextStyle(
             color: AppColors.textWhite,
@@ -171,16 +175,45 @@ class _PageHeader extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        SizedBox(height: 4),
-        Text(
+        const SizedBox(height: 4),
+        const Text(
           'Manage your account information',
           style: TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
+        if (screenWidth <= 600)
+          GestureDetector(
+            onTap: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
+            child: Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(14),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: AppColors.cardBorder)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.logout_rounded,
+                    color: AppColors.textGray,
+                    size: 16,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
 }
-
 // ─── Profile Card ─────────────────────────────────────────────────────────────
 
 class _ProfileCard extends StatelessWidget {
