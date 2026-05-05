@@ -30,7 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+    
+  excel: ^2.0.0
   path_provider: ^2.1.2
   open_file: ^3.3.2
 

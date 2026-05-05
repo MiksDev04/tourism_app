@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../router/app_router.dart';
+import '../../../core/constants/app_colors.dart'; // Import your actual AppColors file
 
 // REMOVE the entire LoginPage class that wraps MaterialApp:
 class LoginPage extends StatelessWidget {
@@ -8,37 +9,9 @@ class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      // ← was: return MaterialApp(...)
       body: LoginScreen(),
     );
   }
-}
-
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-class AppColors {
-  AppColors._();
-
-  static const backgroundDark = Color(0xFF050D1A);
-  static const backgroundMid = Color(0xFF0A1628);
-  static const cardBackground = Color(0xFF0F1E35);
-  static const cardBorder = Color(0xFF1E3050);
-  static const inputBackground = Color(0xFF0D1B2E);
-  static const inputBorder = Color(0xFF1C3050);
-
-  static const primaryCyan = Color(0xFF00BFFF);
-  static const primaryBlue = Color(0xFF1A6FFF);
-  static const accentPurple = Color(0xFF7B5CF0);
-
-  static const textWhite = Color(0xFFFFFFFF);
-  static const textGray = Color(0xFF8A9BB5);
-  static const textSubtle = Color(0xFF506078);
-
-  static const gradientStart = Color(0xFF00D4FF);
-  static const gradientEnd = Color(0xFF1A6FFF);
-
-  static const buttonBorderCyan = Color(0xFF1A4060);
-  static const buttonBorderPurple = Color(0xFF3A2060);
 }
 
 // ─── Login Screen ─────────────────────────────────────────────────────────────
@@ -275,7 +248,7 @@ class _LoginCardState extends State<_LoginCard> {
           const SizedBox(height: 24),
 
           // Email field
-          _FieldLabel(label: 'Email Address'),
+          const _FieldLabel(label: 'Email Address'),
           const SizedBox(height: 8),
           _InputField(
             controller: _emailController,
@@ -285,7 +258,7 @@ class _LoginCardState extends State<_LoginCard> {
           const SizedBox(height: 18),
 
           // Password field
-          _FieldLabel(label: 'Password'),
+          const _FieldLabel(label: 'Password'),
           const SizedBox(height: 8),
           _PasswordField(
             controller: _passwordController,
@@ -335,7 +308,7 @@ class _LoginCardState extends State<_LoginCard> {
               Expanded(
                 child: _DemoButton(
                   label: 'Tourism Office (Admin)',
-                  borderColor: AppColors.buttonBorderCyan,
+                  borderColor: AppColors.inputBorder,
                   textColor: AppColors.textWhite,
                   onPressed: _fillTourismOffice,
                 ),
@@ -344,7 +317,7 @@ class _LoginCardState extends State<_LoginCard> {
               Expanded(
                 child: _DemoButton(
                   label: 'Grand Hotel (Business)',
-                  borderColor: AppColors.buttonBorderPurple,
+                  borderColor: AppColors.accentPurple.withOpacity(0.5),
                   textColor: AppColors.accentPurple,
                   onPressed: _fillGrandHotel,
                 ),

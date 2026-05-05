@@ -103,27 +103,32 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
       title: 'Messages',
       selectedIndex: 3,
       onNavSelected: (_) {},
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _PageHeader(),
-            const SizedBox(height: 16),
-            _FilterRow(
-              searchCtrl: _searchCtrl,
-              onSearchChanged: (v) => setState(() => _searchQuery = v),
-              selectedType: _selectedType,
-              onTypeChanged: (v) => setState(() => _selectedType = v!),
-              selectedMonth: _selectedMonth,
-              onMonthChanged: (v) => setState(() => _selectedMonth = v!),
-              selectedBusiness: _selectedBusiness,
-              onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _PageHeader(),
+                const SizedBox(height: 16),
+                _FilterRow(
+                  searchCtrl: _searchCtrl,
+                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  selectedType: _selectedType,
+                  onTypeChanged: (v) => setState(() => _selectedType = v!),
+                  selectedMonth: _selectedMonth,
+                  onMonthChanged: (v) => setState(() => _selectedMonth = v!),
+                  selectedBusiness: _selectedBusiness,
+                  onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
+                ),
+                const SizedBox(height: 14),
+                _MessagesTable(rows: _filtered),
+              ],
             ),
-            const SizedBox(height: 14),
-            Expanded(child: _MessagesTable(rows: _filtered)),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -452,27 +457,36 @@ class _MessagesTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Column(
-        children: [
-          const _TableHeader(),
-          const Divider(color: AppColors.cardBorder, height: 1),
-          Expanded(
-            child: rows.isEmpty
-                ? const Center(
+      child: rows.isEmpty
+          ? Column(
+              children: [
+                const _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
                     child: Text(
                       'No messages found.',
                       style: TextStyle(color: AppColors.textGray),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => _MessageRow(message: rows[i]),
                   ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                const _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (_, i) => _MessageRow(message: rows[i]),
+                ),
+              ],
+            ),
     );
   }
 }

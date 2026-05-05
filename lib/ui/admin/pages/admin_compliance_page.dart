@@ -174,35 +174,40 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       title: 'Compliance',
       selectedIndex: 4,
       onNavSelected: (_) {},
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _PageHeader(),
-            const SizedBox(height: 20),
-            _SummaryCards(
-              compliant: _compliantCount,
-              nonCompliant: _nonCompliantCount,
-              warning: _warningCount,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _PageHeader(),
+                const SizedBox(height: 20),
+                _SummaryCards(
+                  compliant: _compliantCount,
+                  nonCompliant: _nonCompliantCount,
+                  warning: _warningCount,
+                ),
+                const SizedBox(height: 16),
+                _FilterRow(
+                  searchCtrl: _searchCtrl,
+                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  selectedMonth: _selectedMonth,
+                  onMonthChanged: (v) => setState(() => _selectedMonth = v!),
+                  selectedYear: _selectedYear,
+                  onYearChanged: (v) => setState(() => _selectedYear = v!),
+                  selectedBusiness: _selectedBusiness,
+                  onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
+                  selectedStatus: _selectedStatus,
+                  onStatusChanged: (v) => setState(() => _selectedStatus = v!),
+                ),
+                const SizedBox(height: 14),
+                _ComplianceTable(rows: _filtered),
+              ],
             ),
-            const SizedBox(height: 16),
-            _FilterRow(
-              searchCtrl: _searchCtrl,
-              onSearchChanged: (v) => setState(() => _searchQuery = v),
-              selectedMonth: _selectedMonth,
-              onMonthChanged: (v) => setState(() => _selectedMonth = v!),
-              selectedYear: _selectedYear,
-              onYearChanged: (v) => setState(() => _selectedYear = v!),
-              selectedBusiness: _selectedBusiness,
-              onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
-              selectedStatus: _selectedStatus,
-              onStatusChanged: (v) => setState(() => _selectedStatus = v!),
-            ),
-            const SizedBox(height: 14),
-            Expanded(child: _ComplianceTable(rows: _filtered)),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -616,27 +621,36 @@ class _ComplianceTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Column(
-        children: [
-          _TableHeader(),
-          const Divider(color: AppColors.cardBorder, height: 1),
-          Expanded(
-            child: rows.isEmpty
-                ? const Center(
+      child: rows.isEmpty
+          ? Column(
+              children: [
+                _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
                     child: Text(
                       'No records found.',
                       style: TextStyle(color: AppColors.textGray),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
                   ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
+                ),
+              ],
+            ),
     );
   }
 }

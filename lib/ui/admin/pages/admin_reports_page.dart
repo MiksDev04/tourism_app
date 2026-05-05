@@ -3,6 +3,7 @@ import '../../../core/constants/app_colors.dart';
 import '../widgets/review_report_modal.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../models/report_models.dart';
+import '../../../core/services/excel_generator_service.dart';
 
 // ─── Sample Data ──────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   String _filterMonth = '';
   String _filterYear = '';
   String _filterStatus = '';
+  bool _isExporting = false;
 
   // Filter options
   final List<String> _months = [
@@ -222,60 +224,94 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     );
   }
 
+  Future<void> _exportToExcel() async {
+    setState(() => _isExporting = true);
+    try {
+      final excelGenerator = ExcelGeneratorService();
+      final filePath = await excelGenerator.generateDailyAccommodationReport(
+        reportData: {},
+        fileName: 'DAE-1B_${DateTime.now().toString().substring(0, 10)}',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Exported: $filePath'),
+          backgroundColor: const Color(0xFF00C48C),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: const Color(0xFFFF4D6A),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
       title: 'Reports',
       selectedIndex: 2,
       onNavSelected: (_) {},
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PageHeader(
-              onFilterTap: () => setState(() => _showFilters = !_showFilters),
-              showFilters: _showFilters,
-            ),
-            const SizedBox(height: 16),
-            if (_showFilters)
-              Column(
-                children: [
-                  _FilterSection(
-                    businessNames: _businessNames,
-                    months: _months,
-                    years: _years,
-                    statuses: _statuses,
-                    selectedBusiness: _filterBusiness,
-                    selectedMonth: _filterMonth,
-                    selectedYear: _filterYear,
-                    selectedStatus: _filterStatus,
-                    onBusinessChanged: (value) =>
-                        setState(() => _filterBusiness = value ?? ''),
-                    onMonthChanged: (value) =>
-                        setState(() => _filterMonth = value ?? ''),
-                    onYearChanged: (value) =>
-                        setState(() => _filterYear = value ?? ''),
-                    onStatusChanged: (value) =>
-                        setState(() => _filterStatus = value ?? ''),
-                    onClear: _clearFilters,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _PageHeader(
+                  onFilterTap: () =>
+                      setState(() => _showFilters = !_showFilters),
+                  showFilters: _showFilters,
+                  onExport: _exportToExcel,
+                  isExporting: _isExporting,
+                ),
+                const SizedBox(height: 16),
+                if (_showFilters)
+                  Column(
+                    children: [
+                      _FilterSection(
+                        businessNames: _businessNames,
+                        months: _months,
+                        years: _years,
+                        statuses: _statuses,
+                        selectedBusiness: _filterBusiness,
+                        selectedMonth: _filterMonth,
+                        selectedYear: _filterYear,
+                        selectedStatus: _filterStatus,
+                        onBusinessChanged: (value) =>
+                            setState(() => _filterBusiness = value ?? ''),
+                        onMonthChanged: (value) =>
+                            setState(() => _filterMonth = value ?? ''),
+                        onYearChanged: (value) =>
+                            setState(() => _filterYear = value ?? ''),
+                        onStatusChanged: (value) =>
+                            setState(() => _filterStatus = value ?? ''),
+                        onClear: _clearFilters,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            _SearchBar(
-              controller: _searchCtrl,
-              onChanged: (v) => setState(() => _searchQuery = v),
+                _SearchBar(
+                  controller: _searchCtrl,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                ),
+                const SizedBox(height: 14),
+                _ReportsTable(
+                  rows: _filtered,
+                  onStatusUpdate: _updateReportStatus,
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
-            Expanded(
-              child: _ReportsTable(
-                rows: _filtered,
-                onStatusUpdate: _updateReportStatus,
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -320,14 +356,14 @@ class _FilterSection extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth >= 900;
     final isMediumScreen = screenWidth >= 600 && screenWidth < 900;
-    
+
     int crossAxisCount = 4;
     if (!isLargeScreen && isMediumScreen) {
       crossAxisCount = 2;
     } else if (screenWidth < 600) {
       crossAxisCount = 1;
     }
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -353,7 +389,10 @@ class _FilterSection extends StatelessWidget {
               TextButton(
                 onPressed: onClear,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   minimumSize: Size.zero,
                 ),
                 child: const Text(
@@ -384,14 +423,18 @@ class _FilterSection extends StatelessWidget {
                   case 0:
                     return _FilterDropdown(
                       label: 'Business',
-                      value: selectedBusiness.isEmpty ? 'All Businesses' : selectedBusiness,
+                      value: selectedBusiness.isEmpty
+                          ? 'All Businesses'
+                          : selectedBusiness,
                       items: businessNames,
                       onChanged: onBusinessChanged,
                     );
                   case 1:
                     return _FilterDropdown(
                       label: 'Month',
-                      value: selectedMonth.isEmpty ? 'All Months' : selectedMonth,
+                      value: selectedMonth.isEmpty
+                          ? 'All Months'
+                          : selectedMonth,
                       items: months,
                       onChanged: onMonthChanged,
                     );
@@ -405,7 +448,9 @@ class _FilterSection extends StatelessWidget {
                   case 3:
                     return _FilterDropdown(
                       label: 'Status',
-                      value: selectedStatus.isEmpty ? 'All Statuses' : selectedStatus,
+                      value: selectedStatus.isEmpty
+                          ? 'All Statuses'
+                          : selectedStatus,
                       items: statuses,
                       onChanged: onStatusChanged,
                     );
@@ -490,10 +535,17 @@ class _FilterDropdown extends StatelessWidget {
 
 // ─── Page Header ──────────────────────────────────────────────────────────────
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.onFilterTap, required this.showFilters});
+  const _PageHeader({
+    required this.onFilterTap,
+    required this.showFilters,
+    required this.onExport,
+    required this.isExporting,
+  });
 
   final VoidCallback onFilterTap;
   final bool showFilters;
+  final VoidCallback onExport;
+  final bool isExporting;
 
   @override
   Widget build(BuildContext context) {
@@ -533,11 +585,12 @@ class _PageHeader extends StatelessWidget {
                 isActive: showFilters,
                 onTap: onFilterTap,
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               _HeaderButton(
                 icon: Icons.download_rounded,
                 label: null,
-                onTap: () {},
+                onTap: onExport,
+                isLoading: isExporting,
               ),
             ],
           ),
@@ -551,8 +604,8 @@ class _PageHeader extends StatelessWidget {
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
+          children: const [
+            Text(
               'Monthly Reports',
               style: TextStyle(
                 color: AppColors.textWhite,
@@ -560,8 +613,8 @@ class _PageHeader extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Review and approve accommodation reports',
               style: TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
@@ -580,7 +633,8 @@ class _PageHeader extends StatelessWidget {
             _HeaderButton(
               icon: Icons.download_rounded,
               label: isMediumScreen ? null : 'Export',
-              onTap: () {},
+              onTap: onExport,
+              isLoading: isExporting,
             ),
           ],
         ),
@@ -595,17 +649,19 @@ class _HeaderButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     this.isActive = false,
+    this.isLoading = false,
   });
 
   final IconData icon;
   final String? label;
   final VoidCallback onTap;
   final bool isActive;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
@@ -619,12 +675,22 @@ class _HeaderButton extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: isActive ? AppColors.primaryCyan : AppColors.textGray,
-              size: 16,
-            ),
-            if (label != null) ...[
+            if (isLoading)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.primaryCyan,
+                ),
+              )
+            else
+              Icon(
+                icon,
+                color: isActive ? AppColors.primaryCyan : AppColors.textGray,
+                size: 16,
+              ),
+            if (label != null && !isLoading) ...[
               const SizedBox(width: 6),
               Text(
                 label!,
@@ -640,7 +706,6 @@ class _HeaderButton extends StatelessWidget {
     );
   }
 }
-
 // ─── Search Bar ───────────────────────────────────────────────────────────────
 
 class _SearchBar extends StatelessWidget {
@@ -693,41 +758,55 @@ class _ReportsTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isMediumScreen = constraints.maxWidth < 800;
-              return _TableHeader(isMediumScreen: isMediumScreen);
-            },
-          ),
-          const Divider(color: AppColors.cardBorder, height: 1),
-          Expanded(
-            child: rows.isEmpty
-                ? const Center(
+      child: rows.isEmpty
+          ? Column(
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMediumScreen = constraints.maxWidth < 800;
+                    return _TableHeader(isMediumScreen: isMediumScreen);
+                  },
+                ),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
                     child: Text(
                       'No reports found.',
                       style: TextStyle(color: AppColors.textGray),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isMediumScreen = constraints.maxWidth < 800;
-                        return _TableRow(
-                          report: rows[i],
-                          isMediumScreen: isMediumScreen,
-                          onStatusUpdate: onStatusUpdate,
-                        );
-                      },
-                    ),
                   ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isMediumScreen = constraints.maxWidth < 800;
+                    return _TableHeader(isMediumScreen: isMediumScreen);
+                  },
+                ),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (_, i) => LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isMediumScreen = constraints.maxWidth < 800;
+                      return _TableRow(
+                        report: rows[i],
+                        isMediumScreen: isMediumScreen,
+                        onStatusUpdate: onStatusUpdate,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -843,10 +922,7 @@ class _TableRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 // Status badge
-                Expanded(
-                  flex: 2,
-                  child: _StatusBadge(status: report.status),
-                ),
+                Expanded(flex: 2, child: _StatusBadge(status: report.status)),
                 const SizedBox(width: 8),
                 // Action icon — fixed width, always visible
                 GestureDetector(
@@ -938,10 +1014,7 @@ class _TableRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          Expanded(
-            flex: 3,
-            child: _StatusBadge(status: report.status),
-          ),
+          Expanded(flex: 3, child: _StatusBadge(status: report.status)),
           // Fixed-width action icon — never shrinks or overflows
           GestureDetector(
             onTap: () => _showReportModal(context),
@@ -962,7 +1035,7 @@ class _TableRow extends StatelessWidget {
   void _showReportModal(BuildContext context) {
     // Determine if the report is submitted or not
     final isSubmitted = report.status == ReportStatus.submitted;
-    
+
     showReviewReportModal(
       context,
       ReviewReportData(
@@ -973,8 +1046,12 @@ class _TableRow extends StatelessWidget {
         submitted: report.submitted,
         status: report.status,
       ),
-      onApprove: isSubmitted ? () => onStatusUpdate(report, ReportStatus.approved) : null,
-      onReject: isSubmitted ? () => onStatusUpdate(report, ReportStatus.rejected) : null,
+      onApprove: isSubmitted
+          ? () => onStatusUpdate(report, ReportStatus.approved)
+          : null,
+      onReject: isSubmitted
+          ? () => onStatusUpdate(report, ReportStatus.rejected)
+          : null,
     );
   }
 }

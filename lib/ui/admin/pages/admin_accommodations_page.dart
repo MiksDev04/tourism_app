@@ -159,7 +159,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 900;
-          return Padding(
+          return SingleChildScrollView(
             padding: EdgeInsets.all(isNarrow ? 16 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,17 +178,15 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
                 const SizedBox(height: 14),
-                Expanded(
-                  child: isNarrow
-                      ? _AccommodationCardList(
-                          rows: _filtered,
-                          onStatusUpdate: _updateAccommodationStatus,
-                        )
-                      : _AccommodationTable(
-                          rows: _filtered,
-                          onStatusUpdate: _updateAccommodationStatus,
-                        ),
-                ),
+                isNarrow
+                    ? _AccommodationCardList(
+                        rows: _filtered,
+                        onStatusUpdate: _updateAccommodationStatus,
+                      )
+                    : _AccommodationTable(
+                        rows: _filtered,
+                        onStatusUpdate: _updateAccommodationStatus,
+                      ),
               ],
             ),
           );
@@ -239,24 +237,28 @@ class _FilterTabBar extends StatelessWidget {
   final ValueChanged<int> onTabSelected;
 
   @override
+
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(tabs.length, (i) {
-          final tab = tabs[i];
-          final count = countForStatus(tab.status);
-          final isActive = selectedTab == i;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: _FilterChip(
-              label: tab.label,
-              count: count,
-              isActive: isActive,
-              onTap: () => onTabSelected(i),
-            ),
-          );
-        }),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(tabs.length, (i) {
+            final tab = tabs[i];
+            final count = countForStatus(tab.status);
+            final isActive = selectedTab == i;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: _FilterChip(
+                label: tab.label,
+                count: count,
+                isActive: isActive,
+                onTap: () => onTabSelected(i),
+              ),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -382,30 +384,39 @@ class _AccommodationTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Column(
-        children: [
-          _TableHeader(),
-          const Divider(color: AppColors.cardBorder, height: 1),
-          Expanded(
-            child: rows.isEmpty
-                ? const Center(
+      child: rows.isEmpty
+          ? Column(
+              children: [
+                _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
                     child: Text(
                       'No accommodations found.',
                       style: TextStyle(color: AppColors.textGray),
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: rows.length,
-                    separatorBuilder: (_, _) =>
-                        const Divider(color: AppColors.cardBorder, height: 1),
-                    itemBuilder: (_, i) => _TableRow(
-                      item: rows[i],
-                      onStatusUpdate: onStatusUpdate,
-                    ),
                   ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (_, i) => _TableRow(
+                    item: rows[i],
+                    onStatusUpdate: onStatusUpdate,
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -571,6 +582,8 @@ class _AccommodationCardList extends StatelessWidget {
       );
     }
     return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: rows.length,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) =>
