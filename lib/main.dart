@@ -8,6 +8,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!kIsWeb) {
+    // Initialize the window manager only on desktop platforms
     await windowManager.ensureInitialized();
     await windowManager.setMinimumSize(const Size(375, 500));
     await windowManager.setMaximumSize(const Size(1440, 900));
