@@ -136,6 +136,7 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
   late ComposeMessageDraft _draft;
   bool _previewMode = false;
   bool _sending = false;
+  bool _showValidation = false;
 
   late final TextEditingController _subjectCtrl;
   late final TextEditingController _contentCtrl;
@@ -184,7 +185,10 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
 
   Future<void> _send() async {
     _syncText();
-    if (!_draft.isValid) return;
+    if (!_draft.isValid) {
+      setState(() => _showValidation = true);
+      return;
+    }
     setState(() => _sending = true);
     await Future.delayed(const Duration(milliseconds: 900));
     if (mounted) {
@@ -244,7 +248,10 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
                                     draft: _draft,
                                     subjectCtrl: _subjectCtrl,
                                     contentCtrl: _contentCtrl,
-                                    onChanged: (d) => setState(() => _draft = d),
+                                    showValidation: _showValidation,
+                                    onChanged: (d) => setState(() {
+                                      _draft = d;
+                                    }),
                                   ),
                           ),
                         ),
@@ -350,12 +357,14 @@ class _Form extends StatelessWidget {
     required this.subjectCtrl,
     required this.contentCtrl,
     required this.onChanged,
+    required this.showValidation,
   });
 
   final ComposeMessageDraft draft;
   final TextEditingController subjectCtrl;
   final TextEditingController contentCtrl;
   final ValueChanged<ComposeMessageDraft> onChanged;
+  final bool showValidation;
 
   @override
   Widget build(BuildContext context) {
@@ -386,6 +395,9 @@ class _Form extends StatelessWidget {
               value: draft.selectedBusiness,
               onChanged: (v) =>
                   onChanged(draft.copyWith(selectedBusiness: v)),
+              errorText: showValidation && (draft.selectedBusiness == null || draft.selectedBusiness!.isEmpty)
+                  ? 'Please select a business'
+                  : null,
             ),
           ],
 
@@ -396,6 +408,7 @@ class _Form extends StatelessWidget {
           _TypeSelector(
             selected: draft.messageType,
             onChanged: (t) => onChanged(draft.copyWith(messageType: t)),
+            showValidation: showValidation,
           ),
 
           // Subject
@@ -405,6 +418,8 @@ class _Form extends StatelessWidget {
           _TextField(
             controller: subjectCtrl,
             hint: 'Enter subject...',
+            onChanged: (v) => onChanged(draft.copyWith(subject: v)),
+            errorText: showValidation && draft.subject.trim().isEmpty ? 'Subject is required' : null,
           ),
 
           // Message Content
@@ -415,6 +430,8 @@ class _Form extends StatelessWidget {
             controller: contentCtrl,
             hint: 'Write your message here...',
             maxLines: 6,
+            onChanged: (v) => onChanged(draft.copyWith(messageContent: v)),
+            errorText: showValidation && draft.messageContent.trim().isEmpty ? 'Message content is required' : null,
           ),
         ],
       ),
@@ -521,10 +538,11 @@ const _kBusinesses = [
 ];
 
 class _BusinessDropdown extends StatelessWidget {
-  const _BusinessDropdown({required this.value, required this.onChanged});
+  const _BusinessDropdown({required this.value, required this.onChanged, this.errorText});
 
   final String? value;
   final ValueChanged<String?> onChanged;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -553,16 +571,20 @@ class _BusinessDropdown extends StatelessWidget {
         ),
       ),
     );
+    // show helper text below
+    // (can't return two widgets, but parent layout will handle spacing)
   }
+
 }
 
 // ─── Message Type Selector ────────────────────────────────────────────────────
 
 class _TypeSelector extends StatelessWidget {
-  const _TypeSelector({required this.selected, required this.onChanged});
+  const _TypeSelector({required this.selected, required this.onChanged, this.showValidation = false});
 
   final MessageType? selected;
   final ValueChanged<MessageType> onChanged;
+  final bool showValidation;
 
   static const _opts = [
     (type: MessageType.compliance, label: 'Compliance', icon: '⚠️', color: Color(0xFFFF4D6A)),
@@ -572,54 +594,70 @@ class _TypeSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(_opts.length, (i) {
-        final opt = _opts[i];
-        final isActive = selected == opt.type;
-        return Expanded(
-          child: Padding(
-            padding: EdgeInsets.only(right: i < _opts.length - 1 ? 8 : 0),
-            child: GestureDetector(
-              onTap: () => onChanged(opt.type),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? opt.color.withOpacity(0.13)
-                      : AppColors.cardBackground,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isActive
-                        ? opt.color.withOpacity(0.5)
-                        : AppColors.cardBorder,
-                    width: isActive ? 1.5 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(opt.icon, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        opt.label,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isActive ? opt.color : AppColors.textGray,
-                          fontSize: 12.5,
-                          fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w400,
+    final hasError = showValidation && selected == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: hasError ? Colors.red : Colors.transparent),
+          ),
+          child: Row(
+            children: List.generate(_opts.length, (i) {
+              final opt = _opts[i];
+              final isActive = selected == opt.type;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i < _opts.length - 1 ? 8 : 0),
+                  child: GestureDetector(
+                    onTap: () => onChanged(opt.type),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 170),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? opt.color.withOpacity(0.13)
+                            : AppColors.cardBackground,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isActive
+                              ? opt.color.withOpacity(0.5)
+                              : AppColors.cardBorder,
+                          width: isActive ? 1.5 : 1,
                         ),
                       ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(opt.icon, style: const TextStyle(fontSize: 13)),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              opt.label,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isActive ? opt.color : AppColors.textGray,
+                                fontSize: 12.5,
+                                fontWeight:
+                                    isActive ? FontWeight.w600 : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            }),
           ),
-        );
-      }),
+        ),
+        if (hasError) ...[
+          const SizedBox(height: 6),
+          const Text('Please select a message type', style: TextStyle(color: Colors.redAccent, fontSize: 12)),
+        ]
+      ],
     );
   }
 }
@@ -631,37 +669,51 @@ class _TextField extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.maxLines = 1,
+    this.onChanged,
+    this.errorText,
   });
 
   final TextEditingController controller;
   final String hint;
   final int maxLines;
+  final ValueChanged<String>? onChanged;
+  final String? errorText;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: TextField(
-        controller: controller,
-        maxLines: maxLines,
-        style: const TextStyle(
-          color: AppColors.textWhite,
-          fontSize: 13.5,
-          height: 1.55,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: errorText != null ? Colors.red : AppColors.cardBorder),
+          ),
+          child: TextField(
+            controller: controller,
+            onChanged: onChanged,
+            maxLines: maxLines,
+            style: const TextStyle(
+              color: AppColors.textWhite,
+              fontSize: 13.5,
+              height: 1.55,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle:
+                  const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+              border: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
         ),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle:
-              const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
-      ),
+        if (errorText != null) ...[
+          const SizedBox(height: 6),
+          Text(errorText!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+        ]
+      ],
     );
   }
 }

@@ -125,6 +125,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   _Filter _activeFilter = _Filter.all;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
+  bool _showFilters = false;
 
   // Filter values
   DateTime? _checkInFrom;
@@ -319,6 +320,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                 _PageHeader(
                   activeFilter: _activeFilter,
                   onFilterChanged: (f) => setState(() => _activeFilter = f),
+                  showFilters: _showFilters,
+                  onFilterToggle: () => setState(() => _showFilters = !_showFilters),
                   isNarrow: isNarrow,
                 ),
                 const SizedBox(height: 16),
@@ -327,25 +330,26 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   onChanged: (v) => setState(() => _searchQuery = v),
                 ),
                 const SizedBox(height: 14),
-                // Filters Section
-                _FiltersSection(
-                  checkInFrom: _checkInFrom,
-                  checkOutTo: _checkOutTo,
-                  selectedCountry: _selectedCountry,
-                  selectedPurpose: _selectedPurpose,
-                  selectedTransport: _selectedTransport,
-                  countryOptions: _countryOptions,
-                  purposeOptions: _purposeOptions,
-                  transportOptions: _transportOptions,
-                  onCheckInFromTap: () => _selectCheckInFrom(context),
-                  onCheckOutToTap: () => _selectCheckOutTo(context),
-                  onCountryChanged: (value) => setState(() => _selectedCountry = value),
-                  onPurposeChanged: (value) => setState(() => _selectedPurpose = value),
-                  onTransportChanged: (value) => setState(() => _selectedTransport = value),
-                  onClearAll: _clearAllFilters,
-                  isNarrow: isNarrow,
-                ),
-                const SizedBox(height: 14),
+                if (_showFilters) ...[
+                  _FiltersSection(
+                    checkInFrom: _checkInFrom,
+                    checkOutTo: _checkOutTo,
+                    selectedCountry: _selectedCountry,
+                    selectedPurpose: _selectedPurpose,
+                    selectedTransport: _selectedTransport,
+                    countryOptions: _countryOptions,
+                    purposeOptions: _purposeOptions,
+                    transportOptions: _transportOptions,
+                    onCheckInFromTap: () => _selectCheckInFrom(context),
+                    onCheckOutToTap: () => _selectCheckOutTo(context),
+                    onCountryChanged: (value) => setState(() => _selectedCountry = value),
+                    onPurposeChanged: (value) => setState(() => _selectedPurpose = value),
+                    onTransportChanged: (value) => setState(() => _selectedTransport = value),
+                    onClearAll: _clearAllFilters,
+                    isNarrow: isNarrow,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 _GuestTable(
                   records: _filtered,
                   isNarrow: isNarrow,
@@ -707,11 +711,15 @@ class _PageHeader extends StatelessWidget {
   const _PageHeader({
     required this.activeFilter,
     required this.onFilterChanged,
+    required this.showFilters,
+    required this.onFilterToggle,
     required this.isNarrow,
   });
 
   final _Filter activeFilter;
   final ValueChanged<_Filter> onFilterChanged;
+  final bool showFilters;
+  final VoidCallback onFilterToggle;
   final bool isNarrow;
 
   @override
@@ -720,17 +728,81 @@ class _PageHeader extends StatelessWidget {
       activeFilter: activeFilter,
       onChanged: onFilterChanged,
     );
+    final toggleButton = _FilterPanelButton(
+      isActive: showFilters,
+      onTap: onFilterToggle,
+    );
 
     if (isNarrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [_TitleSubtitle(), const SizedBox(height: 12), filterRow],
+        children: [
+          _TitleSubtitle(),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              filterRow,
+              const SizedBox(width: 10),
+              toggleButton,
+            ],
+          ),
+        ],
       );
     }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
-      children: [_TitleSubtitle(), const Spacer(), filterRow],
+      children: [
+        _TitleSubtitle(),
+        const Spacer(),
+        filterRow,
+        const SizedBox(width: 10),
+        toggleButton,
+      ],
+    );
+  }
+}
+
+class _FilterPanelButton extends StatelessWidget {
+  const _FilterPanelButton({required this.isActive, required this.onTap});
+
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primaryCyan.withOpacity(0.15)
+              : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isActive ? AppColors.primaryCyan : AppColors.cardBorder,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_list_rounded,
+              color: isActive ? AppColors.primaryCyan : AppColors.textGray,
+              size: 16,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Filters',
+              style: TextStyle(
+                color: isActive ? AppColors.primaryCyan : AppColors.textGray,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

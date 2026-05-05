@@ -57,6 +57,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   // Make reports mutable
   late List<Report> _reports;
+  final Set<String> _selectedReportKeys = <String>{};
 
   @override
   void initState() {
@@ -192,6 +193,44 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     return ['All Businesses', ...names];
   }
 
+  String _reportKey(Report report) => '${report.business}||${report.period}';
+
+  bool _isReportSelected(Report report) =>
+      _selectedReportKeys.contains(_reportKey(report));
+
+  bool? _selectAllValue(List<Report> rows) {
+    if (rows.isEmpty) return false;
+    final selectedCount = rows.where(_isReportSelected).length;
+    if (selectedCount == 0) return false;
+    if (selectedCount == rows.length) return true;
+    return null;
+  }
+
+  void _toggleReportSelection(Report report, bool? selected) {
+    final key = _reportKey(report);
+    setState(() {
+      if (selected ?? false) {
+        _selectedReportKeys.add(key);
+      } else {
+        _selectedReportKeys.remove(key);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<Report> rows, bool? selected) {
+    setState(() {
+      if (selected ?? false) {
+        for (final report in rows) {
+          _selectedReportKeys.add(_reportKey(report));
+        }
+      } else {
+        for (final report in rows) {
+          _selectedReportKeys.remove(_reportKey(report));
+        }
+      }
+    });
+  }
+
   void _updateReportStatus(Report report, ReportStatus newStatus) {
     setState(() {
       for (int i = 0; i < _reports.length; i++) {
@@ -306,6 +345,10 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                 const SizedBox(height: 14),
                 _ReportsTable(
                   rows: _filtered,
+                  selectAllValue: _selectAllValue(_filtered),
+                  isSelected: _isReportSelected,
+                  onRowSelectionChanged: _toggleReportSelection,
+                  onSelectAllChanged: _toggleSelectAll,
                   onStatusUpdate: _updateReportStatus,
                 ),
               ],
@@ -745,9 +788,20 @@ class _SearchBar extends StatelessWidget {
 // ─── Reports Table ────────────────────────────────────────────────────────────
 
 class _ReportsTable extends StatelessWidget {
-  const _ReportsTable({required this.rows, required this.onStatusUpdate});
+  const _ReportsTable({
+    required this.rows,
+    required this.selectAllValue,
+    required this.isSelected,
+    required this.onRowSelectionChanged,
+    required this.onSelectAllChanged,
+    required this.onStatusUpdate,
+  });
 
   final List<Report> rows;
+  final bool? selectAllValue;
+  final bool Function(Report report) isSelected;
+  final void Function(Report report, bool? selected) onRowSelectionChanged;
+  final void Function(List<Report> rows, bool? selected) onSelectAllChanged;
   final Function(Report, ReportStatus) onStatusUpdate;
 
   @override
@@ -764,7 +818,12 @@ class _ReportsTable extends StatelessWidget {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final isMediumScreen = constraints.maxWidth < 800;
-                    return _TableHeader(isMediumScreen: isMediumScreen);
+                    return _TableHeader(
+                      isMediumScreen: isMediumScreen,
+                      selectAllValue: selectAllValue,
+                      onSelectAllChanged: (selected) =>
+                          onSelectAllChanged(rows, selected),
+                    );
                   },
                 ),
                 const Divider(color: AppColors.cardBorder, height: 1),
@@ -784,7 +843,12 @@ class _ReportsTable extends StatelessWidget {
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final isMediumScreen = constraints.maxWidth < 800;
-                    return _TableHeader(isMediumScreen: isMediumScreen);
+                    return _TableHeader(
+                      isMediumScreen: isMediumScreen,
+                      selectAllValue: selectAllValue,
+                      onSelectAllChanged: (selected) =>
+                          onSelectAllChanged(rows, selected),
+                    );
                   },
                 ),
                 const Divider(color: AppColors.cardBorder, height: 1),
@@ -800,6 +864,9 @@ class _ReportsTable extends StatelessWidget {
                       return _TableRow(
                         report: rows[i],
                         isMediumScreen: isMediumScreen,
+                        isSelected: isSelected(rows[i]),
+                        onSelectionChanged: (selected) =>
+                            onRowSelectionChanged(rows[i], selected),
                         onStatusUpdate: onStatusUpdate,
                       );
                     },
@@ -814,40 +881,75 @@ class _ReportsTable extends StatelessWidget {
 // ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
-  const _TableHeader({required this.isMediumScreen});
+  const _TableHeader({
+    required this.isMediumScreen,
+    required this.selectAllValue,
+    required this.onSelectAllChanged,
+  });
 
   final bool isMediumScreen;
+  final bool? selectAllValue;
+  final ValueChanged<bool?> onSelectAllChanged;
 
   @override
   Widget build(BuildContext context) {
     // Medium screen: compact card-style rows, no column header needed beyond key fields
     if (isMediumScreen) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Row(
           children: [
-            Expanded(flex: 3, child: _HeaderCell('Business')),
-            Expanded(flex: 2, child: _HeaderCell('Period')),
-            Expanded(flex: 2, child: _HeaderCell('Status')),
-            SizedBox(width: 32), // space for action icon
+            _SelectAllCheckbox(value: selectAllValue, onChanged: onSelectAllChanged),
+            const SizedBox(width: 8),
+            const Expanded(flex: 3, child: _HeaderCell('Business')),
+            const Expanded(flex: 2, child: _HeaderCell('Period')),
+            const Expanded(flex: 2, child: _HeaderCell('Status')),
+            const SizedBox(width: 32), // space for action icon
           ],
         ),
       );
     }
 
     // Large screen: full column layout
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: Row(
         children: [
-          Expanded(flex: 5, child: _HeaderCell('Business')),
-          Expanded(flex: 3, child: _HeaderCell('Period')),
-          Expanded(flex: 2, child: _HeaderCell('Total Guests')),
-          Expanded(flex: 2, child: _HeaderCell('Check-ins')),
-          Expanded(flex: 3, child: _HeaderCell('Submitted')),
-          Expanded(flex: 3, child: _HeaderCell('Status')),
-          SizedBox(width: 36), // space for action icon
+          _SelectAllCheckbox(value: selectAllValue, onChanged: onSelectAllChanged),
+          const SizedBox(width: 8),
+          const Expanded(flex: 5, child: _HeaderCell('Business')),
+          const Expanded(flex: 3, child: _HeaderCell('Period')),
+          const Expanded(flex: 2, child: _HeaderCell('Total Guests')),
+          const Expanded(flex: 2, child: _HeaderCell('Check-ins')),
+          const Expanded(flex: 3, child: _HeaderCell('Submitted')),
+          const Expanded(flex: 3, child: _HeaderCell('Status')),
+          const SizedBox(width: 36), // space for action icon
         ],
+      ),
+    );
+  }
+}
+
+class _SelectAllCheckbox extends StatelessWidget {
+  const _SelectAllCheckbox({required this.value, required this.onChanged});
+
+  final bool? value;
+  final ValueChanged<bool?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Checkbox(
+        value: value,
+        tristate: true,
+        onChanged: onChanged,
+        activeColor: AppColors.primaryCyan,
+        checkColor: Colors.white,
+        side: const BorderSide(color: AppColors.textGray, width: 1.2),
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
@@ -875,11 +977,15 @@ class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.report,
     required this.isMediumScreen,
+    required this.isSelected,
+    required this.onSelectionChanged,
     required this.onStatusUpdate,
   });
 
   final Report report;
   final bool isMediumScreen;
+  final bool isSelected;
+  final ValueChanged<bool?> onSelectionChanged;
   final Function(Report, ReportStatus) onStatusUpdate;
 
   @override
@@ -893,6 +999,16 @@ class _TableRow extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Checkbox(
+                  value: isSelected,
+                  onChanged: onSelectionChanged,
+                  activeColor: AppColors.primaryCyan,
+                  checkColor: Colors.white,
+                  side: const BorderSide(color: AppColors.textGray, width: 1.2),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                const SizedBox(width: 4),
                 // Business + period stacked
                 Expanded(
                   flex: 3,
@@ -962,6 +1078,16 @@ class _TableRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
+          Checkbox(
+            value: isSelected,
+            onChanged: onSelectionChanged,
+            activeColor: AppColors.primaryCyan,
+            checkColor: Colors.white,
+            side: const BorderSide(color: AppColors.textGray, width: 1.2),
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          const SizedBox(width: 4),
           Expanded(
             flex: 5,
             child: Text(
