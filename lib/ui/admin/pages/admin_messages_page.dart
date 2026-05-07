@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -175,6 +177,7 @@ class _PageHeader extends StatelessWidget {
               onMessageSent: () {
                 (context
                     .findAncestorStateOfType<_AdminMessagesPageState>()
+                    // ignore: invalid_use_of_protected_member
                     ?.setState(() {}));
 
                 ScaffoldMessenger.of(context).showSnackBar(

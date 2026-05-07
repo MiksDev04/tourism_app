@@ -136,8 +136,18 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
 
   // Available options
   final List<String> _countryOptions = ['All', 'USA', 'Canada', 'UK'];
-  final List<String> _purposeOptions = ['All', 'Leisure', 'Business', 'Conference'];
-  final List<String> _transportOptions = ['All', 'Private Car', 'Airport Shuttle', 'Bus'];
+  final List<String> _purposeOptions = [
+    'All',
+    'Leisure',
+    'Business',
+    'Conference',
+  ];
+  final List<String> _transportOptions = [
+    'All',
+    'Private Car',
+    'Airport Shuttle',
+    'Bus',
+  ];
 
   Future<void> _selectCheckInFrom(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
@@ -181,8 +191,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
               onPrimary: Colors.black,
               surface: AppColors.cardBackground,
               onSurface: AppColors.textWhite,
-            ),
-            dialogBackgroundColor: AppColors.cardBackground,
+            ), dialogTheme: DialogThemeData(backgroundColor: AppColors.cardBackground),
           ),
           child: child!,
         );
@@ -214,6 +223,13 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
         demographics: record.demographics,
       );
     });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Guest record archived successfully.'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _onEdit(GuestRecord record) async {
@@ -225,6 +241,32 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
       if (idx == -1) return;
       _records[idx] = updated;
     });
+    
+  }
+
+  Future<void> _onRestore(GuestRecord record) async {
+    setState(() {
+      final idx = _records.indexOf(record);
+      if (idx == -1) return;
+      _records[idx] = GuestRecord(
+        checkIn: record.checkIn,
+        checkOut: record.checkOut,
+        nights: record.nights,
+        guests: record.guests,
+        rooms: record.rooms,
+        purpose: record.purpose,
+        transport: record.transport,
+        status: GuestRecordStatus.active,
+        demographics: record.demographics,
+      );
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Guest record restored successfully.'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   void _clearAllFilters() {
@@ -263,7 +305,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
 
     // Country filter
     if (_selectedCountry != null && _selectedCountry != 'All') {
-      final hasCountry = record.demographics?.countries.containsKey(_selectedCountry) ?? false;
+      final hasCountry =
+          record.demographics?.countries.containsKey(_selectedCountry) ?? false;
       if (!hasCountry) return false;
     }
 
@@ -321,7 +364,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   activeFilter: _activeFilter,
                   onFilterChanged: (f) => setState(() => _activeFilter = f),
                   showFilters: _showFilters,
-                  onFilterToggle: () => setState(() => _showFilters = !_showFilters),
+                  onFilterToggle: () =>
+                      setState(() => _showFilters = !_showFilters),
                   isNarrow: isNarrow,
                 ),
                 const SizedBox(height: 16),
@@ -342,9 +386,12 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                     transportOptions: _transportOptions,
                     onCheckInFromTap: () => _selectCheckInFrom(context),
                     onCheckOutToTap: () => _selectCheckOutTo(context),
-                    onCountryChanged: (value) => setState(() => _selectedCountry = value),
-                    onPurposeChanged: (value) => setState(() => _selectedPurpose = value),
-                    onTransportChanged: (value) => setState(() => _selectedTransport = value),
+                    onCountryChanged: (value) =>
+                        setState(() => _selectedCountry = value),
+                    onPurposeChanged: (value) =>
+                        setState(() => _selectedPurpose = value),
+                    onTransportChanged: (value) =>
+                        setState(() => _selectedTransport = value),
                     onClearAll: _clearAllFilters,
                     isNarrow: isNarrow,
                   ),
@@ -355,6 +402,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   isNarrow: isNarrow,
                   onEdit: _onEdit,
                   onArchive: _onArchive,
+                  onRestore: _onRestore, // ADD THIS
                 ),
               ],
             ),
@@ -404,7 +452,8 @@ class _FiltersSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasActiveFilters = checkInFrom != null ||
+    final hasActiveFilters =
+        checkInFrom != null ||
         checkOutTo != null ||
         (selectedCountry != null && selectedCountry != 'All') ||
         (selectedPurpose != null && selectedPurpose != 'All') ||
@@ -478,10 +527,7 @@ class _FiltersSection extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (hasActiveFilters)
-                Expanded(
-                  child: _buildClearButton(),
-                ),
+              if (hasActiveFilters) Expanded(child: _buildClearButton()),
             ],
           ),
         ],
@@ -582,7 +628,11 @@ class _FiltersSection extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.calendar_today, color: AppColors.textSubtle, size: 16),
+                Icon(
+                  Icons.calendar_today,
+                  color: AppColors.textSubtle,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -590,7 +640,9 @@ class _FiltersSection extends StatelessWidget {
                         ? '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}'
                         : hint,
                     style: TextStyle(
-                      color: date != null ? AppColors.textWhite : AppColors.textSubtle,
+                      color: date != null
+                          ? AppColors.textWhite
+                          : AppColors.textSubtle,
                       fontSize: 12.5,
                     ),
                   ),
@@ -624,7 +676,7 @@ class _FiltersSection extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.symmetric( vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(8),
@@ -651,7 +703,11 @@ class _FiltersSection extends StatelessWidget {
                 ),
               ),
               isExpanded: true,
-              icon: const Icon(Icons.arrow_drop_down, color: AppColors.textGray, size: 20),
+              icon: const Icon(
+                Icons.arrow_drop_down,
+                color: AppColors.textGray,
+                size: 20,
+              ),
               dropdownColor: AppColors.cardBackground,
               style: const TextStyle(
                 color: AppColors.textWhite,
@@ -739,13 +795,7 @@ class _PageHeader extends StatelessWidget {
         children: [
           _TitleSubtitle(),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              filterRow,
-              const SizedBox(width: 10),
-              toggleButton,
-            ],
-          ),
+          Row(children: [filterRow, const SizedBox(width: 10), toggleButton]),
         ],
       );
     }
@@ -955,12 +1005,14 @@ class _GuestTable extends StatelessWidget {
     required this.isNarrow,
     required this.onEdit,
     required this.onArchive,
+    required this.onRestore, // ADD
   });
 
   final List<GuestRecord> records;
   final bool isNarrow;
   final ValueChanged<GuestRecord> onEdit;
   final ValueChanged<GuestRecord> onArchive;
+  final ValueChanged<GuestRecord> onRestore; // ADD
 
   @override
   Widget build(BuildContext context) {
@@ -993,12 +1045,14 @@ class _GuestTable extends StatelessWidget {
                             record: r,
                             onEdit: onEdit,
                             onArchive: onArchive,
+                            onRestore: onRestore, // ADD
                           )
                         else
                           _RecordRow(
                             record: r,
                             onEdit: onEdit,
                             onArchive: onArchive,
+                            onRestore: onRestore, // ADD
                           ),
                         if (r != records.last)
                           const Divider(color: AppColors.cardBorder, height: 1),
@@ -1060,11 +1114,13 @@ class _RecordRow extends StatefulWidget {
     required this.record,
     required this.onEdit,
     required this.onArchive,
+    required this.onRestore,   // ADD
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
   final ValueChanged<GuestRecord> onArchive;
+  final ValueChanged<GuestRecord> onRestore;   // ADD
 
   @override
   State<_RecordRow> createState() => _RecordRowState();
@@ -1084,75 +1140,49 @@ class _RecordRowState extends State<_RecordRow> {
             children: [
               Expanded(
                 flex: 3,
-                child: Text(
-                  r.checkIn,
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: Text(r.checkIn,
+                    style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600)),
               ),
               Expanded(
                 flex: 3,
-                child: Text(
-                  r.checkOut,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                  ),
-                ),
+                child: Text(r.checkOut,
+                    style: const TextStyle(
+                        color: AppColors.textGray, fontSize: 13)),
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  r.nights,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                  ),
-                ),
+                child: Text(r.nights,
+                    style: const TextStyle(
+                        color: AppColors.textGray, fontSize: 13)),
               ),
               Expanded(
                 flex: 1,
-                child: Text(
-                  '${r.guests}',
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: Text('${r.guests}',
+                    style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600)),
               ),
               Expanded(
                 flex: 1,
-                child: Text(
-                  '${r.rooms}',
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                  ),
-                ),
+                child: Text('${r.rooms}',
+                    style: const TextStyle(
+                        color: AppColors.textGray, fontSize: 13)),
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  r.purpose,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                  ),
-                ),
+                child: Text(r.purpose,
+                    style: const TextStyle(
+                        color: AppColors.textGray, fontSize: 13)),
               ),
               Expanded(
                 flex: 3,
-                child: Text(
-                  r.transport,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                  ),
-                ),
+                child: Text(r.transport,
+                    style: const TextStyle(
+                        color: AppColors.textGray, fontSize: 13)),
               ),
               Expanded(flex: 2, child: _StatusBadge(status: r.status)),
               Expanded(
@@ -1160,9 +1190,11 @@ class _RecordRowState extends State<_RecordRow> {
                 child: _ActionButtons(
                   status: r.status,
                   expanded: _expanded,
-                  onToggleExpand: () => setState(() => _expanded = !_expanded),
+                  onToggleExpand: () =>
+                      setState(() => _expanded = !_expanded),
                   onEdit: () => widget.onEdit(r),
                   onArchive: () => widget.onArchive(r),
+                  onRestore: () => widget.onRestore(r),   // ADD
                 ),
               ),
             ],
@@ -1181,11 +1213,13 @@ class _RecordCard extends StatefulWidget {
     required this.record,
     required this.onEdit,
     required this.onArchive,
+    required this.onRestore,   // ADD
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
   final ValueChanged<GuestRecord> onArchive;
+  final ValueChanged<GuestRecord> onRestore;   // ADD
 
   @override
   _RecordCardState createState() => _RecordCardState();
@@ -1208,22 +1242,15 @@ class _RecordCardState extends State<_RecordCard> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      r.checkIn,
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(r.checkIn,
+                        style: const TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text(
-                      '${r.checkOut}  •  ${r.nights}',
-                      style: const TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 12,
-                      ),
-                    ),
+                    Text('${r.checkOut}  •  ${r.nights}',
+                        style: const TextStyle(
+                            color: AppColors.textGray, fontSize: 12)),
                   ],
                 ),
               ),
@@ -1241,33 +1268,36 @@ class _RecordCardState extends State<_RecordCard> {
               _InfoChip(label: 'Transport', value: r.transport),
             ],
           ),
-          if (r.status == GuestRecordStatus.active) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              if (r.status == GuestRecordStatus.active) ...[
                 _IconBtn(
-                  icon: Icons.edit_outlined,
-                  onTap: () => widget.onEdit(widget.record),
-                ),
+                    icon: Icons.edit_outlined,
+                    onTap: () => widget.onEdit(widget.record)),
                 const SizedBox(width: 8),
                 _IconBtn(
-                  icon: Icons.archive_outlined,
-                  onTap: () => widget.onArchive(widget.record),
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textGray,
-                    size: 20,
-                  ),
-                ),
+                    icon: Icons.archive_outlined,
+                    onTap: () => widget.onArchive(widget.record)),
+              ] else ...[
+                // ADD: restore button for archived
+                _IconBtn(
+                    icon: Icons.unarchive_outlined,
+                    onTap: () => widget.onRestore(widget.record)),
               ],
-            ),
-          ],
+              const Spacer(),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                child: Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.textGray,
+                  size: 20,
+                ),
+              ),
+            ],
+          ),
           if (_expanded) _ExpandedDetails(record: r),
         ],
       ),
@@ -1511,7 +1541,6 @@ class _StatusBadge extends StatelessWidget {
 }
 
 // ─── Action Buttons ───────────────────────────────────────────────────────────
-
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.status,
@@ -1519,6 +1548,7 @@ class _ActionButtons extends StatelessWidget {
     required this.onToggleExpand,
     required this.onEdit,
     required this.onArchive,
+    required this.onRestore,   // ADD
   });
 
   final GuestRecordStatus status;
@@ -1526,6 +1556,7 @@ class _ActionButtons extends StatelessWidget {
   final VoidCallback onToggleExpand;
   final VoidCallback onEdit;
   final VoidCallback onArchive;
+  final VoidCallback onRestore;   // ADD
 
   @override
   Widget build(BuildContext context) {
@@ -1535,6 +1566,10 @@ class _ActionButtons extends StatelessWidget {
           _IconBtn(icon: Icons.edit_outlined, onTap: onEdit),
           const SizedBox(width: 8),
           _IconBtn(icon: Icons.archive_outlined, onTap: onArchive),
+          const SizedBox(width: 8),
+        ] else ...[
+          // ADD: restore button for archived rows
+          _IconBtn(icon: Icons.unarchive_outlined, onTap: onRestore),
           const SizedBox(width: 8),
         ],
         _IconBtn(
@@ -1547,6 +1582,8 @@ class _ActionButtons extends StatelessWidget {
     );
   }
 }
+
+
 
 class _IconBtn extends StatelessWidget {
   const _IconBtn({required this.icon, required this.onTap});

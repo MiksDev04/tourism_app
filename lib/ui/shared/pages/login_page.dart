@@ -28,27 +28,12 @@ class _LoginScreenState extends State<LoginScreen> {
     text: 'grandhotel@sanpablo.com',
   );
   final _passwordController = TextEditingController(text: '••••••••••');
-  final bool _obscurePassword = true;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  void _fillTourismOffice() {
-    setState(() {
-      _emailController.text = 'admin@tourism.sanpablo.gov';
-      _passwordController.text = 'admin123';
-    });
-  }
-
-  void _fillGrandHotel() {
-    setState(() {
-      _emailController.text = 'grandhotel@sanpablo.com';
-      _passwordController.text = 'hotel123';
-    });
   }
 
   @override
@@ -60,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
             gradient: RadialGradient(
               center: Alignment(0.0, -0.3),
               radius: 1.2,
-              colors: [Color(0xFF0D2040), AppColors.backgroundDark],
+              colors: [AppColors.backgroundMid, AppColors.backgroundDark],
             ),
           ),
           child: SafeArea(

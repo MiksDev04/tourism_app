@@ -312,6 +312,7 @@ class _FilterChip extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
                 color: isActive
+                    // ignore: deprecated_member_use
                     ? Colors.white.withOpacity(0.25)
                     : AppColors.cardBorder,
                 borderRadius: BorderRadius.circular(10),
@@ -855,13 +856,11 @@ class _ActionIcon extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.tooltip,
-    this.color,
   });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
-  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -869,7 +868,7 @@ class _ActionIcon extends StatelessWidget {
       message: tooltip ?? '',
       child: GestureDetector(
         onTap: onTap,
-        child: Icon(icon, color: color ?? AppColors.textGray, size: 20),
+        child: Icon(icon, color: AppColors.textGray, size: 20),
       ),
     );
   }

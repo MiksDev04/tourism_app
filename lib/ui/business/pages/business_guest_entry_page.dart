@@ -77,8 +77,6 @@ const _ageGroupOptions = [
 ];
 
 const double _inputDateHeight = 8;
-const double _inputTextHeight = 8;
-const double _inputNumberHeight = 8;
 const double _inputPassiveHeight = 8;
 const double _inputDropdownHeight = 6;
 
@@ -1352,20 +1350,17 @@ class _InputField extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.keyboardType = TextInputType.text,
-    this.onChanged,
   });
 
   final TextEditingController controller;
   final String hint;
   final TextInputType keyboardType;
-  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      onChanged: onChanged,
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         hintText: hint,

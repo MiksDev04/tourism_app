@@ -5,9 +5,11 @@ import '../../../router/app_router.dart';
 // ─── Admin Header ─────────────────────────────────────────────────────────────
 
 class AdminHeader extends StatelessWidget implements PreferredSizeWidget {
-  const AdminHeader({super.key, required this.title});
+  const AdminHeader({super.key, required this.title, required this.displayName, required this.initials});
 
   final String title;
+  final String displayName;
+  final String initials;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -41,7 +43,7 @@ class AdminHeader extends StatelessWidget implements PreferredSizeWidget {
               const SizedBox(width: 4),
               Container(width: 1, height: 24, color: AppColors.cardBorder),
               const SizedBox(width: 12),
-              _ProfileButton(),
+              _ProfileButton(displayName: displayName, initials: initials),
             ],
           ),
         ],
@@ -85,8 +87,8 @@ class _NotificationBell extends StatelessWidget {
 
 class _ProfileButton extends StatefulWidget {
   const _ProfileButton({
-    this.displayName = 'Tourism Office',
-    this.initials = 'A',
+    required this.displayName,
+    required this.initials,
   });
 
   final String displayName;

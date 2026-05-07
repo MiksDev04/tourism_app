@@ -872,7 +872,6 @@ class _BarChartState extends State<_BarChart>
   }
 
   void _checkHoveredBar(Offset position, Size size) {
-    const maxVal = 360.0;
     const leftPad = 36.0;
     const bottomPad = 24.0;
     final chartH = size.height - bottomPad;

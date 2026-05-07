@@ -517,15 +517,11 @@ startxref
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Row(children: [
-              Icon(Icons.check_circle_outline, color: Colors.white, size: 16),
+              Icon(Icons.check_circle_outline, color: AppColors.textWhite, size: 16),
               SizedBox(width: 8),
               Text('PDF exported successfully.'),
             ]),
-            backgroundColor: const Color(0xFF1A7F4B),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
+            backgroundColor: AppColors.primaryCyan,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -536,10 +532,6 @@ startxref
           SnackBar(
             content: Text('Export failed: $e'),
             backgroundColor: AppColors.accentRed,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -571,10 +563,6 @@ startxref
               Text('CSV exported successfully.'),
             ]),
             backgroundColor: AppColors.primaryCyan,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            margin: const EdgeInsets.all(16),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -599,20 +587,23 @@ startxref
   Future<void> _confirmAndSubmit(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.55),
+      // ignore: deprecated_member_use
+      barrierColor: Colors.black.withOpacity(0.6),
       builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
+        // ignore: deprecated_member_use
+        backgroundColor: Colors.black.withOpacity(0.6),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
           child: Container(
             padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
             decoration: BoxDecoration(
-              color: const Color(0xFF0F1A2A),
+              color: AppColors.cardBackground,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: AppColors.cardBorder),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.4),
+                  // ignore: deprecated_member_use
+                  color: Colors.black.withOpacity(0.40),
                   blurRadius: 32,
                   offset: const Offset(0, 12),
                 ),
@@ -685,12 +676,12 @@ startxref
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.send_rounded,
-                                  color: Colors.white, size: 14),
+                                  color: AppColors.textWhite, size: 14),
                               SizedBox(width: 6),
                               Text(
                                 'Submit',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.textWhite,
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -714,16 +705,20 @@ startxref
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(children: [
-          const Icon(Icons.check_circle_outline, color: Colors.white, size: 16),
-          const SizedBox(width: 8),
-          Text('Report for ${report.period} submitted successfully.'),
-        ]),
-        backgroundColor: const Color(0xFF1A7F4B),
-        behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        margin: const EdgeInsets.all(16),
+        content: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.check_circle_outline, color: AppColors.textWhite, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Report for ${report.period} submitted successfully.',
+                softWrap: true,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.primaryCyan,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -805,8 +800,10 @@ class _AwaitingReviewBtn extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
+        // ignore: deprecated_member_use
         color: AppColors.accentOrange.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
+        // ignore: deprecated_member_use
         border: Border.all(color: AppColors.accentOrange.withOpacity(0.4)),
       ),
       child: Row(
@@ -846,6 +843,7 @@ class _SubmitBtn extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
+              // ignore: deprecated_member_use
               color: AppColors.primaryBlue.withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -855,12 +853,12 @@ class _SubmitBtn extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.send_rounded, color: Colors.white, size: 13),
+            const Icon(Icons.send_rounded, color: AppColors.textWhite, size: 13),
             const SizedBox(width: 5),
             const Text(
               'Submit',
               style: TextStyle(
-                color: Colors.white,
+                color: AppColors.textWhite,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -884,25 +882,25 @@ class _StatusBadge extends StatelessWidget {
         return const _BadgeStyle(
           label: 'Submitted',
           icon: Icons.schedule_rounded,
-          color: Color(0xFFFFB020),
+          color: AppColors.accentOrange,
         );
       case ReportStatus.approved:
         return const _BadgeStyle(
           label: 'Approved',
           icon: Icons.check_circle_outline_rounded,
-          color: Color(0xFF00C48C),
+          color: AppColors.accentGreen,
         );
       case ReportStatus.rejected:
         return const _BadgeStyle(
           label: 'Rejected',
           icon: Icons.cancel_outlined,
-          color: Color(0xFFFF4D6A),
+          color: AppColors.accentRed,
         );
       case ReportStatus.draft:
         return const _BadgeStyle(
           label: 'Draft',
           icon: Icons.edit_outlined,
-          color: Color(0xFF8A9BB5),
+          color: AppColors.textGray,
         );
     }
   }
@@ -913,8 +911,10 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
+        // ignore: deprecated_member_use
         color: style.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
+        // ignore: deprecated_member_use
         border: Border.all(color: style.color.withOpacity(0.35)),
       ),
       child: Row(
@@ -963,8 +963,10 @@ class _FeedbackBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
+        // ignore: deprecated_member_use
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
+        // ignore: deprecated_member_use
         border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Row(

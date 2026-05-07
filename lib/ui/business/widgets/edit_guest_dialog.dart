@@ -330,7 +330,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         constraints: const BoxConstraints(maxWidth: 700),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1A2A),
+            color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.cardBorder),
             boxShadow: [
@@ -604,7 +604,7 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF132035),
+        color: AppColors.backgroundDark,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
@@ -944,19 +944,20 @@ class _AddRowButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E3A5F),
+          color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(6),
+          // ignore: deprecated_member_use
           border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, color: Color(0xFF3B82F6), size: 14),
+            Icon(Icons.add, color: AppColors.textWhite, size: 14),
             SizedBox(width: 4),
             Text(
               '+ Add Row',
               style: TextStyle(
-                color: Color(0xFF3B82F6),
+                color: AppColors.textWhite,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

@@ -27,6 +27,7 @@ Future<void> showMessageViewDialog(
 ) {
   return showDialog(
     context: context,
+    // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.65),
     barrierDismissible: true,
     builder: (_) => MessageViewDialog(data: data),
@@ -130,11 +131,12 @@ class _MessageViewDialogState extends State<MessageViewDialog>
                   constraints: const BoxConstraints(maxWidth: 580),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F1923),
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.cardBorder),
                       boxShadow: [
                         BoxShadow(
+                          // ignore: deprecated_member_use
                           color: Colors.black.withOpacity(0.55),
                           blurRadius: 48,
                           offset: const Offset(0, 18),

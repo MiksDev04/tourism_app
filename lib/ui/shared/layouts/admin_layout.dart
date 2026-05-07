@@ -29,6 +29,9 @@ class AdminLayout extends StatelessWidget {
   final ValueChanged<int> onNavSelected;
   final Widget child;
 
+  final String displayName = 'Tourism Office';
+  final String initials = 'TO';
+
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
@@ -49,7 +52,7 @@ class AdminLayout extends StatelessWidget {
         Expanded(
           child: Column(
             children: [
-              AdminHeader(title: title),
+              AdminHeader(title: title, displayName: displayName, initials: initials),
               Expanded(
                 child: Container(
                   color: AppColors.backgroundDark,
@@ -68,7 +71,7 @@ class AdminLayout extends StatelessWidget {
       backgroundColor: AppColors.backgroundDark,
       body: Column(
         children: [
-          AdminHeader(title: title),
+          AdminHeader(title: title, displayName: displayName, initials: initials),
           Expanded(
             child: Container(
               color: AppColors.backgroundDark,

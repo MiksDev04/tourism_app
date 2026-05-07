@@ -108,28 +108,6 @@ abstract final class AppRouter {
 // ─── Dev-only Placeholder Page ────────────────────────────────────────────────
 // Remove this whole section once every page is implemented.
 
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF050D1A),
-      body: Center(
-        child: Text(
-          '$title\n(coming soon)',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF8A9BB5),
-            fontSize: 18,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ─── 404 Page ─────────────────────────────────────────────────────────────────
 
 class _NotFoundPage extends StatelessWidget {

@@ -1072,8 +1072,4 @@ class _WarningBadge extends StatelessWidget {
 
 // ─── Color Extensions ─────────────────────────────────────────────────────────
 
-extension _ExtraColors on AppColors {
-  static const accentGreen = Color(0xFF00C48C);
-  static const accentOrange = Color(0xFFFFB020);
-  static const accentRed = Color(0xFFFF4D6A);
-}
+

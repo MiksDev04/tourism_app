@@ -29,6 +29,9 @@ class BusinessLayout extends StatelessWidget {
   final ValueChanged<int> onNavSelected;
   final Widget child;
   final bool hasNotification;
+    final String displayName = 'Juan Dela Cruz';
+    final String businessName = 'Traveler\'s Lodge';
+    final String initials = 'JD';
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +56,9 @@ class BusinessLayout extends StatelessWidget {
               BusinessHeader(
                 title: title,
                 hasNotification: hasNotification,
+                displayName: displayName,
+                businessName: businessName,
+                initials: initials,
               ),
               Expanded(
                 child: Container(
@@ -75,6 +81,9 @@ class BusinessLayout extends StatelessWidget {
           BusinessHeader(
             title: title,
             hasNotification: hasNotification,
+            displayName: displayName,
+            businessName: businessName,
+            initials: initials,
           ),
           Expanded(
             child: Container(
@@ -87,6 +96,9 @@ class BusinessLayout extends StatelessWidget {
       bottomNavigationBar: BusinessBottomNavBar(
         selectedIndex: selectedIndex,
         onItemSelected: onNavSelected,
+        displayName: displayName,
+        businessName: businessName,
+        initials: initials,
       ),
     );
   }
@@ -99,10 +111,16 @@ class BusinessBottomNavBar extends StatelessWidget {
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    required this.displayName,
+    required this.businessName,
+    required this.initials,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
+  final String displayName;
+  final String businessName;
+  final String initials;
 
   static const _navItems = [
     BizNavItem(

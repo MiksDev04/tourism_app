@@ -31,7 +31,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   bool _obscureNew     = true;
   bool _obscureConfirm = true;
 
-  final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
@@ -751,11 +750,4 @@ class _ActionButton extends StatelessWidget {
       ),
     );
   }
-}
-
-// ─── Extra color constants (mirror app_colors.dart) ──────────────────────────
-
-extension _ProfileColors on AppColors {
-  static const inputBackground = Color(0xFF0D1B2E);
-  static const inputBorder     = Color(0xFF1C3050);
 }

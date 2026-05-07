@@ -61,6 +61,7 @@ Future<ComposeMessageDraft?> showComposeMessageDialog(
 }) {
   return showDialog<ComposeMessageDraft>(
     context: context,
+    // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.65),
     barrierDismissible: true,
     builder: (_) => ComposeMessageDialog(initialDraft: initialDraft),
@@ -215,7 +216,7 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0F1923),
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: AppColors.cardBorder),
                       boxShadow: [

@@ -23,7 +23,7 @@ class _MessageViewDialog extends StatelessWidget {
     final isNarrow = MediaQuery.of(context).size.width < 500;
 
     return Dialog(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.black.withOpacity(0.6),
       insetPadding: EdgeInsets.symmetric(
         horizontal: isNarrow ? 16 : 40,
         vertical: 40,
@@ -32,7 +32,7 @@ class _MessageViewDialog extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 520),
         child: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1A2A),
+            color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.cardBorder),
             boxShadow: [
@@ -101,7 +101,7 @@ class _MessageViewDialog extends StatelessWidget {
                   child: Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
-                      color: const Color(0xFF132035),
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppColors.cardBorder),
                     ),
@@ -180,7 +180,7 @@ class _MessageViewDialog extends StatelessWidget {
                           margin: const EdgeInsets.all(14),
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF0F1A2A),
+                            color: AppColors.inputBackground,
                             borderRadius: BorderRadius.circular(8),
                             border:
                                 Border.all(color: AppColors.cardBorder),

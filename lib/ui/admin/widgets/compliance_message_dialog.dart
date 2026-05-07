@@ -97,9 +97,9 @@ class _ComplianceMessageDialogState extends State<ComplianceMessageDialog>
             constraints: const BoxConstraints(maxWidth: 480),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0F1923),
+                color: AppColors.backgroundMid,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.07)),
+                border: Border.all(color: AppColors.cardBorder),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.55),
@@ -166,7 +166,7 @@ class _DialogHeader extends StatelessWidget {
                 const Text(
                   'Message History',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: AppColors.textWhite,
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                     letterSpacing: -0.2,
@@ -176,7 +176,7 @@ class _DialogHeader extends StatelessWidget {
                 Text(
                   business,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.45),
+                    color: AppColors.textGray,
                     fontSize: 13,
                   ),
                 ),
@@ -189,12 +189,12 @@ class _DialogHeader extends StatelessWidget {
               width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
+                color: AppColors.textSubtle.withOpacity(0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(
                 Icons.close_rounded,
-                color: Colors.white.withOpacity(0.5),
+                color: AppColors.textGray,
                 size: 16,
               ),
             ),
@@ -232,9 +232,9 @@ class _MessageCardState extends State<_MessageCard> {
         curve: Curves.easeInOut,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF182231),
+          color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white.withOpacity(0.06)),
+          border: Border.all(color: AppColors.cardBorder),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,8 +246,8 @@ class _MessageCardState extends State<_MessageCard> {
                 Expanded(
                   child: Text(
                     widget.message.title,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: AppColors.textWhite,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w600,
                       height: 1.4,
@@ -270,7 +270,7 @@ class _MessageCardState extends State<_MessageCard> {
               firstChild: Text(
                 widget.message.preview,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.45),
+                  color: AppColors.textGray,
                   fontSize: 12.5,
                   height: 1.55,
                 ),
@@ -280,7 +280,7 @@ class _MessageCardState extends State<_MessageCard> {
               secondChild: Text(
                 widget.message.preview,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.45),
+                  color: AppColors.textGray,
                   fontSize: 12.5,
                   height: 1.55,
                 ),
@@ -296,7 +296,7 @@ class _MessageCardState extends State<_MessageCard> {
                 Text(
                   widget.message.date,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.30),
+                    color: AppColors.textSubtle,
                     fontSize: 12,
                   ),
                 ),
@@ -304,7 +304,7 @@ class _MessageCardState extends State<_MessageCard> {
                   _isExpanded
                       ? Icons.expand_less_rounded
                       : Icons.expand_more_rounded,
-                  color: Colors.white.withOpacity(0.35),
+                  color: AppColors.textSubtle,
                   size: 18,
                 ),
               ],
@@ -326,9 +326,9 @@ class _TagBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (tag) {
-      MessageTag.compliance => ('compliance', const Color(0xFFFF4D6A)),
-      MessageTag.general => ('general', const Color(0xFF6C7FD8)),
-      MessageTag.warning => ('warning', const Color(0xFFFFB020)),
+      MessageTag.compliance => ('compliance', AppColors.accentRed),
+      MessageTag.general => ('general', AppColors.primaryBlue),
+      MessageTag.warning => ('warning', AppColors.accentOrange),
     };
 
     return Container(
@@ -364,14 +364,14 @@ class _EmptyState extends StatelessWidget {
           children: [
             Icon(
               Icons.inbox_outlined,
-              color: Colors.white.withOpacity(0.2),
+              color: AppColors.textSubtle,
               size: 36,
             ),
             const SizedBox(height: 10),
             Text(
               'No messages sent yet.',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.3),
+                color: AppColors.textSubtle,
                 fontSize: 13,
               ),
             ),

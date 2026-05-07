@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../router/app_router.dart';
+import '../../../core/constants/app_colors.dart';
 
 // void main() {
 //   runApp(const RegisterPage());
@@ -18,23 +19,10 @@ class RegisterPage extends StatelessWidget {
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 
-class AppColors {
-  AppColors._();
+class RegisterColors {
+  RegisterColors._();
 
-  static const backgroundDark = Color(0xFF050D1A);
-  static const cardBackground = Color(0xFF0F1E35);
-  static const cardBorder = Color(0xFF1E3050);
-  static const inputBackground = Color(0xFF0D1B2E);
-  static const inputBorder = Color(0xFF1C3050);
 
-  static const primaryCyan = Color(0xFF00BFFF);
-  static const primaryBlue = Color(0xFF1A6FFF);
-  static const gradientStart = Color(0xFF00D4FF);
-  static const gradientEnd = Color(0xFF1A6FFF);
-
-  static const textWhite = Color(0xFFFFFFFF);
-  static const textGray = Color(0xFF8A9BB5);
-  static const textSubtle = Color(0xFF506078);
   static const textRed = Color(0xFFFF4D6A);
   static const warningBg = Color(0xFF1A1200);
   static const warningText = Color(0xFFFFB020);
@@ -129,48 +117,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
           gradient: RadialGradient(
             center: Alignment(0.0, -0.3),
             radius: 1.2,
-            colors: [Color(0xFF0D2040), AppColors.backgroundDark],
+            colors: [AppColors.backgroundMid, AppColors.backgroundDark],
           ),
         ),
         child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
-              child: Column(
-                children: [
-                  const _AppHeader(),
-                  const SizedBox(height: 28),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500),
-                    child: _FormCard(
-                      step: _step,
-                      showErrors: _showErrors,
-                      // Step 1
-                      fullNameCtrl: _fullNameCtrl,
-                      usernameCtrl: _usernameCtrl,
-                      emailCtrl: _emailCtrl,
-                      phoneCtrl: _phoneCtrl,
-                      passwordCtrl: _passwordCtrl,
-                      confirmPassCtrl: _confirmPassCtrl,
-                      onNext: _goNext,
-                      // Step 2
-                      businessNameCtrl: _businessNameCtrl,
-                      businessType: _businessType,
-                      onBusinessTypeChanged: (v) =>
-                          setState(() => _businessType = v!),
-                      ownerNameCtrl: _ownerNameCtrl,
-                      totalRoomsCtrl: _totalRoomsCtrl,
-                      permitNumberCtrl: _permitNumberCtrl,
-                      registrationCtrl: _registrationCtrl,
-                      businessAddrCtrl: _businessAddrCtrl,
-                      contactNumberCtrl: _contactNumberCtrl,
-                      onBack: _goBack,
-                      onSubmit: _submit,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
+                  ),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Column(
+                      children: [
+                        const _AppHeader(),
+                        const SizedBox(height: 28),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 500),
+                          child: _FormCard(
+                            step: _step,
+                            showErrors: _showErrors,
+                            // Step 1
+                            fullNameCtrl: _fullNameCtrl,
+                            usernameCtrl: _usernameCtrl,
+                            emailCtrl: _emailCtrl,
+                            phoneCtrl: _phoneCtrl,
+                            passwordCtrl: _passwordCtrl,
+                            confirmPassCtrl: _confirmPassCtrl,
+                            onNext: _goNext,
+                            // Step 2
+                            businessNameCtrl: _businessNameCtrl,
+                            businessType: _businessType,
+                            onBusinessTypeChanged: (v) =>
+                                setState(() => _businessType = v!),
+                            ownerNameCtrl: _ownerNameCtrl,
+                            totalRoomsCtrl: _totalRoomsCtrl,
+                            permitNumberCtrl: _permitNumberCtrl,
+                            registrationCtrl: _registrationCtrl,
+                            businessAddrCtrl: _businessAddrCtrl,
+                            contactNumberCtrl: _contactNumberCtrl,
+                            onBack: _goBack,
+                            onSubmit: _submit,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -732,16 +731,16 @@ class _WarningBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.warningBg,
+        color: RegisterColors.warningBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.warningText.withOpacity(0.3)),
+        border: Border.all(color: RegisterColors.warningText.withOpacity(0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Icon(
             Icons.info_outline_rounded,
-            color: AppColors.warningText,
+            color: RegisterColors.warningText,
             size: 16,
           ),
           SizedBox(width: 8),
@@ -749,7 +748,7 @@ class _WarningBanner extends StatelessWidget {
             child: Text(
               'Business documents (permit, valid ID) should be uploaded after account approval. Please prepare these documents.',
               style: TextStyle(
-                color: AppColors.warningText,
+                color: RegisterColors.warningText,
                 fontSize: 12.5,
                 height: 1.4,
               ),
@@ -789,7 +788,7 @@ class _LabeledField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             error!,
-            style: const TextStyle(color: AppColors.textRed, fontSize: 11.5),
+            style: const TextStyle(color: RegisterColors.textRed, fontSize: 11.5),
           ),
         ],
       ],
@@ -814,7 +813,7 @@ class _Input extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError ? AppColors.textRed : AppColors.inputBorder;
+    final borderColor = hasError ? RegisterColors.textRed : AppColors.inputBorder;
     return TextField(
       controller: controller,
       obscureText: obscure,

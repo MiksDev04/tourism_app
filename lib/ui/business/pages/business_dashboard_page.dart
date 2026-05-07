@@ -782,7 +782,6 @@ class _BarChartState extends State<_BarChart> with SingleTickerProviderStateMixi
   }
 
   void _checkHoveredBar(Offset position, Size size, double availableWidth) {
-    const maxVal = 40.0;
     final leftPad = availableWidth < 400 ? 28.0 : 36.0;
     final bottomPad = availableWidth < 400 ? 20.0 : 24.0;
     final chartH = size.height - bottomPad;

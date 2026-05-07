@@ -44,6 +44,7 @@ Future<void> showBusinessDetailsModal(
 }) {
   return showDialog(
     context: context,
+    // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.6),
     barrierDismissible: true,
     builder: (_) => BusinessDetailsModal(
@@ -122,7 +123,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
                     constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F1923),
+                        color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.cardBorder),
                         boxShadow: [

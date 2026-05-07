@@ -112,7 +112,7 @@ class _ReviewReportModalState extends State<ReviewReportModal>
                     constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF0F1923),
+                        color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.cardBorder),
                         boxShadow: [

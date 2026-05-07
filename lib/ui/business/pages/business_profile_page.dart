@@ -619,7 +619,7 @@ class _InputField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         filled: true,
-        fillColor: _ProfileColors.inputBackground,
+        fillColor: AppColors.inputBackground,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
@@ -627,11 +627,11 @@ class _InputField extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -660,7 +660,7 @@ class _MultilineField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         filled: true,
-        fillColor: _ProfileColors.inputBackground,
+        fillColor: AppColors.inputBackground,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
@@ -668,11 +668,11 @@ class _MultilineField extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -713,7 +713,7 @@ class _DropdownField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         filled: true,
-        fillColor: _ProfileColors.inputBackground,
+        fillColor: AppColors.inputBackground,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
@@ -721,11 +721,11 @@ class _DropdownField extends StatelessWidget {
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: _ProfileColors.inputBorder),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -799,7 +799,3 @@ class _ActionButton extends StatelessWidget {
 
 // ─── Local color constants (mirror app_colors.dart) ──────────────────────────
 
-class _ProfileColors {
-  static const inputBackground = Color(0xFF0D1B2E);
-  static const inputBorder = Color(0xFF1C3050);
-}
