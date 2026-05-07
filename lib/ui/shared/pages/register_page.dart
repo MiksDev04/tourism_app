@@ -117,7 +117,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           gradient: RadialGradient(
             center: Alignment(0.0, -0.3),
             radius: 1.2,
-            colors: [AppColors.backgroundMid, AppColors.backgroundDark],
+            colors: [AppColors.activeNavBg, AppColors.backgroundDark],
           ),
         ),
         child: SafeArea(
