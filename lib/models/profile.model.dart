@@ -22,11 +22,16 @@ class Profile extends OfflineFirstWithSupabaseModel {
   @Sqlite(index: true, unique: true)
   final String id;
 
+  @Supabase(name: 'deleted_at')
+  @Sqlite(name: 'deleted_at')
+  final String? deletedAt;
+
   Profile({
     String? id,
     required this.fullName,
     required this.role,
     required this.createAt,
     required this.updatedAt,
+     this.deletedAt,
   }) : id = id ?? const Uuid().v4();
 }

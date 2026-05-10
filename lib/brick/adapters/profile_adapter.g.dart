@@ -12,6 +12,9 @@ Future<Profile> _$ProfileFromSupabase(
     createAt: data['create_at'] as String,
     updatedAt: data['updated_at'] as String,
     id: data['id'] as String?,
+    deletedAt: data['deleted_at'] == null
+        ? null
+        : data['deleted_at'] as String?,
   );
 }
 
@@ -26,6 +29,7 @@ Future<Map<String, dynamic>> _$ProfileToSupabase(
     'create_at': instance.createAt,
     'updated_at': instance.updatedAt,
     'id': instance.id,
+    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -40,6 +44,9 @@ Future<Profile> _$ProfileFromSqlite(
     createAt: data['create_at'] as String,
     updatedAt: data['updated_at'] as String,
     id: data['id'] as String,
+    deletedAt: data['deleted_at'] == null
+        ? null
+        : data['deleted_at'] as String?,
   )..primaryKey = data['_brick_id'] as int;
 }
 
@@ -54,6 +61,7 @@ Future<Map<String, dynamic>> _$ProfileToSqlite(
     'create_at': instance.createAt,
     'updated_at': instance.updatedAt,
     'id': instance.id,
+    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -86,6 +94,10 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'id': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'id',
+    ),
+    'deletedAt': const RuntimeSupabaseColumnDefinition(
+      association: false,
+      columnName: 'deleted_at',
     ),
   };
   @override
@@ -127,6 +139,12 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'id': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'id',
+      iterable: false,
+      type: String,
+    ),
+    'deletedAt': const RuntimeSqliteColumnDefinition(
+      association: false,
+      columnName: 'deleted_at',
       iterable: false,
       type: String,
     ),
