@@ -9,7 +9,7 @@ Future<Profile> _$ProfileFromSupabase(
   return Profile(
     fullName: data['full_name'] as String,
     role: data['role'] as String,
-    createAt: data['create_at'] as String,
+    createdAt: data['created_at'] as String,
     updatedAt: data['updated_at'] as String,
     id: data['id'] as String?,
     deletedAt: data['deleted_at'] == null
@@ -26,7 +26,7 @@ Future<Map<String, dynamic>> _$ProfileToSupabase(
   return {
     'full_name': instance.fullName,
     'role': instance.role,
-    'create_at': instance.createAt,
+    'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
     'id': instance.id,
     'deleted_at': instance.deletedAt,
@@ -41,7 +41,7 @@ Future<Profile> _$ProfileFromSqlite(
   return Profile(
     fullName: data['full_name'] as String,
     role: data['role'] as String,
-    createAt: data['create_at'] as String,
+    createdAt: data['created_at'] as String,
     updatedAt: data['updated_at'] as String,
     id: data['id'] as String,
     deletedAt: data['deleted_at'] == null
@@ -58,7 +58,7 @@ Future<Map<String, dynamic>> _$ProfileToSqlite(
   return {
     'full_name': instance.fullName,
     'role': instance.role,
-    'create_at': instance.createAt,
+    'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
     'id': instance.id,
     'deleted_at': instance.deletedAt,
@@ -83,9 +83,9 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
       association: false,
       columnName: 'role',
     ),
-    'createAt': const RuntimeSupabaseColumnDefinition(
+    'createdAt': const RuntimeSupabaseColumnDefinition(
       association: false,
-      columnName: 'create_at',
+      columnName: 'created_at',
     ),
     'updatedAt': const RuntimeSupabaseColumnDefinition(
       association: false,
@@ -124,9 +124,9 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
       iterable: false,
       type: String,
     ),
-    'createAt': const RuntimeSqliteColumnDefinition(
+    'createdAt': const RuntimeSqliteColumnDefinition(
       association: false,
-      columnName: 'create_at',
+      columnName: 'created_at',
       iterable: false,
       type: String,
     ),

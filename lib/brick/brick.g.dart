@@ -3,6 +3,10 @@ import 'package:brick_core/query.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_sqlite/db.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
+// ignore: unused_import, unused_shown_name, unnecessary_import
+import 'package:tourism_app/models/profile.model.dart';
+// ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_offline_first_with_supabase/brick_offline_first_with_supabase.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_sqlite/brick_sqlite.dart';

@@ -1,5 +1,3 @@
-// Your model definition can live anywhere in lib/**/* as long as it has the .model.dart suffix
-// Assume this file is saved at my_app/lib/src/users/user.model.dart
 
 import 'package:brick_offline_first_with_supabase/brick_offline_first_with_supabase.dart';
 import 'package:brick_sqlite/brick_sqlite.dart';
@@ -12,12 +10,9 @@ import 'package:uuid/uuid.dart';
 class Profile extends OfflineFirstWithSupabaseModel {
   final String fullName;
   final String role;
-  final String createAt;
+  final String createdAt;
   final String updatedAt;
 
-  // Be sure to specify an index that **is not** auto incremented in your table.
-  // An offline-first strategy requires distributed clients to create
-  // indexes without fear of collision.
   @Supabase(unique: true)
   @Sqlite(index: true, unique: true)
   final String id;
@@ -30,8 +25,8 @@ class Profile extends OfflineFirstWithSupabaseModel {
     String? id,
     required this.fullName,
     required this.role,
-    required this.createAt,
+    required this.createdAt,
     required this.updatedAt,
-     this.deletedAt,
+    this.deletedAt,
   }) : id = id ?? const Uuid().v4();
 }
