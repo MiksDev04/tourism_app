@@ -25,10 +25,6 @@ Future<Business> _$BusinessFromSupabase(
         ? null
         : data['registration_number'] as String?,
     address: data['address'] == null ? null : data['address'] as String?,
-    contactNumber: data['contact_number'] == null
-        ? null
-        : data['contact_number'] as String?,
-    email: data['email'] == null ? null : data['email'] as String?,
     totalRooms: data['total_rooms'] as int,
     permitFileUrl: data['permit_file_url'] == null
         ? null
@@ -64,8 +60,6 @@ Future<Map<String, dynamic>> _$BusinessToSupabase(
     'permit_number': instance.permitNumber,
     'registration_number': instance.registrationNumber,
     'address': instance.address,
-    'contact_number': instance.contactNumber,
-    'email': instance.email,
     'total_rooms': instance.totalRooms,
     'permit_file_url': instance.permitFileUrl,
     'valid_id_url': instance.validIdUrl,
@@ -103,10 +97,6 @@ Future<Business> _$BusinessFromSqlite(
         ? null
         : data['registration_number'] as String?,
     address: data['address'] == null ? null : data['address'] as String?,
-    contactNumber: data['contact_number'] == null
-        ? null
-        : data['contact_number'] as String?,
-    email: data['email'] == null ? null : data['email'] as String?,
     totalRooms: data['total_rooms'] as int,
     permitFileUrl: data['permit_file_url'] == null
         ? null
@@ -143,8 +133,6 @@ Future<Map<String, dynamic>> _$BusinessToSqlite(
     'permit_number': instance.permitNumber,
     'registration_number': instance.registrationNumber,
     'address': instance.address,
-    'contact_number': instance.contactNumber,
-    'email': instance.email,
     'total_rooms': instance.totalRooms,
     'permit_file_url': instance.permitFileUrl,
     'valid_id_url': instance.validIdUrl,
@@ -199,14 +187,6 @@ class BusinessAdapter extends OfflineFirstWithSupabaseAdapter<Business> {
     'address': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'address',
-    ),
-    'contactNumber': const RuntimeSupabaseColumnDefinition(
-      association: false,
-      columnName: 'contact_number',
-    ),
-    'email': const RuntimeSupabaseColumnDefinition(
-      association: false,
-      columnName: 'email',
     ),
     'totalRooms': const RuntimeSupabaseColumnDefinition(
       association: false,
@@ -298,18 +278,6 @@ class BusinessAdapter extends OfflineFirstWithSupabaseAdapter<Business> {
     'address': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'address',
-      iterable: false,
-      type: String,
-    ),
-    'contactNumber': const RuntimeSqliteColumnDefinition(
-      association: false,
-      columnName: 'contact_number',
-      iterable: false,
-      type: String,
-    ),
-    'email': const RuntimeSqliteColumnDefinition(
-      association: false,
-      columnName: 'email',
       iterable: false,
       type: String,
     ),

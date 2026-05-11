@@ -22,8 +22,6 @@ class Business extends OfflineFirstWithSupabaseModel {
   final String? permitNumber;
   final String? registrationNumber;
   final String? address;
-  final String? contactNumber;
-  final String? email;
   final int totalRooms;
   final String? permitFileUrl;
   final String? validIdUrl;
@@ -42,8 +40,6 @@ class Business extends OfflineFirstWithSupabaseModel {
     this.permitNumber,
     this.registrationNumber,
     this.address,
-    this.contactNumber,
-    this.email,
     this.totalRooms = 0,
     this.permitFileUrl,
     this.validIdUrl,

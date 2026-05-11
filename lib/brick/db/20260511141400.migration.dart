@@ -9,7 +9,7 @@ part of 'schema.g.dart';
 
 // The migration version must **always** mirror the file name
 
-const List<MigrationCommand> _migration_20260511135429_up = [
+const List<MigrationCommand> _migration_20260511141400_up = [
   InsertTable('Business'),
   InsertColumn('id', Column.varchar, onTable: 'Business', unique: true),
   InsertForeignKey('Business', 'Profile', foreignKeyColumn: 'profile_Profile_brick_id', onDeleteCascade: false, onDeleteSetDefault: false),
@@ -19,8 +19,6 @@ const List<MigrationCommand> _migration_20260511135429_up = [
   InsertColumn('permit_number', Column.varchar, onTable: 'Business'),
   InsertColumn('registration_number', Column.varchar, onTable: 'Business'),
   InsertColumn('address', Column.varchar, onTable: 'Business'),
-  InsertColumn('contact_number', Column.varchar, onTable: 'Business'),
-  InsertColumn('email', Column.varchar, onTable: 'Business'),
   InsertColumn('total_rooms', Column.integer, onTable: 'Business'),
   InsertColumn('permit_file_url', Column.varchar, onTable: 'Business'),
   InsertColumn('valid_id_url', Column.varchar, onTable: 'Business'),
@@ -32,7 +30,7 @@ const List<MigrationCommand> _migration_20260511135429_up = [
   CreateIndex(columns: ['id'], onTable: 'Business', unique: true)
 ];
 
-const List<MigrationCommand> _migration_20260511135429_down = [
+const List<MigrationCommand> _migration_20260511141400_down = [
   DropTable('Business'),
   DropColumn('id', onTable: 'Business'),
   DropColumn('profile_Profile_brick_id', onTable: 'Business'),
@@ -42,8 +40,6 @@ const List<MigrationCommand> _migration_20260511135429_down = [
   DropColumn('permit_number', onTable: 'Business'),
   DropColumn('registration_number', onTable: 'Business'),
   DropColumn('address', onTable: 'Business'),
-  DropColumn('contact_number', onTable: 'Business'),
-  DropColumn('email', onTable: 'Business'),
   DropColumn('total_rooms', onTable: 'Business'),
   DropColumn('permit_file_url', onTable: 'Business'),
   DropColumn('valid_id_url', onTable: 'Business'),
@@ -60,15 +56,15 @@ const List<MigrationCommand> _migration_20260511135429_down = [
 //
 
 @Migratable(
-  version: '20260511135429',
-  up: _migration_20260511135429_up,
-  down: _migration_20260511135429_down,
+  version: '20260511141400',
+  up: _migration_20260511141400_up,
+  down: _migration_20260511141400_down,
 )
-class Migration20260511135429 extends Migration {
-  const Migration20260511135429()
+class Migration20260511141400 extends Migration {
+  const Migration20260511141400()
     : super(
-        version: 20260511135429,
-        up: _migration_20260511135429_up,
-        down: _migration_20260511135429_down,
+        version: 20260511141400,
+        up: _migration_20260511141400_up,
+        down: _migration_20260511141400_down,
       );
 }
