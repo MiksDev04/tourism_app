@@ -562,7 +562,7 @@ class _BusinessDropdown extends StatelessWidget {
             style: TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
           ),
           isExpanded: true,
-          dropdownColor: const Color(0xFF0F1923),
+          dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
           style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
           items: _kBusinesses
