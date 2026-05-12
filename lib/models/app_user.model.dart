@@ -11,6 +11,8 @@ class AppUser {
 
   String? get email => authUser?.email;
 
+  String? get phone => authUser?.phone;
+
   String? get fullName => profile?.fullName;
 
   String? get role => profile?.role;

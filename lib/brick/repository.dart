@@ -6,13 +6,14 @@ import 'package:brick_sqlite/memory_cache_provider.dart';
 // supabase_flutter **will not** be imported in application code.
 import 'package:brick_supabase/brick_supabase.dart' hide Supabase;
 import 'package:sqflite_common/sqlite_api.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tourism_app/brick/db/schema.g.dart';
 
 import 'brick.g.dart';
 
 class Repository extends OfflineFirstWithSupabaseRepository {
-  static late Repository? _instance;
+  static Repository? _instance;
 
   Repository._({
     required super.supabaseProvider,
@@ -22,7 +23,13 @@ class Repository extends OfflineFirstWithSupabaseRepository {
     super.memoryCacheProvider,
   });
 
-  factory Repository() => _instance!;
+  factory Repository() {
+    assert(
+      _instance != null,
+      'Call Repository.configure() before using Repository()',
+    );
+    return _instance!;
+  }
 
   static Future<void> configure(DatabaseFactory databaseFactory) async {
     final (client, queue) = OfflineFirstWithSupabaseRepository.clientQueue(
@@ -30,8 +37,8 @@ class Repository extends OfflineFirstWithSupabaseRepository {
     );
 
     await Supabase.initialize(
-    url: 'https://vhnuvhmvozzeufgzvzbt.supabase.co',
-    anonKey: 'sb_publishable_VgX-aoJBn6FooTfEo2MADA_zzt9KLL9',
+      url: 'https://vhnuvhmvozzeufgzvzbt.supabase.co',
+      anonKey: 'sb_publishable_VgX-aoJBn6FooTfEo2MADA_zzt9KLL9',
       httpClient: client,
     );
 

@@ -1,19 +1,17 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import '../../../router/app_router.dart';
-import '../../../core/constants/app_colors.dart';
-
-// void main() {
-//   runApp(const RegisterPage());
-// }
+import 'package:tourism_app/api/register_api.dart';
+import 'package:tourism_app/models/business.model.dart';
+import 'package:tourism_app/router/app_router.dart';
+import 'package:tourism_app/core/constants/app_colors.dart';
 
 class RegisterPage extends StatelessWidget {
   const RegisterPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: RegisterScreen(),
-    );
+    return const Scaffold(body: RegisterScreen());
   }
 }
 
@@ -21,7 +19,6 @@ class RegisterPage extends StatelessWidget {
 
 class RegisterColors {
   RegisterColors._();
-
 
   static const textRed = Color(0xFFFF4D6A);
   static const warningBg = Color(0xFF1A1200);
@@ -38,11 +35,12 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  int _step = 1; // 1 = Account Info, 2 = Business Details
+  int _step = 1;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   // Step 1 controllers
   final _fullNameCtrl = TextEditingController();
-  final _usernameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -58,14 +56,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _contactNumberCtrl = TextEditingController();
   String _businessType = 'Hotel';
 
-  // Validation errors (step 2)
+  // File uploads
+  File? _permitFile;
+  File? _validIdFile;
+
   bool _showErrors = false;
+
+  final _api = RegisterApi();
 
   @override
   void dispose() {
     for (final c in [
       _fullNameCtrl,
-      _usernameCtrl,
       _emailCtrl,
       _phoneCtrl,
       _passwordCtrl,
@@ -83,31 +85,130 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  void _goNext() => setState(() {
-    _step = 2;
-    _showErrors = false;
-  });
-  void _goBack() => setState(() {
-    _step = 1;
-    _showErrors = false;
-  });
+  // ── Step 1 validation ──────────────────────────────────────────────────────
 
-  void _submit() {
+  bool get _step1Valid {
+    return _fullNameCtrl.text.isNotEmpty &&
+        _emailCtrl.text.isNotEmpty &&
+        _emailCtrl.text.contains('@') &&
+        _phoneCtrl.text.isNotEmpty &&
+        _passwordCtrl.text.length >= 6 &&
+        _passwordCtrl.text == _confirmPassCtrl.text;
+  }
+
+  void _goNext() {
     setState(() => _showErrors = true);
-    final valid =
-        _businessNameCtrl.text.isNotEmpty &&
+    if (!_step1Valid) return;
+    setState(() {
+      _step = 2;
+      _showErrors = false;
+      _errorMessage = null;
+    });
+  }
+
+  void _goBack() => setState(() {
+        _step = 1;
+        _showErrors = false;
+        _errorMessage = null;
+      });
+
+  // ── Step 2 validation ──────────────────────────────────────────────────────
+
+  bool get _step2Valid {
+    return _businessNameCtrl.text.isNotEmpty &&
         _ownerNameCtrl.text.isNotEmpty &&
         int.tryParse(_totalRoomsCtrl.text) != null &&
         _permitNumberCtrl.text.isNotEmpty &&
         _registrationCtrl.text.isNotEmpty &&
         _businessAddrCtrl.text.isNotEmpty &&
-        _contactNumberCtrl.text.isNotEmpty;
-    if (valid) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Registration submitted!')));
+        _contactNumberCtrl.text.isNotEmpty &&
+        _permitFile != null &&
+        _validIdFile != null;
+  }
+
+  // ── File picking ───────────────────────────────────────────────────────────
+
+  Future<void> _pickPermitFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() => _permitFile = File(result.files.single.path!));
     }
   }
+
+  Future<void> _pickValidId() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (result != null && result.files.single.path != null) {
+      setState(() => _validIdFile = File(result.files.single.path!));
+    }
+  }
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
+
+  Future<void> _submit() async {
+    setState(() {
+      _showErrors = true;
+      _errorMessage = null;
+    });
+
+    if (!_step2Valid) return;
+
+    setState(() => _isLoading = true);
+
+    final result = await _api.register(
+      fullName: _fullNameCtrl.text.trim(),
+      email: _emailCtrl.text.trim(),
+      password: _passwordCtrl.text,
+      businessName: _businessNameCtrl.text.trim(),
+      businessType: _mapBusinessType(_businessType),
+      ownerName: _ownerNameCtrl.text.trim(),
+      totalRooms: int.parse(_totalRoomsCtrl.text.trim()),
+      permitNumber: _permitNumberCtrl.text.trim(),
+      registrationNumber: _registrationCtrl.text.trim(),
+      address: _businessAddrCtrl.text.trim(),
+      contactNumber: _contactNumberCtrl.text.trim(),
+      permitFile: _permitFile!,
+      validIdFile: _validIdFile!,
+    );
+
+    if (!mounted) return;
+
+    setState(() => _isLoading = false);
+
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration submitted! Awaiting approval.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pushReplacementNamed(context, AppRoutes.login);
+    } else {
+      setState(() => _errorMessage = result.error);
+    }
+  }
+
+  BusinessType _mapBusinessType(String type) {
+    switch (type.toLowerCase()) {
+      case 'resort':
+        return BusinessType.resort;
+      case 'inn':
+        return BusinessType.inn;
+      case 'other':
+      case 'pension house':
+        return BusinessType.other;
+      case 'hotel':
+      default:
+        return BusinessType.hotel;
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +225,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 36,
+                ),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight,
-                  ),
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: Column(
@@ -141,9 +242,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: _FormCard(
                             step: _step,
                             showErrors: _showErrors,
+                            isLoading: _isLoading,
+                            errorMessage: _errorMessage,
                             // Step 1
                             fullNameCtrl: _fullNameCtrl,
-                            usernameCtrl: _usernameCtrl,
                             emailCtrl: _emailCtrl,
                             phoneCtrl: _phoneCtrl,
                             passwordCtrl: _passwordCtrl,
@@ -160,6 +262,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             registrationCtrl: _registrationCtrl,
                             businessAddrCtrl: _businessAddrCtrl,
                             contactNumberCtrl: _contactNumberCtrl,
+                            permitFile: _permitFile,
+                            validIdFile: _validIdFile,
+                            onPickPermitFile: _pickPermitFile,
+                            onPickValidId: _pickValidId,
                             onBack: _goBack,
                             onSubmit: _submit,
                           ),
@@ -235,8 +341,9 @@ class _FormCard extends StatelessWidget {
   const _FormCard({
     required this.step,
     required this.showErrors,
+    required this.isLoading,
+    this.errorMessage,
     required this.fullNameCtrl,
-    required this.usernameCtrl,
     required this.emailCtrl,
     required this.phoneCtrl,
     required this.passwordCtrl,
@@ -251,23 +358,26 @@ class _FormCard extends StatelessWidget {
     required this.registrationCtrl,
     required this.businessAddrCtrl,
     required this.contactNumberCtrl,
+    required this.permitFile,
+    required this.validIdFile,
+    required this.onPickPermitFile,
+    required this.onPickValidId,
     required this.onBack,
     required this.onSubmit,
   });
 
   final int step;
   final bool showErrors;
+  final bool isLoading;
+  final String? errorMessage;
 
-  // Step 1
   final TextEditingController fullNameCtrl;
-  final TextEditingController usernameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController passwordCtrl;
   final TextEditingController confirmPassCtrl;
   final VoidCallback onNext;
 
-  // Step 2
   final TextEditingController businessNameCtrl;
   final String businessType;
   final ValueChanged<String?> onBusinessTypeChanged;
@@ -277,6 +387,10 @@ class _FormCard extends StatelessWidget {
   final TextEditingController registrationCtrl;
   final TextEditingController businessAddrCtrl;
   final TextEditingController contactNumberCtrl;
+  final File? permitFile;
+  final File? validIdFile;
+  final VoidCallback onPickPermitFile;
+  final VoidCallback onPickValidId;
   final VoidCallback onBack;
   final VoidCallback onSubmit;
 
@@ -304,16 +418,18 @@ class _FormCard extends StatelessWidget {
           if (step == 1)
             _Step1Form(
               fullNameCtrl: fullNameCtrl,
-              usernameCtrl: usernameCtrl,
               emailCtrl: emailCtrl,
               phoneCtrl: phoneCtrl,
               passwordCtrl: passwordCtrl,
               confirmPassCtrl: confirmPassCtrl,
+              showErrors: showErrors,
               onNext: onNext,
             )
           else
             _Step2Form(
               showErrors: showErrors,
+              isLoading: isLoading,
+              errorMessage: errorMessage,
               businessNameCtrl: businessNameCtrl,
               businessType: businessType,
               onBusinessTypeChanged: onBusinessTypeChanged,
@@ -323,6 +439,10 @@ class _FormCard extends StatelessWidget {
               registrationCtrl: registrationCtrl,
               businessAddrCtrl: businessAddrCtrl,
               contactNumberCtrl: contactNumberCtrl,
+              permitFile: permitFile,
+              validIdFile: validIdFile,
+              onPickPermitFile: onPickPermitFile,
+              onPickValidId: onPickValidId,
               onBack: onBack,
               onSubmit: onSubmit,
             ),
@@ -334,7 +454,8 @@ class _FormCard extends StatelessWidget {
               child: RichText(
                 text: const TextSpan(
                   text: 'Already registered? ',
-                  style: TextStyle(color: AppColors.textSubtle, fontSize: 13),
+                  style:
+                      TextStyle(color: AppColors.textSubtle, fontSize: 13),
                   children: [
                     TextSpan(
                       text: 'Sign in',
@@ -406,12 +527,10 @@ class _StepBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color borderColor = (isActive || isComplete)
-        ? AppColors.primaryCyan
-        : AppColors.cardBorder;
-    final Color textColor = (isActive || isComplete)
-        ? AppColors.textWhite
-        : AppColors.textSubtle;
+    final borderColor =
+        (isActive || isComplete) ? AppColors.primaryCyan : AppColors.cardBorder;
+    final textColor =
+        (isActive || isComplete) ? AppColors.textWhite : AppColors.textSubtle;
 
     return Row(
       children: [
@@ -421,17 +540,10 @@ class _StepBadge extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             border: Border.all(color: borderColor, width: 1.5),
-            color: (isActive || isComplete)
-                ? Colors.transparent
-                : Colors.transparent,
           ),
           child: Center(
             child: isComplete
-                ? const Icon(
-                    Icons.check,
-                    color: AppColors.primaryCyan,
-                    size: 16,
-                  )
+                ? const Icon(Icons.check, color: AppColors.primaryCyan, size: 16)
                 : Text(
                     '$number',
                     style: TextStyle(
@@ -461,72 +573,77 @@ class _StepBadge extends StatelessWidget {
 class _Step1Form extends StatelessWidget {
   const _Step1Form({
     required this.fullNameCtrl,
-    required this.usernameCtrl,
     required this.emailCtrl,
     required this.phoneCtrl,
     required this.passwordCtrl,
     required this.confirmPassCtrl,
+    required this.showErrors,
     required this.onNext,
   });
 
   final TextEditingController fullNameCtrl;
-  final TextEditingController usernameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController passwordCtrl;
   final TextEditingController confirmPassCtrl;
+  final bool showErrors;
   final VoidCallback onNext;
+
+  bool _isEmpty(TextEditingController c) => showErrors && c.text.isEmpty;
+  bool get _passwordMismatch =>
+      showErrors && passwordCtrl.text != confirmPassCtrl.text;
+  bool get _passwordTooShort =>
+      showErrors && passwordCtrl.text.isNotEmpty && passwordCtrl.text.length < 6;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Full Name',
-                child: _Input(controller: fullNameCtrl, hint: 'Maria Santos'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Username',
-                child: _Input(controller: usernameCtrl, hint: 'maria_santos'),
-              ),
-            ),
-          ],
+        _LabeledField(
+          label: 'Full Name',
+          error: _isEmpty(fullNameCtrl) ? 'Required' : null,
+          child: _Input(
+            controller: fullNameCtrl,
+            hint: 'Maria Santos',
+            hasError: _isEmpty(fullNameCtrl),
+          ),
         ),
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Email Address',
+          error: _isEmpty(emailCtrl) ? 'Required' : null,
           child: _Input(
             controller: emailCtrl,
             hint: 'email@example.com',
             keyboardType: TextInputType.emailAddress,
+            hasError: _isEmpty(emailCtrl),
           ),
         ),
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Phone Number',
+          error: _isEmpty(phoneCtrl) ? 'Required' : null,
           child: _Input(
             controller: phoneCtrl,
             hint: '09XX-XXX-XXXX',
             keyboardType: TextInputType.phone,
+            hasError: _isEmpty(phoneCtrl),
           ),
         ),
         const SizedBox(height: 16),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _LabeledField(
                 label: 'Password',
+                error: _passwordTooShort ? 'Min 6 characters' : null,
                 child: _Input(
                   controller: passwordCtrl,
                   hint: 'Min 6 characters',
                   obscure: true,
+                  hasError: _passwordTooShort,
                 ),
               ),
             ),
@@ -534,10 +651,12 @@ class _Step1Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Confirm Password',
+                error: _passwordMismatch ? 'Passwords do not match' : null,
                 child: _Input(
                   controller: confirmPassCtrl,
                   hint: 'Repeat password',
                   obscure: true,
+                  hasError: _passwordMismatch,
                 ),
               ),
             ),
@@ -555,6 +674,8 @@ class _Step1Form extends StatelessWidget {
 class _Step2Form extends StatelessWidget {
   const _Step2Form({
     required this.showErrors,
+    required this.isLoading,
+    this.errorMessage,
     required this.businessNameCtrl,
     required this.businessType,
     required this.onBusinessTypeChanged,
@@ -564,11 +685,17 @@ class _Step2Form extends StatelessWidget {
     required this.registrationCtrl,
     required this.businessAddrCtrl,
     required this.contactNumberCtrl,
+    required this.permitFile,
+    required this.validIdFile,
+    required this.onPickPermitFile,
+    required this.onPickValidId,
     required this.onBack,
     required this.onSubmit,
   });
 
   final bool showErrors;
+  final bool isLoading;
+  final String? errorMessage;
   final TextEditingController businessNameCtrl;
   final String businessType;
   final ValueChanged<String?> onBusinessTypeChanged;
@@ -578,6 +705,10 @@ class _Step2Form extends StatelessWidget {
   final TextEditingController registrationCtrl;
   final TextEditingController businessAddrCtrl;
   final TextEditingController contactNumberCtrl;
+  final File? permitFile;
+  final File? validIdFile;
+  final VoidCallback onPickPermitFile;
+  final VoidCallback onPickValidId;
   final VoidCallback onBack;
   final VoidCallback onSubmit;
 
@@ -610,13 +741,7 @@ class _Step2Form extends StatelessWidget {
                 label: 'Business Type',
                 child: _DropdownField(
                   value: businessType,
-                  items: const [
-                    'Hotel',
-                    'Resort',
-                    'Inn',
-                    'Pension House',
-                    'Other',
-                  ],
+                  items: const ['Hotel', 'Resort', 'Inn', 'Pension House', 'Other'],
                   onChanged: onBusinessTypeChanged,
                 ),
               ),
@@ -704,17 +829,73 @@ class _Step2Form extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        _WarningBanner(),
-        const SizedBox(height: 20),
+
+        // ── File Uploads ─────────────────────────────────────────────────────
+        _LabeledField(
+          label: 'Business Permit',
+          error: showErrors && permitFile == null ? 'Required' : null,
+          child: _FilePicker(
+            label: 'Upload Permit (PDF/Image)',
+            file: permitFile,
+            hasError: showErrors && permitFile == null,
+            onPick: onPickPermitFile,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _LabeledField(
+          label: 'Valid ID',
+          error: showErrors && validIdFile == null ? 'Required' : null,
+          child: _FilePicker(
+            label: "Upload Owner's Valid ID (PDF/Image)",
+            file: validIdFile,
+            hasError: showErrors && validIdFile == null,
+            onPick: onPickValidId,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── Error Message ────────────────────────────────────────────────────
+        if (errorMessage != null) ...[
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: RegisterColors.textRed.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: RegisterColors.textRed.withOpacity(0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline,
+                    color: RegisterColors.textRed, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    errorMessage!,
+                    style: const TextStyle(
+                      color: RegisterColors.textRed,
+                      fontSize: 12.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+
         Row(
           children: [
-            _BackButton(onPressed: onBack),
+            _BackButton(onPressed: isLoading ? () {} : onBack),
             const SizedBox(width: 12),
             Expanded(
-              child: _GradientButton(
-                label: 'Submit Registration',
-                onPressed: onSubmit,
-              ),
+              child: isLoading
+                  ? const _LoadingButton()
+                  : _GradientButton(
+                      label: 'Submit Registration',
+                      onPressed: onSubmit,
+                    ),
             ),
           ],
         ),
@@ -723,38 +904,96 @@ class _Step2Form extends StatelessWidget {
   }
 }
 
-// ─── Warning Banner ───────────────────────────────────────────────────────────
+// ─── File Picker Widget ───────────────────────────────────────────────────────
 
-class _WarningBanner extends StatelessWidget {
+class _FilePicker extends StatelessWidget {
+  const _FilePicker({
+    required this.label,
+    required this.file,
+    required this.hasError,
+    required this.onPick,
+  });
+
+  final String label;
+  final File? file;
+  final bool hasError;
+  final VoidCallback onPick;
+
+  String get _fileName => file!.path.split('/').last;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor =
+        hasError ? RegisterColors.textRed : AppColors.inputBorder;
+
+    return GestureDetector(
+      onTap: onPick,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppColors.inputBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              file != null ? Icons.check_circle : Icons.upload_file_rounded,
+              color: file != null ? AppColors.primaryCyan : AppColors.textGray,
+              size: 18,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                file != null ? _fileName : label,
+                style: TextStyle(
+                  color: file != null
+                      ? AppColors.textWhite
+                      : AppColors.textSubtle,
+                  fontSize: 13,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              file != null ? 'Change' : 'Browse',
+              style: const TextStyle(
+                color: AppColors.primaryCyan,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Loading Button ───────────────────────────────────────────────────────────
+
+class _LoadingButton extends StatelessWidget {
+  const _LoadingButton();
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      height: 48,
       decoration: BoxDecoration(
-        color: RegisterColors.warningBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: RegisterColors.warningText.withOpacity(0.3)),
+        gradient: const LinearGradient(
+          colors: [AppColors.gradientStart, AppColors.gradientEnd],
+        ),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
-          Icon(
-            Icons.info_outline_rounded,
-            color: RegisterColors.warningText,
-            size: 16,
+      child: const Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2,
           ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Business documents (permit, valid ID) should be uploaded after account approval. Please prepare these documents.',
-              style: TextStyle(
-                color: RegisterColors.warningText,
-                fontSize: 12.5,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -763,7 +1002,11 @@ class _WarningBanner extends StatelessWidget {
 // ─── Reusable Widgets ─────────────────────────────────────────────────────────
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child, this.error});
+  const _LabeledField({
+    required this.label,
+    required this.child,
+    this.error,
+  });
 
   final String label;
   final Widget child;
@@ -788,7 +1031,10 @@ class _LabeledField extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             error!,
-            style: const TextStyle(color: RegisterColors.textRed, fontSize: 11.5),
+            style: const TextStyle(
+              color: RegisterColors.textRed,
+              fontSize: 11.5,
+            ),
           ),
         ],
       ],
@@ -813,7 +1059,8 @@ class _Input extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError ? RegisterColors.textRed : AppColors.inputBorder;
+    final borderColor =
+        hasError ? RegisterColors.textRed : AppColors.inputBorder;
     return TextField(
       controller: controller,
       obscureText: obscure,
@@ -821,7 +1068,8 @@ class _Input extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+        hintStyle:
+            const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
         filled: true,
         fillColor: AppColors.inputBackground,
         isDense: true,
@@ -875,7 +1123,8 @@ class _DropdownField extends StatelessWidget {
           isExpanded: true,
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
-          style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+          style:
+              const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
           items: items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
