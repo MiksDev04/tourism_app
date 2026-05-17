@@ -9,8 +9,9 @@ part of 'schema.g.dart';
 
 // The migration version must **always** mirror the file name
 
-const List<MigrationCommand> _migration_20260511141400_up = [
+const List<MigrationCommand> _migration_20260517022711_up = [
   InsertTable('Business'),
+  InsertTable('Profile'),
   InsertColumn('id', Column.varchar, onTable: 'Business', unique: true),
   InsertForeignKey('Business', 'Profile', foreignKeyColumn: 'profile_Profile_brick_id', onDeleteCascade: false, onDeleteSetDefault: false),
   InsertColumn('business_name', Column.varchar, onTable: 'Business'),
@@ -26,12 +27,19 @@ const List<MigrationCommand> _migration_20260511141400_up = [
   InsertColumn('remarks', Column.varchar, onTable: 'Business'),
   InsertColumn('created_at', Column.varchar, onTable: 'Business'),
   InsertColumn('updated_at', Column.varchar, onTable: 'Business'),
-  InsertColumn('deleted_at', Column.varchar, onTable: 'Business'),
-  CreateIndex(columns: ['id'], onTable: 'Business', unique: true)
+  InsertColumn('id', Column.varchar, onTable: 'Profile', unique: true),
+  InsertColumn('full_name', Column.varchar, onTable: 'Profile'),
+  InsertColumn('phone', Column.varchar, onTable: 'Profile'),
+  InsertColumn('role', Column.integer, onTable: 'Profile'),
+  InsertColumn('created_at', Column.varchar, onTable: 'Profile'),
+  InsertColumn('updated_at', Column.varchar, onTable: 'Profile'),
+  CreateIndex(columns: ['id'], onTable: 'Business', unique: true),
+  CreateIndex(columns: ['id'], onTable: 'Profile', unique: true)
 ];
 
-const List<MigrationCommand> _migration_20260511141400_down = [
+const List<MigrationCommand> _migration_20260517022711_down = [
   DropTable('Business'),
+  DropTable('Profile'),
   DropColumn('id', onTable: 'Business'),
   DropColumn('profile_Profile_brick_id', onTable: 'Business'),
   DropColumn('business_name', onTable: 'Business'),
@@ -47,8 +55,14 @@ const List<MigrationCommand> _migration_20260511141400_down = [
   DropColumn('remarks', onTable: 'Business'),
   DropColumn('created_at', onTable: 'Business'),
   DropColumn('updated_at', onTable: 'Business'),
-  DropColumn('deleted_at', onTable: 'Business'),
-  DropIndex('index_Business_on_id')
+  DropColumn('id', onTable: 'Profile'),
+  DropColumn('full_name', onTable: 'Profile'),
+  DropColumn('phone', onTable: 'Profile'),
+  DropColumn('role', onTable: 'Profile'),
+  DropColumn('created_at', onTable: 'Profile'),
+  DropColumn('updated_at', onTable: 'Profile'),
+  DropIndex('index_Business_on_id'),
+  DropIndex('index_Profile_on_id')
 ];
 
 //
@@ -56,15 +70,15 @@ const List<MigrationCommand> _migration_20260511141400_down = [
 //
 
 @Migratable(
-  version: '20260511141400',
-  up: _migration_20260511141400_up,
-  down: _migration_20260511141400_down,
+  version: '20260517022711',
+  up: _migration_20260517022711_up,
+  down: _migration_20260517022711_down,
 )
-class Migration20260511141400 extends Migration {
-  const Migration20260511141400()
+class Migration20260517022711 extends Migration {
+  const Migration20260517022711()
     : super(
-        version: 20260511141400,
-        up: _migration_20260511141400_up,
-        down: _migration_20260511141400_down,
+        version: 20260517022711,
+        up: _migration_20260517022711_up,
+        down: _migration_20260517022711_down,
       );
 }

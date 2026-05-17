@@ -3,15 +3,13 @@ import 'package:brick_core/query.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_sqlite/db.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
-import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
-// ignore: unused_import, unused_shown_name, unnecessary_import
-import 'package:tourism_app/models/profile.model.dart';
-// ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_offline_first_with_supabase/brick_offline_first_with_supabase.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_sqlite/brick_sqlite.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:brick_supabase/brick_supabase.dart';
+// ignore: unused_import, unused_shown_name, unnecessary_import
+import 'package:tourism_app/brick/models/profile.model.dart';
 // ignore: unused_import, unused_shown_name, unnecessary_import
 import 'package:uuid/uuid.dart';// GENERATED CODE DO NOT EDIT
 // ignore: unused_import
@@ -23,8 +21,8 @@ import 'package:brick_offline_first/brick_offline_first.dart' show RuntimeOfflin
 // ignore: unused_import, unused_shown_name
 import 'package:sqflite_common/sqlite_api.dart' show DatabaseExecutor;
 
-import '../models/business.model.dart';
-import '../models/profile.model.dart';
+import '../brick/models/business.model.dart';
+import '../brick/models/profile.model.dart';
 
 part 'adapters/business_adapter.g.dart';
 part 'adapters/profile_adapter.g.dart';

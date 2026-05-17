@@ -1,28 +1,27 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tourism_app/brick/models/business.model.dart';
+import 'package:tourism_app/brick/models/profile.model.dart';
 import 'package:tourism_app/brick/repository.dart';
-import 'package:tourism_app/models/business.model.dart';
-import 'package:tourism_app/models/profile.model.dart';
+import 'package:uuid/uuid.dart';
 
 class RegisterResult {
   final bool success;
   final String? error;
 
-  const RegisterResult({required this.success, this.error});
+  const RegisterResult.ok() : success = true, error = null;
+  const RegisterResult.err(this.error) : success = false;
 }
 
 class RegisterApi {
   final _supabase = Supabase.instance.client;
-  final _storage = Supabase.instance.client.storage;
-
-  static const _bucket = 'business-documents';
 
   Future<RegisterResult> register({
-    // Step 1 — Account
     required String fullName,
     required String email,
     required String password,
-    // Step 2 — Business
+    required String phoneNumber,
     required String businessName,
     required BusinessType businessType,
     required String ownerName,
@@ -30,56 +29,88 @@ class RegisterApi {
     required String permitNumber,
     required String registrationNumber,
     required String address,
-    required String contactNumber,
     required File permitFile,
     required File validIdFile,
   }) async {
     try {
-      // ── 1. Create auth user ──────────────────────────────────────────────
+      // ── 1. Validate inputs before any network call ─────────────────────
+      final validationError = _validate(
+        fullName: fullName,
+        email: email,
+        phoneNumber: phoneNumber,
+        businessName: businessName,
+        ownerName: ownerName,
+        totalRooms: totalRooms,
+        permitNumber: permitNumber,
+        registrationNumber: registrationNumber,
+        address: address,
+      );
+      if (validationError != null) return RegisterResult.err(validationError);
+
+      // ── 2. Sign up via Supabase Auth ───────────────────────────────────
       final authResponse = await _supabase.auth.signUp(
         email: email,
         password: password,
-        data: {
-          'full_name': fullName,
-          'contact_number': contactNumber, // store here instead
-        },
+        data: {'full_name': fullName, 'phone': phoneNumber},
       );
 
       final authUser = authResponse.user;
       if (authUser == null) {
-        return const RegisterResult(
-          success: false,
-          error: 'Registration failed. Please try again.',
+        return const RegisterResult.err(
+          'Registration failed. Please try again.',
         );
       }
 
-      final userId = authUser.id;
-      final now = DateTime.now().toIso8601String();
-
-      // ── 2. Upload files ──────────────────────────────────────────────────
-      final permitFileUrl = await _uploadFile(
+      // ── 3. Upload files to Supabase Storage ────────────────────────────
+      final permitUrl = await _uploadFile(
         file: permitFile,
-        path: 'permits/$userId/${_fileName(permitFile)}',
+        bucket: 'business-permits',
+        userId: authUser.id,
+        label: 'permit',
       );
+      if (permitUrl == null) {
+        return const RegisterResult.err('Failed to upload business permit.');
+      }
 
       final validIdUrl = await _uploadFile(
         file: validIdFile,
-        path: 'valid-ids/$userId/${_fileName(validIdFile)}',
+        bucket: 'valid-ids',
+        userId: authUser.id,
+        label: 'valid_id',
       );
+      if (validIdUrl == null) {
+        return const RegisterResult.err("Failed to upload owner's valid ID.");
+      }
 
-      // ── 3. Create Profile ────────────────────────────────────────────────
+      // ── 4. Upsert Profile via Brick (offline-first, auto-syncs) ────────
       final profile = Profile(
-        id: userId, // matches auth.users id
+        id: authUser.id, // must match auth.users(id)
         fullName: fullName,
-        role: 'business',
-        createdAt: now,
-        updatedAt: now,
+        phone: phoneNumber,
+        role: Role.business,
       );
-
       await Repository().upsert<Profile>(profile);
 
-      // ── 4. Create Business ───────────────────────────────────────────────
+      // ── 5. Insert Business directly via Supabase (Brick FK serialization workaround) ──
+      final businessId = const Uuid().v4();
+      await _supabase.from('businesses').insert({
+        'id': businessId,
+        'profile_id': profile.id,
+        'business_name': businessName,
+        'business_type': businessType.name,
+        'owner_name': ownerName,
+        'total_rooms': totalRooms,
+        'permit_number': permitNumber,
+        'registration_number': registrationNumber,
+        'address': address,
+        'permit_file_url': permitUrl,
+        'valid_id_url': validIdUrl,
+        'status': 'pending',
+      });
+
+      // ── 6. Save Business to SQLite only (for offline dashboard use) ────
       final business = Business(
+        id: businessId,
         profile: profile,
         businessName: businessName,
         businessType: businessType,
@@ -88,62 +119,91 @@ class RegisterApi {
         permitNumber: permitNumber,
         registrationNumber: registrationNumber,
         address: address,
-        permitFileUrl: permitFileUrl,
+        permitFileUrl: permitUrl,
         validIdUrl: validIdUrl,
         status: BusinessStatus.pending,
-        createdAt: now,
-        updatedAt: now,
       );
 
-      await Repository().upsert<Business>(business);
+      await Repository().sqliteProvider.upsert<Business>(
+        business,
+        repository: Repository(),
+      );
+      debugPrint('✅ Business saved to SQLite only (no remote sync)');
 
-      return const RegisterResult(success: true);
+      return const RegisterResult.ok();
     } on AuthException catch (e) {
-      return RegisterResult(success: false, error: e.message);
-    } on StorageException catch (e) {
-      return RegisterResult(
-        success: false,
-        error: 'File upload failed: ${e.message}',
-      );
+      return RegisterResult.err(_friendlyAuthError(e.message));
     } catch (e) {
-      return RegisterResult(success: false, error: e.toString());
+      return RegisterResult.err('An unexpected error occurred: $e');
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── File upload helper ───────────────────────────────────────────────────
 
-  Future<String> _uploadFile({required File file, required String path}) async {
-    final bytes = await file.readAsBytes();
-    final mimeType = _mimeType(file.path.split('.').last);
+  Future<String?> _uploadFile({
+    required File file,
+    required String bucket,
+    required String userId,
+    required String label,
+  }) async {
+    try {
+      final ext = file.path.split('.').last;
+      final path =
+          '$userId/${label}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-    await _storage
-        .from(_bucket)
-        .uploadBinary(
-          path,
-          bytes,
-          fileOptions: FileOptions(contentType: mimeType, upsert: true),
-        );
+      await _supabase.storage
+          .from(bucket)
+          .upload(path, file, fileOptions: const FileOptions(upsert: true));
 
-    return _storage.from(_bucket).getPublicUrl(path);
-  }
-
-  String _fileName(File file) {
-    final ext = file.path.split('.').last;
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    return '$timestamp.$ext';
-  }
-
-  String _mimeType(String ext) {
-    switch (ext.toLowerCase()) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      default:
-        return 'application/octet-stream';
+      return _supabase.storage.from(bucket).getPublicUrl(path);
+    } catch (e) {
+      debugPrint('❌ Upload failed [$bucket/$label]: $e'); // ← add this
+      return null;
     }
+  }
+
+  // ── Field-level validation (mirrors _V in register_page.dart) ───────────
+
+  String? _validate({
+    required String fullName,
+    required String email,
+    required String phoneNumber,
+    required String businessName,
+    required String ownerName,
+    required int totalRooms,
+    required String permitNumber,
+    required String registrationNumber,
+    required String address,
+  }) {
+    final emailRe = RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
+    final phoneRe = RegExp(r'^(09|\+639)\d{9}$');
+    final strippedPhone = phoneNumber.replaceAll(RegExp(r'[-\s]'), '');
+
+    if (fullName.trim().isEmpty) return 'Full name is required.';
+    if (!emailRe.hasMatch(email.trim())) return 'Enter a valid email address.';
+    if (!phoneRe.hasMatch(strippedPhone)) return 'Invalid phone number format.';
+    if (businessName.trim().isEmpty) return 'Business name is required.';
+    if (ownerName.trim().isEmpty) return 'Owner name is required.';
+    if (totalRooms <= 0) return 'Total rooms must be at least 1.';
+    if (permitNumber.trim().isEmpty) return 'Permit number is required.';
+    if (registrationNumber.trim().isEmpty)
+      return 'Registration number is required.';
+    if (address.trim().isEmpty) return 'Business address is required.';
+    return null;
+  }
+
+  // ── Human-readable Supabase Auth errors ─────────────────────────────────
+
+  String _friendlyAuthError(String message) {
+    final m = message.toLowerCase();
+    if (m.contains('already registered') ||
+        m.contains('already been registered')) {
+      return 'An account with this email already exists.';
+    }
+    if (m.contains('invalid email'))
+      return 'Please enter a valid email address.';
+    if (m.contains('password'))
+      return 'Password must be at least 6 characters.';
+    return message;
   }
 }

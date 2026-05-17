@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:tourism_app/api/register_api.dart';
-import 'package:tourism_app/models/business.model.dart';
+import 'package:tourism_app/brick/models/business.model.dart';
 import 'package:tourism_app/router/app_router.dart';
 import 'package:tourism_app/core/constants/app_colors.dart';
 
@@ -19,10 +20,72 @@ class RegisterPage extends StatelessWidget {
 
 class RegisterColors {
   RegisterColors._();
-
   static const textRed = Color(0xFFFF4D6A);
-  static const warningBg = Color(0xFF1A1200);
-  static const warningText = Color(0xFFFFB020);
+}
+
+// ─── Validators ───────────────────────────────────────────────────────────────
+
+class _V {
+  _V._();
+
+  static final _emailRe = RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
+  static final _phoneRe = RegExp(r'^(09|\+639)\d{9}$');
+
+  static String? fullName(String v) =>
+      v.trim().isEmpty ? 'Full name is required' : null;
+
+  static String? email(String v) {
+    v = v.trim();
+    if (v.isEmpty) return 'Email is required';
+    if (!_emailRe.hasMatch(v)) return 'Enter a valid email address';
+    return null;
+  }
+
+  static String? phone(String v) {
+    final stripped = v.trim().replaceAll(RegExp(r'[-\s]'), '');
+    if (stripped.isEmpty) return 'Phone number is required';
+    if (!_phoneRe.hasMatch(stripped)) {
+      return 'Use format 09XX-XXX-XXXX or +639XXXXXXXXX';
+    }
+    return null;
+  }
+
+  static String? password(String v) {
+    if (v.isEmpty) return 'Password is required';
+    if (v.length < 6) return 'Minimum 6 characters';
+    return null;
+  }
+
+  static String? confirmPassword(String v, String password) {
+    if (v.isEmpty) return 'Please confirm your password';
+    if (v != password) return 'Passwords do not match';
+    return null;
+  }
+
+  static String? businessName(String v) =>
+      v.trim().isEmpty ? 'Business name is required' : null;
+
+  static String? ownerName(String v) =>
+      v.trim().isEmpty ? 'Owner name is required' : null;
+
+  static String? totalRooms(String v) {
+    final n = int.tryParse(v.trim());
+    if (n == null) return 'Enter a valid number';
+    if (n <= 0) return 'Must be at least 1';
+    return null;
+  }
+
+  static String? permitNumber(String v) =>
+      v.trim().isEmpty ? 'Permit number is required' : null;
+
+  static String? registrationNumber(String v) =>
+      v.trim().isEmpty ? 'Registration number is required' : null;
+
+  static String? address(String v) =>
+      v.trim().isEmpty ? 'Business address is required' : null;
+
+  static String? file(File? f) =>
+      f == null ? 'Please upload the required file' : null;
 }
 
 // ─── Register Screen ──────────────────────────────────────────────────────────
@@ -35,37 +98,54 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  // ── Connectivity ───────────────────────────────────────────────────────────
+  bool _isOnline = true;
+  bool _checkingConnection = true;
+  Timer? _connectivityTimer;
+
+  // ── Form state ─────────────────────────────────────────────────────────────
   int _step = 1;
   bool _isLoading = false;
   String? _errorMessage;
 
-  // Step 1 controllers
+  // Step 1
   final _fullNameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
-  // Step 2 controllers
+  // Step 2
   final _businessNameCtrl = TextEditingController();
   final _ownerNameCtrl = TextEditingController();
   final _totalRoomsCtrl = TextEditingController();
   final _permitNumberCtrl = TextEditingController();
   final _registrationCtrl = TextEditingController();
   final _businessAddrCtrl = TextEditingController();
-  final _contactNumberCtrl = TextEditingController();
   String _businessType = 'Hotel';
 
-  // File uploads
   File? _permitFile;
   File? _validIdFile;
-
   bool _showErrors = false;
 
   final _api = RegisterApi();
 
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectivity();
+    // Re-check every 3 seconds so the overlay auto-dismisses when reconnected
+    _connectivityTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _checkConnectivity(),
+    );
+  }
+
   @override
   void dispose() {
+    _connectivityTimer?.cancel();
     for (final c in [
       _fullNameCtrl,
       _emailCtrl,
@@ -78,23 +158,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _permitNumberCtrl,
       _registrationCtrl,
       _businessAddrCtrl,
-      _contactNumberCtrl,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
 
-  // ── Step 1 validation ──────────────────────────────────────────────────────
-
-  bool get _step1Valid {
-    return _fullNameCtrl.text.isNotEmpty &&
-        _emailCtrl.text.isNotEmpty &&
-        _emailCtrl.text.contains('@') &&
-        _phoneCtrl.text.isNotEmpty &&
-        _passwordCtrl.text.length >= 6 &&
-        _passwordCtrl.text == _confirmPassCtrl.text;
+  Future<void> _checkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup(
+        'google.com',
+      ).timeout(const Duration(seconds: 3));
+      final online = result.isNotEmpty && result.first.rawAddress.isNotEmpty;
+      if (mounted) {
+        setState(() {
+          _isOnline = online;
+          _checkingConnection = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _isOnline = false;
+          _checkingConnection = false;
+        });
+      }
+    }
   }
+
+  // ── Step 1 ─────────────────────────────────────────────────────────────────
+
+  bool get _step1Valid =>
+      _V.fullName(_fullNameCtrl.text) == null &&
+      _V.email(_emailCtrl.text) == null &&
+      _V.phone(_phoneCtrl.text) == null &&
+      _V.password(_passwordCtrl.text) == null &&
+      _V.confirmPassword(_confirmPassCtrl.text, _passwordCtrl.text) == null;
 
   void _goNext() {
     setState(() => _showErrors = true);
@@ -107,26 +206,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _goBack() => setState(() {
-        _step = 1;
-        _showErrors = false;
-        _errorMessage = null;
-      });
+    _step = 1;
+    _showErrors = false;
+    _errorMessage = null;
+  });
 
-  // ── Step 2 validation ──────────────────────────────────────────────────────
+  // ── Step 2 ─────────────────────────────────────────────────────────────────
 
-  bool get _step2Valid {
-    return _businessNameCtrl.text.isNotEmpty &&
-        _ownerNameCtrl.text.isNotEmpty &&
-        int.tryParse(_totalRoomsCtrl.text) != null &&
-        _permitNumberCtrl.text.isNotEmpty &&
-        _registrationCtrl.text.isNotEmpty &&
-        _businessAddrCtrl.text.isNotEmpty &&
-        _contactNumberCtrl.text.isNotEmpty &&
-        _permitFile != null &&
-        _validIdFile != null;
-  }
-
-  // ── File picking ───────────────────────────────────────────────────────────
+  bool get _step2Valid =>
+      _V.businessName(_businessNameCtrl.text) == null &&
+      _V.ownerName(_ownerNameCtrl.text) == null &&
+      _V.totalRooms(_totalRoomsCtrl.text) == null &&
+      _V.permitNumber(_permitNumberCtrl.text) == null &&
+      _V.registrationNumber(_registrationCtrl.text) == null &&
+      _V.address(_businessAddrCtrl.text) == null &&
+      _V.file(_permitFile) == null &&
+      _V.file(_validIdFile) == null;
 
   Future<void> _pickPermitFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -148,14 +243,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
-
   Future<void> _submit() async {
     setState(() {
       _showErrors = true;
       _errorMessage = null;
     });
-
     if (!_step2Valid) return;
 
     setState(() => _isLoading = true);
@@ -164,6 +256,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       fullName: _fullNameCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
       password: _passwordCtrl.text,
+      phoneNumber: _phoneCtrl.text.trim(),
       businessName: _businessNameCtrl.text.trim(),
       businessType: _mapBusinessType(_businessType),
       ownerName: _ownerNameCtrl.text.trim(),
@@ -171,19 +264,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
       permitNumber: _permitNumberCtrl.text.trim(),
       registrationNumber: _registrationCtrl.text.trim(),
       address: _businessAddrCtrl.text.trim(),
-      contactNumber: _contactNumberCtrl.text.trim(),
       permitFile: _permitFile!,
       validIdFile: _validIdFile!,
     );
 
     if (!mounted) return;
-
     setState(() => _isLoading = false);
 
     if (result.success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Registration submitted! Awaiting approval.'),
+          content: Text('Registration submitted! Awaiting admin approval.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -199,8 +290,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return BusinessType.resort;
       case 'inn':
         return BusinessType.inn;
-      case 'other':
       case 'pension house':
+      case 'other':
         return BusinessType.other;
       case 'hotel':
       default:
@@ -212,8 +303,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
+    // Show a plain spinner on the very first connectivity check
+    if (_checkingConnection) {
+      return Container(
         decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(0.0, -0.3),
@@ -221,61 +313,162 @@ class _RegisterScreenState extends State<RegisterScreen> {
             colors: [AppColors.activeNavBg, AppColors.backgroundDark],
           ),
         ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 36,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Align(
-                    alignment: Alignment.topCenter,
-                    child: Column(
-                      children: [
-                        const _AppHeader(),
-                        const SizedBox(height: 28),
-                        ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 500),
-                          child: _FormCard(
-                            step: _step,
-                            showErrors: _showErrors,
-                            isLoading: _isLoading,
-                            errorMessage: _errorMessage,
-                            // Step 1
-                            fullNameCtrl: _fullNameCtrl,
-                            emailCtrl: _emailCtrl,
-                            phoneCtrl: _phoneCtrl,
-                            passwordCtrl: _passwordCtrl,
-                            confirmPassCtrl: _confirmPassCtrl,
-                            onNext: _goNext,
-                            // Step 2
-                            businessNameCtrl: _businessNameCtrl,
-                            businessType: _businessType,
-                            onBusinessTypeChanged: (v) =>
-                                setState(() => _businessType = v!),
-                            ownerNameCtrl: _ownerNameCtrl,
-                            totalRoomsCtrl: _totalRoomsCtrl,
-                            permitNumberCtrl: _permitNumberCtrl,
-                            registrationCtrl: _registrationCtrl,
-                            businessAddrCtrl: _businessAddrCtrl,
-                            contactNumberCtrl: _contactNumberCtrl,
-                            permitFile: _permitFile,
-                            validIdFile: _validIdFile,
-                            onPickPermitFile: _pickPermitFile,
-                            onPickValidId: _pickValidId,
-                            onBack: _goBack,
-                            onSubmit: _submit,
-                          ),
+        child: const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryCyan),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        // ── The actual page (always rendered) ─────────────────────────────
+        _buildPage(),
+
+        // ── Offline blocking overlay ───────────────────────────────────────
+        if (!_isOnline) _buildOfflineOverlay(),
+      ],
+    );
+  }
+
+  Widget _buildPage() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(0.0, -0.3),
+          radius: 1.2,
+          colors: [AppColors.activeNavBg, AppColors.backgroundDark],
+        ),
+      ),
+      child: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Column(
+                    children: [
+                      const _AppHeader(),
+                      const SizedBox(height: 28),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 500),
+                        child: _FormCard(
+                          step: _step,
+                          showErrors: _showErrors,
+                          isLoading: _isLoading,
+                          errorMessage: _errorMessage,
+                          fullNameCtrl: _fullNameCtrl,
+                          emailCtrl: _emailCtrl,
+                          phoneCtrl: _phoneCtrl,
+                          passwordCtrl: _passwordCtrl,
+                          confirmPassCtrl: _confirmPassCtrl,
+                          onNext: _goNext,
+                          businessNameCtrl: _businessNameCtrl,
+                          businessType: _businessType,
+                          onBusinessTypeChanged: (v) =>
+                              setState(() => _businessType = v!),
+                          ownerNameCtrl: _ownerNameCtrl,
+                          totalRoomsCtrl: _totalRoomsCtrl,
+                          permitNumberCtrl: _permitNumberCtrl,
+                          registrationCtrl: _registrationCtrl,
+                          businessAddrCtrl: _businessAddrCtrl,
+                          permitFile: _permitFile,
+                          validIdFile: _validIdFile,
+                          onPickPermitFile: _pickPermitFile,
+                          onPickValidId: _pickValidId,
+                          onBack: _goBack,
+                          onSubmit: _submit,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOfflineOverlay() {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withOpacity(0.75),
+        child: Center(
+          child: Container(
+            width: 340, // ← fixed width, won't stretch on desktop
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: RegisterColors.textRed.withOpacity(0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.wifi_off_rounded,
+                    size: 28,
+                    color: RegisterColors.textRed,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'No Internet Connection',
+                  style: TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'An internet connection is required to register your accommodation establishment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 12,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _HoverButton(
+                  label: 'Try Again',
+                  icon: Icons.refresh_rounded,
+                  onPressed: _checkConnectivity,
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () =>
+                      Navigator.pushReplacementNamed(context, AppRoutes.login),
+                  child: const Text(
+                    'Back to Sign In',
+                    style: TextStyle(
+                      color: AppColors.primaryCyan,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              );
-            },
+              ],
+            ),
           ),
         ),
       ),
@@ -357,7 +550,6 @@ class _FormCard extends StatelessWidget {
     required this.permitNumberCtrl,
     required this.registrationCtrl,
     required this.businessAddrCtrl,
-    required this.contactNumberCtrl,
     required this.permitFile,
     required this.validIdFile,
     required this.onPickPermitFile,
@@ -370,14 +562,12 @@ class _FormCard extends StatelessWidget {
   final bool showErrors;
   final bool isLoading;
   final String? errorMessage;
-
   final TextEditingController fullNameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController passwordCtrl;
   final TextEditingController confirmPassCtrl;
   final VoidCallback onNext;
-
   final TextEditingController businessNameCtrl;
   final String businessType;
   final ValueChanged<String?> onBusinessTypeChanged;
@@ -386,7 +576,6 @@ class _FormCard extends StatelessWidget {
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
   final TextEditingController businessAddrCtrl;
-  final TextEditingController contactNumberCtrl;
   final File? permitFile;
   final File? validIdFile;
   final VoidCallback onPickPermitFile;
@@ -438,7 +627,6 @@ class _FormCard extends StatelessWidget {
               permitNumberCtrl: permitNumberCtrl,
               registrationCtrl: registrationCtrl,
               businessAddrCtrl: businessAddrCtrl,
-              contactNumberCtrl: contactNumberCtrl,
               permitFile: permitFile,
               validIdFile: validIdFile,
               onPickPermitFile: onPickPermitFile,
@@ -454,8 +642,7 @@ class _FormCard extends StatelessWidget {
               child: RichText(
                 text: const TextSpan(
                   text: 'Already registered? ',
-                  style:
-                      TextStyle(color: AppColors.textSubtle, fontSize: 13),
+                  style: TextStyle(color: AppColors.textSubtle, fontSize: 13),
                   children: [
                     TextSpan(
                       text: 'Sign in',
@@ -479,7 +666,6 @@ class _FormCard extends StatelessWidget {
 
 class _StepIndicator extends StatelessWidget {
   const _StepIndicator({required this.currentStep});
-
   final int currentStep;
 
   @override
@@ -527,10 +713,12 @@ class _StepBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        (isActive || isComplete) ? AppColors.primaryCyan : AppColors.cardBorder;
-    final textColor =
-        (isActive || isComplete) ? AppColors.textWhite : AppColors.textSubtle;
+    final borderColor = (isActive || isComplete)
+        ? AppColors.primaryCyan
+        : AppColors.cardBorder;
+    final textColor = (isActive || isComplete)
+        ? AppColors.textWhite
+        : AppColors.textSubtle;
 
     return Row(
       children: [
@@ -543,7 +731,11 @@ class _StepBadge extends StatelessWidget {
           ),
           child: Center(
             child: isComplete
-                ? const Icon(Icons.check, color: AppColors.primaryCyan, size: 16)
+                ? const Icon(
+                    Icons.check,
+                    color: AppColors.primaryCyan,
+                    size: 16,
+                  )
                 : Text(
                     '$number',
                     style: TextStyle(
@@ -570,7 +762,7 @@ class _StepBadge extends StatelessWidget {
 
 // ─── Step 1 Form ──────────────────────────────────────────────────────────────
 
-class _Step1Form extends StatelessWidget {
+class _Step1Form extends StatefulWidget {
   const _Step1Form({
     required this.fullNameCtrl,
     required this.emailCtrl,
@@ -589,11 +781,15 @@ class _Step1Form extends StatelessWidget {
   final bool showErrors;
   final VoidCallback onNext;
 
-  bool _isEmpty(TextEditingController c) => showErrors && c.text.isEmpty;
-  bool get _passwordMismatch =>
-      showErrors && passwordCtrl.text != confirmPassCtrl.text;
-  bool get _passwordTooShort =>
-      showErrors && passwordCtrl.text.isNotEmpty && passwordCtrl.text.length < 6;
+  @override
+  State<_Step1Form> createState() => _Step1FormState();
+}
+
+class _Step1FormState extends State<_Step1Form> {
+  final _touched = <String>{};
+
+  void _touch(String field) => setState(() => _touched.add(field));
+  bool _show(String f) => _touched.contains(f) || widget.showErrors;
 
   @override
   Widget build(BuildContext context) {
@@ -602,33 +798,40 @@ class _Step1Form extends StatelessWidget {
       children: [
         _LabeledField(
           label: 'Full Name',
-          error: _isEmpty(fullNameCtrl) ? 'Required' : null,
+          error: _show('fullName')
+              ? _V.fullName(widget.fullNameCtrl.text)
+              : null,
           child: _Input(
-            controller: fullNameCtrl,
+            controller: widget.fullNameCtrl,
             hint: 'Maria Santos',
-            hasError: _isEmpty(fullNameCtrl),
+            hasError:
+                _show('fullName') &&
+                _V.fullName(widget.fullNameCtrl.text) != null,
+            onChanged: (_) => _touch('fullName'),
           ),
         ),
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Email Address',
-          error: _isEmpty(emailCtrl) ? 'Required' : null,
+          error: _show('email') ? _V.email(widget.emailCtrl.text) : null,
           child: _Input(
-            controller: emailCtrl,
+            controller: widget.emailCtrl,
             hint: 'email@example.com',
             keyboardType: TextInputType.emailAddress,
-            hasError: _isEmpty(emailCtrl),
+            hasError: _show('email') && _V.email(widget.emailCtrl.text) != null,
+            onChanged: (_) => _touch('email'),
           ),
         ),
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Phone Number',
-          error: _isEmpty(phoneCtrl) ? 'Required' : null,
+          error: _show('phone') ? _V.phone(widget.phoneCtrl.text) : null,
           child: _Input(
-            controller: phoneCtrl,
+            controller: widget.phoneCtrl,
             hint: '09XX-XXX-XXXX',
             keyboardType: TextInputType.phone,
-            hasError: _isEmpty(phoneCtrl),
+            hasError: _show('phone') && _V.phone(widget.phoneCtrl.text) != null,
+            onChanged: (_) => _touch('phone'),
           ),
         ),
         const SizedBox(height: 16),
@@ -638,12 +841,17 @@ class _Step1Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Password',
-                error: _passwordTooShort ? 'Min 6 characters' : null,
+                error: _show('password')
+                    ? _V.password(widget.passwordCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: passwordCtrl,
+                  controller: widget.passwordCtrl,
                   hint: 'Min 6 characters',
                   obscure: true,
-                  hasError: _passwordTooShort,
+                  hasError:
+                      _show('password') &&
+                      _V.password(widget.passwordCtrl.text) != null,
+                  onChanged: (_) => _touch('password'),
                 ),
               ),
             ),
@@ -651,19 +859,34 @@ class _Step1Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Confirm Password',
-                error: _passwordMismatch ? 'Passwords do not match' : null,
+                error: _show('confirmPass')
+                    ? _V.confirmPassword(
+                        widget.confirmPassCtrl.text,
+                        widget.passwordCtrl.text,
+                      )
+                    : null,
                 child: _Input(
-                  controller: confirmPassCtrl,
+                  controller: widget.confirmPassCtrl,
                   hint: 'Repeat password',
                   obscure: true,
-                  hasError: _passwordMismatch,
+                  hasError:
+                      _show('confirmPass') &&
+                      _V.confirmPassword(
+                            widget.confirmPassCtrl.text,
+                            widget.passwordCtrl.text,
+                          ) !=
+                          null,
+                  onChanged: (_) => _touch('confirmPass'),
                 ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 22),
-        _GradientButton(label: 'Next: Business Details →', onPressed: onNext),
+        _GradientButton(
+          label: 'Next: Business Details →',
+          onPressed: widget.onNext,
+        ),
       ],
     );
   }
@@ -671,7 +894,7 @@ class _Step1Form extends StatelessWidget {
 
 // ─── Step 2 Form ──────────────────────────────────────────────────────────────
 
-class _Step2Form extends StatelessWidget {
+class _Step2Form extends StatefulWidget {
   const _Step2Form({
     required this.showErrors,
     required this.isLoading,
@@ -684,7 +907,6 @@ class _Step2Form extends StatelessWidget {
     required this.permitNumberCtrl,
     required this.registrationCtrl,
     required this.businessAddrCtrl,
-    required this.contactNumberCtrl,
     required this.permitFile,
     required this.validIdFile,
     required this.onPickPermitFile,
@@ -704,7 +926,6 @@ class _Step2Form extends StatelessWidget {
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
   final TextEditingController businessAddrCtrl;
-  final TextEditingController contactNumberCtrl;
   final File? permitFile;
   final File? validIdFile;
   final VoidCallback onPickPermitFile;
@@ -712,9 +933,15 @@ class _Step2Form extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onSubmit;
 
-  bool _isEmpty(TextEditingController c) => showErrors && c.text.isEmpty;
-  bool get _invalidRooms =>
-      showErrors && int.tryParse(totalRoomsCtrl.text) == null;
+  @override
+  State<_Step2Form> createState() => _Step2FormState();
+}
+
+class _Step2FormState extends State<_Step2Form> {
+  final _touched = <String>{};
+
+  void _touch(String field) => setState(() => _touched.add(field));
+  bool _show(String f) => _touched.contains(f) || widget.showErrors;
 
   @override
   Widget build(BuildContext context) {
@@ -727,11 +954,16 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Business Name',
-                error: _isEmpty(businessNameCtrl) ? 'Required' : null,
+                error: _show('businessName')
+                    ? _V.businessName(widget.businessNameCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: businessNameCtrl,
+                  controller: widget.businessNameCtrl,
                   hint: 'Hotel / Resort Name',
-                  hasError: _isEmpty(businessNameCtrl),
+                  hasError:
+                      _show('businessName') &&
+                      _V.businessName(widget.businessNameCtrl.text) != null,
+                  onChanged: (_) => _touch('businessName'),
                 ),
               ),
             ),
@@ -740,9 +972,15 @@ class _Step2Form extends StatelessWidget {
               child: _LabeledField(
                 label: 'Business Type',
                 child: _DropdownField(
-                  value: businessType,
-                  items: const ['Hotel', 'Resort', 'Inn', 'Pension House', 'Other'],
-                  onChanged: onBusinessTypeChanged,
+                  value: widget.businessType,
+                  items: const [
+                    'Hotel',
+                    'Resort',
+                    'Inn',
+                    'Pension House',
+                    'Other',
+                  ],
+                  onChanged: widget.onBusinessTypeChanged,
                 ),
               ),
             ),
@@ -755,24 +993,34 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Owner Name',
-                error: _isEmpty(ownerNameCtrl) ? 'Required' : null,
+                error: _show('ownerName')
+                    ? _V.ownerName(widget.ownerNameCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: ownerNameCtrl,
+                  controller: widget.ownerNameCtrl,
                   hint: 'Full name of owner',
-                  hasError: _isEmpty(ownerNameCtrl),
+                  hasError:
+                      _show('ownerName') &&
+                      _V.ownerName(widget.ownerNameCtrl.text) != null,
+                  onChanged: (_) => _touch('ownerName'),
                 ),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: _LabeledField(
-                label: 'Total Rooms/Units',
-                error: _invalidRooms ? 'Valid number required' : null,
+                label: 'Total Rooms / Units',
+                error: _show('totalRooms')
+                    ? _V.totalRooms(widget.totalRoomsCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: totalRoomsCtrl,
+                  controller: widget.totalRoomsCtrl,
                   hint: 'e.g. 30',
                   keyboardType: TextInputType.number,
-                  hasError: _invalidRooms,
+                  hasError:
+                      _show('totalRooms') &&
+                      _V.totalRooms(widget.totalRoomsCtrl.text) != null,
+                  onChanged: (_) => _touch('totalRooms'),
                 ),
               ),
             ),
@@ -785,11 +1033,16 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Permit Number',
-                error: _isEmpty(permitNumberCtrl) ? 'Required' : null,
+                error: _show('permitNumber')
+                    ? _V.permitNumber(widget.permitNumberCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: permitNumberCtrl,
+                  controller: widget.permitNumberCtrl,
                   hint: 'SP-HTL-2024-XXX',
-                  hasError: _isEmpty(permitNumberCtrl),
+                  hasError:
+                      _show('permitNumber') &&
+                      _V.permitNumber(widget.permitNumberCtrl.text) != null,
+                  onChanged: (_) => _touch('permitNumber'),
                 ),
               ),
             ),
@@ -797,11 +1050,17 @@ class _Step2Form extends StatelessWidget {
             Expanded(
               child: _LabeledField(
                 label: 'Registration Number',
-                error: _isEmpty(registrationCtrl) ? 'Required' : null,
+                error: _show('registration')
+                    ? _V.registrationNumber(widget.registrationCtrl.text)
+                    : null,
                 child: _Input(
-                  controller: registrationCtrl,
+                  controller: widget.registrationCtrl,
                   hint: 'BIR-2024-XXXXX',
-                  hasError: _isEmpty(registrationCtrl),
+                  hasError:
+                      _show('registration') &&
+                      _V.registrationNumber(widget.registrationCtrl.text) !=
+                          null,
+                  onChanged: (_) => _touch('registration'),
                 ),
               ),
             ),
@@ -810,52 +1069,42 @@ class _Step2Form extends StatelessWidget {
         const SizedBox(height: 16),
         _LabeledField(
           label: 'Business Address',
-          error: _isEmpty(businessAddrCtrl) ? 'Required' : null,
+          error: _show('address')
+              ? _V.address(widget.businessAddrCtrl.text)
+              : null,
           child: _Input(
-            controller: businessAddrCtrl,
+            controller: widget.businessAddrCtrl,
             hint: 'Complete address in San Pablo City',
-            hasError: _isEmpty(businessAddrCtrl),
+            hasError:
+                _show('address') &&
+                _V.address(widget.businessAddrCtrl.text) != null,
+            onChanged: (_) => _touch('address'),
           ),
         ),
         const SizedBox(height: 16),
-        _LabeledField(
-          label: 'Contact Number',
-          error: _isEmpty(contactNumberCtrl) ? 'Required' : null,
-          child: _Input(
-            controller: contactNumberCtrl,
-            hint: '049-XXX-XXXX',
-            keyboardType: TextInputType.phone,
-            hasError: _isEmpty(contactNumberCtrl),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ── File Uploads ─────────────────────────────────────────────────────
         _LabeledField(
           label: 'Business Permit',
-          error: showErrors && permitFile == null ? 'Required' : null,
+          error: widget.showErrors ? _V.file(widget.permitFile) : null,
           child: _FilePicker(
-            label: 'Upload Permit (PDF/Image)',
-            file: permitFile,
-            hasError: showErrors && permitFile == null,
-            onPick: onPickPermitFile,
+            label: 'Upload Permit (PDF / Image)',
+            file: widget.permitFile,
+            hasError: widget.showErrors && _V.file(widget.permitFile) != null,
+            onPick: widget.onPickPermitFile,
           ),
         ),
         const SizedBox(height: 16),
         _LabeledField(
-          label: 'Valid ID',
-          error: showErrors && validIdFile == null ? 'Required' : null,
+          label: "Owner's Valid ID",
+          error: widget.showErrors ? _V.file(widget.validIdFile) : null,
           child: _FilePicker(
-            label: "Upload Owner's Valid ID (PDF/Image)",
-            file: validIdFile,
-            hasError: showErrors && validIdFile == null,
-            onPick: onPickValidId,
+            label: "Upload Owner's Valid ID (PDF / Image)",
+            file: widget.validIdFile,
+            hasError: widget.showErrors && _V.file(widget.validIdFile) != null,
+            onPick: widget.onPickValidId,
           ),
         ),
         const SizedBox(height: 16),
-
-        // ── Error Message ────────────────────────────────────────────────────
-        if (errorMessage != null) ...[
+        if (widget.errorMessage != null) ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -867,12 +1116,15 @@ class _Step2Form extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.error_outline,
-                    color: RegisterColors.textRed, size: 16),
+                const Icon(
+                  Icons.error_outline,
+                  color: RegisterColors.textRed,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    errorMessage!,
+                    widget.errorMessage!,
                     style: const TextStyle(
                       color: RegisterColors.textRed,
                       fontSize: 12.5,
@@ -884,17 +1136,16 @@ class _Step2Form extends StatelessWidget {
           ),
           const SizedBox(height: 16),
         ],
-
         Row(
           children: [
-            _BackButton(onPressed: isLoading ? () {} : onBack),
+            _BackButton(onPressed: widget.isLoading ? () {} : widget.onBack),
             const SizedBox(width: 12),
             Expanded(
-              child: isLoading
+              child: widget.isLoading
                   ? const _LoadingButton()
                   : _GradientButton(
                       label: 'Submit Registration',
-                      onPressed: onSubmit,
+                      onPressed: widget.onSubmit,
                     ),
             ),
           ],
@@ -904,7 +1155,7 @@ class _Step2Form extends StatelessWidget {
   }
 }
 
-// ─── File Picker Widget ───────────────────────────────────────────────────────
+// ─── Reusable Widgets ─────────────────────────────────────────────────────────
 
 class _FilePicker extends StatelessWidget {
   const _FilePicker({
@@ -923,9 +1174,9 @@ class _FilePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        hasError ? RegisterColors.textRed : AppColors.inputBorder;
-
+    final borderColor = hasError
+        ? RegisterColors.textRed
+        : AppColors.inputBorder;
     return GestureDetector(
       onTap: onPick,
       child: Container(
@@ -970,8 +1221,6 @@ class _FilePicker extends StatelessWidget {
   }
 }
 
-// ─── Loading Button ───────────────────────────────────────────────────────────
-
 class _LoadingButton extends StatelessWidget {
   const _LoadingButton();
 
@@ -989,24 +1238,15 @@ class _LoadingButton extends StatelessWidget {
         child: SizedBox(
           width: 20,
           height: 20,
-          child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
-          ),
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
         ),
       ),
     );
   }
 }
 
-// ─── Reusable Widgets ─────────────────────────────────────────────────────────
-
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.error,
-  });
+  const _LabeledField({required this.label, required this.child, this.error});
 
   final String label;
   final Widget child;
@@ -1049,6 +1289,7 @@ class _Input extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.obscure = false,
     this.hasError = false,
+    this.onChanged,
   });
 
   final TextEditingController controller;
@@ -1056,20 +1297,22 @@ class _Input extends StatelessWidget {
   final TextInputType keyboardType;
   final bool obscure;
   final bool hasError;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor =
-        hasError ? RegisterColors.textRed : AppColors.inputBorder;
+    final borderColor = hasError
+        ? RegisterColors.textRed
+        : AppColors.inputBorder;
     return TextField(
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,
+      onChanged: onChanged,
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle:
-            const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
         filled: true,
         fillColor: AppColors.inputBackground,
         isDense: true,
@@ -1123,8 +1366,7 @@ class _DropdownField extends StatelessWidget {
           isExpanded: true,
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
-          style:
-              const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+          style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
           items: items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
@@ -1135,46 +1377,69 @@ class _DropdownField extends StatelessWidget {
   }
 }
 
-class _GradientButton extends StatelessWidget {
+class _GradientButton extends StatefulWidget {
   const _GradientButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback onPressed;
 
   @override
+  State<_GradientButton> createState() => _GradientButtonState();
+}
+
+class _GradientButtonState extends State<_GradientButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          ),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withOpacity(0.3),
-              blurRadius: 14,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton(
-          onPressed: onPressed,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          widget.onPressed();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 80),
+          child: AnimatedOpacity(
+            opacity: _hovered && !_pressed ? 0.88 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withOpacity(
+                        _hovered ? 0.5 : 0.3,
+                      ),
+                      blurRadius: _hovered ? 20 : 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -1183,28 +1448,145 @@ class _GradientButton extends StatelessWidget {
   }
 }
 
-class _BackButton extends StatelessWidget {
+class _BackButton extends StatefulWidget {
   const _BackButton({required this.onPressed});
-
   final VoidCallback onPressed;
 
   @override
+  State<_BackButton> createState() => _BackButtonState();
+}
+
+class _BackButtonState extends State<_BackButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.arrow_back, size: 16, color: AppColors.textGray),
-        label: const Text(
-          'Back',
-          style: TextStyle(color: AppColors.textGray, fontSize: 14),
-        ),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: AppColors.cardBorder),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          widget.onPressed();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 80),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: BoxDecoration(
+              color: _hovered
+                  ? AppColors.cardBorder.withOpacity(0.3)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: _hovered ? AppColors.textGray : AppColors.cardBorder,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_back,
+                  size: 16,
+                  color: _hovered ? AppColors.textWhite : AppColors.textGray,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Back',
+                  style: TextStyle(
+                    color: _hovered ? AppColors.textWhite : AppColors.textGray,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _HoverButton extends StatefulWidget {
+  const _HoverButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  State<_HoverButton> createState() => _HoverButtonState();
+}
+
+class _HoverButtonState extends State<_HoverButton> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapUp: (_) {
+          setState(() => _pressed = false);
+          widget.onPressed();
+        },
+        onTapCancel: () => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.97 : 1.0,
+          duration: const Duration(milliseconds: 80),
+          child: AnimatedOpacity(
+            opacity: _hovered && !_pressed ? 0.88 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              width: double.infinity,
+              height: 46,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(
+                      _hovered ? 0.55 : 0.3,
+                    ),
+                    blurRadius: _hovered ? 22 : 14,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, size: 18, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );

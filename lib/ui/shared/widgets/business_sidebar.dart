@@ -170,8 +170,10 @@ class _BusinessBadge extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
+          // ignore: deprecated_member_use
           color: AppColors.accentPurple.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
+          // ignore: deprecated_member_use
           border: Border.all(color: AppColors.accentPurple.withOpacity(0.35)),
         ),
         child: Row(

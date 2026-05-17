@@ -207,10 +207,7 @@ class _StatCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               label,
-              style: const TextStyle(
-                color: AppColors.textGray,
-                fontSize: 12.5,
-              ),
+              style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
             ),
           ],
         ),
@@ -270,6 +267,7 @@ class _DonutChartsRow extends StatelessWidget {
     );
   }
 }
+
 class _DonutChartCard1 extends StatelessWidget {
   const _DonutChartCard1();
 
@@ -278,7 +276,7 @@ class _DonutChartCard1 extends StatelessWidget {
     final mediaQuery = MediaQuery.of(context);
     final isSmallScreen = mediaQuery.size.width < 600;
     final chartSize = isSmallScreen ? 120.0 : 140.0;
-    
+
     return _DashCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,9 +286,24 @@ class _DonutChartCard1 extends StatelessWidget {
           Center(
             child: _DonutChart(
               segments: const [
-                _Segment(value: 0.60, color: AppColors.chartCyan, label: 'Male', percentage: '60%'),
-                _Segment(value: 0.30, color: AppColors.chartPurple, label: 'Female', percentage: '30%'),
-                _Segment(value: 0.10, color: AppColors.chartOrange, label: 'Other', percentage: '10%'),
+                _Segment(
+                  value: 0.60,
+                  color: AppColors.chartCyan,
+                  label: 'Male',
+                  percentage: '60%',
+                ),
+                _Segment(
+                  value: 0.30,
+                  color: AppColors.chartPurple,
+                  label: 'Female',
+                  percentage: '30%',
+                ),
+                _Segment(
+                  value: 0.10,
+                  color: AppColors.chartOrange,
+                  label: 'Other',
+                  percentage: '10%',
+                ),
               ],
               size: chartSize,
             ),
@@ -316,7 +329,7 @@ class _DonutChartCard2 extends StatelessWidget {
     final mediaQuery = MediaQuery.of(context);
     final isSmallScreen = mediaQuery.size.width < 600;
     final chartSize = isSmallScreen ? 120.0 : 140.0;
-    
+
     return _DashCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,11 +339,36 @@ class _DonutChartCard2 extends StatelessWidget {
           Center(
             child: _DonutChart(
               segments: const [
-                _Segment(value: 0.38, color: AppColors.chartGreen, label: 'Philippines', percentage: '38%'),
-                _Segment(value: 0.20, color: AppColors.chartBlue, label: 'USA', percentage: '20%'),
-                _Segment(value: 0.18, color: AppColors.chartOrange, label: 'Japan', percentage: '18%'),
-                _Segment(value: 0.14, color: AppColors.chartPurple, label: 'Korea', percentage: '14%'),
-                _Segment(value: 0.10, color: AppColors.chartGray, label: 'Others', percentage: '10%'),
+                _Segment(
+                  value: 0.38,
+                  color: AppColors.chartGreen,
+                  label: 'Philippines',
+                  percentage: '38%',
+                ),
+                _Segment(
+                  value: 0.20,
+                  color: AppColors.chartBlue,
+                  label: 'USA',
+                  percentage: '20%',
+                ),
+                _Segment(
+                  value: 0.18,
+                  color: AppColors.chartOrange,
+                  label: 'Japan',
+                  percentage: '18%',
+                ),
+                _Segment(
+                  value: 0.14,
+                  color: AppColors.chartPurple,
+                  label: 'Korea',
+                  percentage: '14%',
+                ),
+                _Segment(
+                  value: 0.10,
+                  color: AppColors.chartGray,
+                  label: 'Others',
+                  percentage: '10%',
+                ),
               ],
               size: chartSize,
             ),
@@ -359,7 +397,7 @@ class _DonutChartCard3 extends StatelessWidget {
     final mediaQuery = MediaQuery.of(context);
     final isSmallScreen = mediaQuery.size.width < 600;
     final chartSize = isSmallScreen ? 120.0 : 140.0;
-    
+
     return _DashCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,11 +407,36 @@ class _DonutChartCard3 extends StatelessWidget {
           Center(
             child: _DonutChart(
               segments: const [
-                _Segment(value: 0.44, color: AppColors.chartCyan, label: 'Private Car', percentage: '44%'),
-                _Segment(value: 0.20, color: AppColors.chartGreen, label: 'Bus', percentage: '20%'),
-                _Segment(value: 0.16, color: AppColors.chartOrange, label: 'Van', percentage: '16%'),
-                _Segment(value: 0.12, color: AppColors.chartPurple, label: 'Motorcycle', percentage: '12%'),
-                _Segment(value: 0.08, color: AppColors.chartGray, label: 'Other', percentage: '8%'),
+                _Segment(
+                  value: 0.44,
+                  color: AppColors.chartCyan,
+                  label: 'Private Car',
+                  percentage: '44%',
+                ),
+                _Segment(
+                  value: 0.20,
+                  color: AppColors.chartGreen,
+                  label: 'Bus',
+                  percentage: '20%',
+                ),
+                _Segment(
+                  value: 0.16,
+                  color: AppColors.chartOrange,
+                  label: 'Van',
+                  percentage: '16%',
+                ),
+                _Segment(
+                  value: 0.12,
+                  color: AppColors.chartPurple,
+                  label: 'Motorcycle',
+                  percentage: '12%',
+                ),
+                _Segment(
+                  value: 0.08,
+                  color: AppColors.chartGray,
+                  label: 'Other',
+                  percentage: '8%',
+                ),
               ],
               size: chartSize,
             ),
@@ -403,7 +466,7 @@ class _TouristTrendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final chartHeight = mediaQuery.size.width < 500 ? 150.0 : 200.0;
-    
+
     return _DashCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,10 +487,10 @@ class _TopRegionsCard extends StatelessWidget {
 
   static const _regions = [
     _RegionData('NCR', 1.0),
-    _RegionData('Laguna', 0.72),
-    _RegionData('Cavite', 0.55),
-    _RegionData('Batangas', 0.42),
-    _RegionData('Quezon', 0.28),
+    _RegionData('Region IV-A', 0.75),
+    _RegionData('Region IV-B', 0.60),
+    _RegionData('CARAGA', 0.45),
+    _RegionData('CAR', 0.30),
   ];
 
   @override
@@ -464,7 +527,8 @@ class _RegionBar extends StatefulWidget {
   State<_RegionBar> createState() => _RegionBarState();
 }
 
-class _RegionBarState extends State<_RegionBar> with SingleTickerProviderStateMixin {
+class _RegionBarState extends State<_RegionBar>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _widthAnimation;
 
@@ -475,9 +539,10 @@ class _RegionBarState extends State<_RegionBar> with SingleTickerProviderStateMi
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    _widthAnimation = Tween<double>(begin: 0, end: widget.data.ratio).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
+    _widthAnimation = Tween<double>(
+      begin: 0,
+      end: widget.data.ratio,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -491,7 +556,7 @@ class _RegionBarState extends State<_RegionBar> with SingleTickerProviderStateMi
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final labelWidth = mediaQuery.size.width < 400 ? 60.0 : 70.0;
-    
+
     return AnimatedBuilder(
       animation: _widthAnimation,
       builder: (context, child) {
@@ -501,7 +566,10 @@ class _RegionBarState extends State<_RegionBar> with SingleTickerProviderStateMi
               width: labelWidth,
               child: Text(
                 widget.data.name,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 12.5),
+                style: const TextStyle(
+                  color: AppColors.textGray,
+                  fontSize: 12.5,
+                ),
               ),
             ),
             Expanded(
@@ -544,7 +612,12 @@ class _RegionBarState extends State<_RegionBar> with SingleTickerProviderStateMi
 // ─── Chart: Donut ─────────────────────────────────────────────────────────────
 
 class _Segment {
-  const _Segment({required this.value, required this.color, this.label, this.percentage});
+  const _Segment({
+    required this.value,
+    required this.color,
+    this.label,
+    this.percentage,
+  });
   final double value;
   final Color color;
   final String? label;
@@ -560,7 +633,8 @@ class _DonutChart extends StatefulWidget {
   State<_DonutChart> createState() => _DonutChartState();
 }
 
-class _DonutChartState extends State<_DonutChart> with SingleTickerProviderStateMixin {
+class _DonutChartState extends State<_DonutChart>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   int _hoveredIndex = -1;
 
@@ -586,20 +660,21 @@ class _DonutChartState extends State<_DonutChart> with SingleTickerProviderState
     final dx = position.dx - center.dx;
     final dy = position.dy - center.dy;
     final distance = math.sqrt(dx * dx + dy * dy);
-    
+
     final strokeWidth = size.width * 0.17;
     final innerRadius = radius - strokeWidth;
     final outerRadius = radius;
-    
+
     if (distance >= innerRadius && distance <= outerRadius) {
       double angle = math.atan2(dy, dx);
       angle = (angle + math.pi * 2) % (math.pi * 2);
       double startAngle = (math.pi / 2 - angle) % (math.pi * 2);
-      
+
       double accumulatedAngle = 0;
       for (int i = 0; i < widget.segments.length; i++) {
         final segmentAngle = widget.segments[i].value * math.pi * 2;
-        if (startAngle >= accumulatedAngle && startAngle <= accumulatedAngle + segmentAngle) {
+        if (startAngle >= accumulatedAngle &&
+            startAngle <= accumulatedAngle + segmentAngle) {
           if (_hoveredIndex != i) {
             setState(() {
               _hoveredIndex = i;
@@ -610,7 +685,7 @@ class _DonutChartState extends State<_DonutChart> with SingleTickerProviderState
         accumulatedAngle += segmentAngle;
       }
     }
-    
+
     if (_hoveredIndex != -1) {
       setState(() {
         _hoveredIndex = -1;
@@ -654,9 +729,13 @@ class _DonutChartState extends State<_DonutChart> with SingleTickerProviderState
                       ),
                       size: Size(widget.size, widget.size),
                     ),
-                    if (_hoveredIndex != -1 && widget.segments[_hoveredIndex].label != null)
+                    if (_hoveredIndex != -1 &&
+                        widget.segments[_hoveredIndex].label != null)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black87,
                           borderRadius: BorderRadius.circular(6),
@@ -724,14 +803,16 @@ class _DonutPainter extends CustomPainter {
     for (int i = 0; i < segments.length; i++) {
       final seg = segments[i];
       final sweepAngle = seg.value * 2 * math.pi * animationValue;
-      
-      final currentStrokeWidth = (hoveredIndex == i) ? strokeWidth + 4 : strokeWidth;
+
+      final currentStrokeWidth = (hoveredIndex == i)
+          ? strokeWidth + 4
+          : strokeWidth;
       final paint = Paint()
         ..color = (hoveredIndex == i) ? seg.color.withOpacity(1.0) : seg.color
         ..style = PaintingStyle.stroke
         ..strokeWidth = currentStrokeWidth
         ..strokeCap = StrokeCap.butt;
-      
+
       canvas.drawArc(rect, startAngle, sweepAngle - 0.04, false, paint);
       startAngle += sweepAngle;
     }
@@ -753,13 +834,35 @@ class _BarChart extends StatefulWidget {
   State<_BarChart> createState() => _BarChartState();
 }
 
-class _BarChartState extends State<_BarChart> with SingleTickerProviderStateMixin {
+class _BarChartState extends State<_BarChart>
+    with SingleTickerProviderStateMixin {
   static const List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
   static const List<double> _values = [
-    22.0, 29.0, 11.0, 39.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    22.0,
+    29.0,
+    11.0,
+    39.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
   ];
 
   late AnimationController _controller;
@@ -786,14 +889,15 @@ class _BarChartState extends State<_BarChart> with SingleTickerProviderStateMixi
     final bottomPad = availableWidth < 400 ? 20.0 : 24.0;
     final chartH = size.height - bottomPad;
     final chartW = size.width - leftPad;
-    
-    final barW = (chartW / _months.length) * (availableWidth < 500 ? 0.65 : 0.45);
+
+    final barW =
+        (chartW / _months.length) * (availableWidth < 500 ? 0.65 : 0.45);
     final gap = chartW / _months.length;
-    
+
     for (int i = 0; i < _months.length; i++) {
       final x = leftPad + gap * i + gap / 2 - barW / 2;
       final barRect = Rect.fromLTWH(x, 0, barW, chartH);
-      
+
       if (barRect.contains(position)) {
         if (_hoveredBarIndex != i && _values[i] > 0) {
           setState(() {
@@ -803,7 +907,7 @@ class _BarChartState extends State<_BarChart> with SingleTickerProviderStateMixi
         return;
       }
     }
-    
+
     if (_hoveredBarIndex != -1) {
       setState(() {
         _hoveredBarIndex = -1;
@@ -815,7 +919,7 @@ class _BarChartState extends State<_BarChart> with SingleTickerProviderStateMixi
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final availableWidth = mediaQuery.size.width;
-    
+
     return MouseRegion(
       onHover: (event) {
         final renderBox = context.findRenderObject() as RenderBox?;
@@ -876,10 +980,10 @@ class _BarPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     const maxVal = 40.0;
     const yLabels = [0.0, 10.0, 20.0, 30.0, 40.0];
-    
+
     final leftPad = availableWidth < 400 ? 28.0 : 36.0;
     final bottomPad = availableWidth < 400 ? 20.0 : 24.0;
-    
+
     final chartH = size.height - bottomPad;
     final chartW = size.width - leftPad;
 
@@ -904,7 +1008,8 @@ class _BarPainter extends CustomPainter {
       );
     }
 
-    final barW = (chartW / months.length) * (availableWidth < 500 ? 0.65 : 0.45);
+    final barW =
+        (chartW / months.length) * (availableWidth < 500 ? 0.65 : 0.45);
     final gap = chartW / months.length;
 
     for (int i = 0; i < months.length; i++) {
@@ -913,15 +1018,26 @@ class _BarPainter extends CustomPainter {
       final isHovered = hoveredBarIndex == i;
 
       if (animatedHeight > 0) {
-        final rect = Rect.fromLTWH(x, chartH - animatedHeight, barW, animatedHeight);
-        
+        final rect = Rect.fromLTWH(
+          x,
+          chartH - animatedHeight,
+          barW,
+          animatedHeight,
+        );
+
         final paint = Paint()
           ..shader = LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: isHovered
-                ? [AppColors.chartPurple, AppColors.chartPurple.withOpacity(0.9)]
-                : [AppColors.chartPurple, AppColors.chartPurple.withOpacity(0.5)],
+                ? [
+                    AppColors.chartPurple,
+                    AppColors.chartPurple.withOpacity(0.9),
+                  ]
+                : [
+                    AppColors.chartPurple,
+                    AppColors.chartPurple.withOpacity(0.5),
+                  ],
           ).createShader(rect);
 
         canvas.drawRRect(
@@ -939,26 +1055,38 @@ class _BarPainter extends CustomPainter {
           final textPainter = TextPainter(
             text: TextSpan(
               text: tooltipText,
-              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             textDirection: TextDirection.ltr,
           )..layout();
-          
+
           final tooltipX = x + barW / 2 - textPainter.width / 2;
           final tooltipY = chartH - animatedHeight - 22;
-          
+
           if (tooltipY > 0) {
             final tooltipRect = RRect.fromRectAndRadius(
-              Rect.fromLTWH(tooltipX - 6, tooltipY - 2, textPainter.width + 12, textPainter.height + 4),
+              Rect.fromLTWH(
+                tooltipX - 6,
+                tooltipY - 2,
+                textPainter.width + 12,
+                textPainter.height + 4,
+              ),
               const Radius.circular(4),
             );
-            
+
             final shadowPaint = Paint()..color = Colors.black.withOpacity(0.3);
-            canvas.drawRRect(tooltipRect.shift(const Offset(1, 1)), shadowPaint);
-            
+            canvas.drawRRect(
+              tooltipRect.shift(const Offset(1, 1)),
+              shadowPaint,
+            );
+
             final tooltipPaint = Paint()..color = const Color(0xFF1E293B);
             canvas.drawRRect(tooltipRect, tooltipPaint);
-            
+
             textPainter.paint(canvas, Offset(tooltipX, tooltipY));
           }
         }
@@ -1006,8 +1134,10 @@ class _DashCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final isSmallScreen = mediaQuery.size.width < 500;
-    final padding = isSmallScreen ? const EdgeInsets.all(14) : const EdgeInsets.all(18);
-    
+    final padding = isSmallScreen
+        ? const EdgeInsets.all(14)
+        : const EdgeInsets.all(18);
+
     return Container(
       padding: padding,
       decoration: BoxDecoration(
@@ -1028,7 +1158,7 @@ class _CardTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final fontSize = mediaQuery.size.width < 500 ? 12.0 : 14.0;
-    
+
     return Text(
       title,
       style: TextStyle(
@@ -1058,7 +1188,7 @@ class _Legend extends StatelessWidget {
     final isSmallScreen = mediaQuery.size.width < 500;
     final spacing = isSmallScreen ? 8.0 : 12.0;
     final fontSize = isSmallScreen ? 10.0 : 11.0;
-    
+
     return Wrap(
       spacing: spacing,
       runSpacing: 6,

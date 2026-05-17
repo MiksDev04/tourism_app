@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:tourism_app/api/login_api.dart';
+import 'package:tourism_app/brick/models/profile.model.dart';
 import '../../../router/app_router.dart';
-import '../../../core/constants/app_colors.dart'; // Import your actual AppColors file
+import '../../../core/constants/app_colors.dart';
 
-// REMOVE the entire LoginPage class that wraps MaterialApp:
 class LoginPage extends StatelessWidget {
   const LoginPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: LoginScreen(),
-    );
+    return const Scaffold(body: LoginScreen());
   }
 }
 
@@ -24,18 +23,6 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(
-    text: 'grandhotel@sanpablo.com',
-  );
-  final _passwordController = TextEditingController(text: '••••••••••');
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -57,12 +44,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const _AppLogo(),
-                    const SizedBox(height: 16),
-                    const _AppTitle(),
-                    const SizedBox(height: 40),
-                    const _LoginCard(),
+                  children: const [
+                    _AppLogo(),
+                    SizedBox(height: 16),
+                    _AppTitle(),
+                    SizedBox(height: 40),
+                    _LoginCard(),
                   ],
                 ),
               ),
@@ -151,11 +138,14 @@ class _LoginCard extends StatefulWidget {
 }
 
 class _LoginCardState extends State<_LoginCard> {
-  final _emailController = TextEditingController(
-    text: 'grandhotel@sanpablo.com',
-  );
-  final _passwordController = TextEditingController(text: '••••••••••');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+  bool _isOffline = false;
+
+  final _api = LoginApi();
 
   @override
   void dispose() {
@@ -164,39 +154,39 @@ class _LoginCardState extends State<_LoginCard> {
     super.dispose();
   }
 
-  void _fillTourismOffice() {
+  // ── Sign In ────────────────────────────────────────────────────────────────
+
+  Future<void> _handleSignIn() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email and password.');
+      return;
+    }
+
     setState(() {
-      _emailController.text = 'admin@tourism.sanpablo.gov';
-      _passwordController.text = 'admin123';
-      _obscurePassword = true;
+      _isLoading = true;
+      _errorMessage = null;
+      _isOffline = false;
     });
-  }
 
-  void _fillGrandHotel() {
-    setState(() {
-      _emailController.text = 'grandhotel@sanpablo.com';
-      _passwordController.text = 'hotel123';
-      _obscurePassword = true;
-    });
-  }
+    final result = await _api.login(email: email, password: password);
 
-  void _handleSignIn() {
-    final email = _emailController.text;
+    if (!mounted) return;
+    setState(() => _isLoading = false);
 
-    if (email == 'admin@tourism.sanpablo.gov') {
-      // Admin goes to admin dashboard
-      Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
-    } else if (email == 'grandhotel@sanpablo.com') {
-      // Business goes to business dashboard
-      Navigator.pushReplacementNamed(context, AppRoutes.businessDashboard);
+    if (result.success) {
+      
+
+      // ── Route based on role ──────────────────────────────────────────
+      if (result.role == Role.admin) {
+        Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
+      } else {
+        Navigator.pushReplacementNamed(context, AppRoutes.businessDashboard);
+      }
     } else {
-      // Default or show error
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Invalid credentials'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() => _errorMessage = result.error);
     }
   }
 
@@ -213,7 +203,6 @@ class _LoginCardState extends State<_LoginCard> {
           BoxShadow(
             color: Colors.black.withOpacity(0.4),
             blurRadius: 40,
-            spreadRadius: 0,
             offset: const Offset(0, 8),
           ),
         ],
@@ -221,7 +210,6 @@ class _LoginCardState extends State<_LoginCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Sign In heading
           const Text(
             'Sign In',
             style: TextStyle(
@@ -232,7 +220,7 @@ class _LoginCardState extends State<_LoginCard> {
           ),
           const SizedBox(height: 24),
 
-          // Email field
+          // ── Email ──────────────────────────────────────────────────────
           const _FieldLabel(label: 'Email Address'),
           const SizedBox(height: 8),
           _InputField(
@@ -242,7 +230,7 @@ class _LoginCardState extends State<_LoginCard> {
           ),
           const SizedBox(height: 18),
 
-          // Password field
+          // ── Password ───────────────────────────────────────────────────
           const _FieldLabel(label: 'Password'),
           const SizedBox(height: 8),
           _PasswordField(
@@ -253,11 +241,61 @@ class _LoginCardState extends State<_LoginCard> {
           ),
           const SizedBox(height: 22),
 
-          // Sign In button
-          _SignInButton(onPressed: _handleSignIn),
+          // ── Error banner ───────────────────────────────────────────────
+          if (_errorMessage != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.red, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Offline banner ─────────────────────────────────────────────
+          if (_isOffline) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.withOpacity(0.4)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.wifi_off, color: Colors.orange, size: 16),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You are offline. Showing cached data.',
+                      style: TextStyle(color: Colors.orange, fontSize: 12.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Sign In button ─────────────────────────────────────────────
+          _isLoading ? const _LoadingButton() : _SignInButton(onPressed: _handleSignIn),
           const SizedBox(height: 16),
 
-          // Register link
+          // ── Register link ──────────────────────────────────────────────
           Center(
             child: GestureDetector(
               onTap: () =>
@@ -272,43 +310,6 @@ class _LoginCardState extends State<_LoginCard> {
               ),
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Divider
-          const Divider(color: AppColors.cardBorder, thickness: 1),
-          const SizedBox(height: 16),
-
-          // Demo credentials label
-          const Center(
-            child: Text(
-              'Demo Credentials',
-              style: TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Demo credential buttons
-          Row(
-            children: [
-              Expanded(
-                child: _DemoButton(
-                  label: 'Tourism Office (Admin)',
-                  borderColor: AppColors.inputBorder,
-                  textColor: AppColors.textWhite,
-                  onPressed: _fillTourismOffice,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _DemoButton(
-                  label: 'Grand Hotel (Business)',
-                  borderColor: AppColors.accentPurple.withOpacity(0.5),
-                  textColor: AppColors.accentPurple,
-                  onPressed: _fillGrandHotel,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -319,7 +320,6 @@ class _LoginCardState extends State<_LoginCard> {
 
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel({required this.label});
-
   final String label;
 
   @override
@@ -359,24 +359,18 @@ class _InputField extends StatelessWidget {
         hintStyle: const TextStyle(color: AppColors.textSubtle),
         filled: true,
         fillColor: AppColors.inputBackground,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.inputBorder, width: 1),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.inputBorder, width: 1),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: AppColors.primaryCyan,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
         ),
       ),
     );
@@ -405,24 +399,20 @@ class _PasswordField extends StatelessWidget {
       decoration: InputDecoration(
         filled: true,
         fillColor: AppColors.inputBackground,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
+        hintText: 'Enter password',
+        hintStyle: const TextStyle(color: AppColors.textSubtle),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.inputBorder, width: 1),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.inputBorder, width: 1),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(
-            color: AppColors.primaryCyan,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
         ),
         suffixIcon: IconButton(
           icon: Icon(
@@ -441,7 +431,6 @@ class _PasswordField extends StatelessWidget {
 
 class _SignInButton extends StatelessWidget {
   const _SignInButton({required this.onPressed});
-
   final VoidCallback onPressed;
 
   @override
@@ -459,7 +448,6 @@ class _SignInButton extends StatelessWidget {
             BoxShadow(
               color: AppColors.primaryBlue.withOpacity(0.35),
               blurRadius: 16,
-              spreadRadius: 0,
               offset: const Offset(0, 4),
             ),
           ],
@@ -473,7 +461,6 @@ class _SignInButton extends StatelessWidget {
               color: Colors.white,
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              letterSpacing: 0.3,
             ),
           ),
           style: ElevatedButton.styleFrom(
@@ -489,38 +476,27 @@ class _SignInButton extends StatelessWidget {
   }
 }
 
-// ─── Demo Button ──────────────────────────────────────────────────────────────
+// ─── Loading Button ───────────────────────────────────────────────────────────
 
-class _DemoButton extends StatelessWidget {
-  const _DemoButton({
-    required this.label,
-    required this.borderColor,
-    required this.textColor,
-    required this.onPressed,
-  });
-
-  final String label;
-  final Color borderColor;
-  final Color textColor;
-  final VoidCallback onPressed;
+class _LoadingButton extends StatelessWidget {
+  const _LoadingButton();
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-        side: BorderSide(color: borderColor, width: 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        backgroundColor: Colors.transparent,
+    return Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.gradientStart, AppColors.gradientEnd],
+        ),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Text(
-        label,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
+      child: const Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
         ),
       ),
     );

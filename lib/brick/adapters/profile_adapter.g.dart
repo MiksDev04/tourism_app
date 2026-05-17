@@ -7,14 +7,12 @@ Future<Profile> _$ProfileFromSupabase(
   OfflineFirstWithSupabaseRepository? repository,
 }) async {
   return Profile(
+    id: data['id'] as String,
     fullName: data['full_name'] as String,
-    role: data['role'] as String,
-    createdAt: data['created_at'] as String,
-    updatedAt: data['updated_at'] as String,
-    id: data['id'] as String?,
-    deletedAt: data['deleted_at'] == null
-        ? null
-        : data['deleted_at'] as String?,
+    phone: data['phone'] as String,
+    role: Role.values.byName(data['role']),
+    createdAt: data['created_at'] as String?,
+    updatedAt: data['updated_at'] as String?,
   );
 }
 
@@ -24,12 +22,12 @@ Future<Map<String, dynamic>> _$ProfileToSupabase(
   OfflineFirstWithSupabaseRepository? repository,
 }) async {
   return {
+    'id': instance.id,
     'full_name': instance.fullName,
-    'role': instance.role,
+    'phone': instance.phone,
+    'role': instance.role.name,
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
-    'id': instance.id,
-    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -39,14 +37,12 @@ Future<Profile> _$ProfileFromSqlite(
   OfflineFirstWithSupabaseRepository? repository,
 }) async {
   return Profile(
+    id: data['id'] as String,
     fullName: data['full_name'] as String,
-    role: data['role'] as String,
+    phone: data['phone'] as String,
+    role: Role.values[data['role'] as int],
     createdAt: data['created_at'] as String,
     updatedAt: data['updated_at'] as String,
-    id: data['id'] as String,
-    deletedAt: data['deleted_at'] == null
-        ? null
-        : data['deleted_at'] as String?,
   )..primaryKey = data['_brick_id'] as int;
 }
 
@@ -56,12 +52,12 @@ Future<Map<String, dynamic>> _$ProfileToSqlite(
   OfflineFirstWithSupabaseRepository? repository,
 }) async {
   return {
+    'id': instance.id,
     'full_name': instance.fullName,
-    'role': instance.role,
+    'phone': instance.phone,
+    'role': Role.values.indexOf(instance.role),
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
-    'id': instance.id,
-    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -75,9 +71,17 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
   final defaultToNull = true;
   @override
   final fieldsToSupabaseColumns = {
+    'id': const RuntimeSupabaseColumnDefinition(
+      association: false,
+      columnName: 'id',
+    ),
     'fullName': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'full_name',
+    ),
+    'phone': const RuntimeSupabaseColumnDefinition(
+      association: false,
+      columnName: 'phone',
     ),
     'role': const RuntimeSupabaseColumnDefinition(
       association: false,
@@ -90,14 +94,6 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'updatedAt': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'updated_at',
-    ),
-    'id': const RuntimeSupabaseColumnDefinition(
-      association: false,
-      columnName: 'id',
-    ),
-    'deletedAt': const RuntimeSupabaseColumnDefinition(
-      association: false,
-      columnName: 'deleted_at',
     ),
   };
   @override
@@ -112,9 +108,21 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
       iterable: false,
       type: int,
     ),
+    'id': const RuntimeSqliteColumnDefinition(
+      association: false,
+      columnName: 'id',
+      iterable: false,
+      type: String,
+    ),
     'fullName': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'full_name',
+      iterable: false,
+      type: String,
+    ),
+    'phone': const RuntimeSqliteColumnDefinition(
+      association: false,
+      columnName: 'phone',
       iterable: false,
       type: String,
     ),
@@ -122,7 +130,7 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
       association: false,
       columnName: 'role',
       iterable: false,
-      type: String,
+      type: Role,
     ),
     'createdAt': const RuntimeSqliteColumnDefinition(
       association: false,
@@ -133,18 +141,6 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'updatedAt': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'updated_at',
-      iterable: false,
-      type: String,
-    ),
-    'id': const RuntimeSqliteColumnDefinition(
-      association: false,
-      columnName: 'id',
-      iterable: false,
-      type: String,
-    ),
-    'deletedAt': const RuntimeSqliteColumnDefinition(
-      association: false,
-      columnName: 'deleted_at',
       iterable: false,
       type: String,
     ),

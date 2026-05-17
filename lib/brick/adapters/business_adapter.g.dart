@@ -14,7 +14,7 @@ Future<Business> _$BusinessFromSupabase(
       repository: repository,
     ),
     businessName: data['business_name'] as String,
-    businessType: BusinessType.values[data['business_type'] as int],
+    businessType: BusinessType.values.byName(data['business_type']),
     ownerName: data['owner_name'] == null
         ? null
         : data['owner_name'] as String?,
@@ -32,13 +32,10 @@ Future<Business> _$BusinessFromSupabase(
     validIdUrl: data['valid_id_url'] == null
         ? null
         : data['valid_id_url'] as String?,
-    status: BusinessStatus.values[data['status'] as int],
+    status: BusinessStatus.values.byName(data['status']),
     remarks: data['remarks'] == null ? null : data['remarks'] as String?,
-    createdAt: data['created_at'] as String,
-    updatedAt: data['updated_at'] as String,
-    deletedAt: data['deleted_at'] == null
-        ? null
-        : data['deleted_at'] as String?,
+    createdAt: data['created_at'] as String?,
+    updatedAt: data['updated_at'] as String?,
   );
 }
 
@@ -55,7 +52,7 @@ Future<Map<String, dynamic>> _$BusinessToSupabase(
       repository: repository,
     ),
     'business_name': instance.businessName,
-    'business_type': BusinessType.values.indexOf(instance.businessType),
+    'business_type': instance.businessType.name,
     'owner_name': instance.ownerName,
     'permit_number': instance.permitNumber,
     'registration_number': instance.registrationNumber,
@@ -63,11 +60,10 @@ Future<Map<String, dynamic>> _$BusinessToSupabase(
     'total_rooms': instance.totalRooms,
     'permit_file_url': instance.permitFileUrl,
     'valid_id_url': instance.validIdUrl,
-    'status': BusinessStatus.values.indexOf(instance.status),
+    'status': instance.status.name,
     'remarks': instance.remarks,
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
-    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -108,9 +104,6 @@ Future<Business> _$BusinessFromSqlite(
     remarks: data['remarks'] == null ? null : data['remarks'] as String?,
     createdAt: data['created_at'] as String,
     updatedAt: data['updated_at'] as String,
-    deletedAt: data['deleted_at'] == null
-        ? null
-        : data['deleted_at'] as String?,
   )..primaryKey = data['_brick_id'] as int;
 }
 
@@ -140,7 +133,6 @@ Future<Map<String, dynamic>> _$BusinessToSqlite(
     'remarks': instance.remarks,
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
-    'deleted_at': instance.deletedAt,
   };
 }
 
@@ -163,6 +155,7 @@ class BusinessAdapter extends OfflineFirstWithSupabaseAdapter<Business> {
       columnName: 'profile',
       associationType: Profile,
       associationIsNullable: false,
+      foreignKey: 'profile_id',
     ),
     'businessName': const RuntimeSupabaseColumnDefinition(
       association: false,
@@ -215,10 +208,6 @@ class BusinessAdapter extends OfflineFirstWithSupabaseAdapter<Business> {
     'updatedAt': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'updated_at',
-    ),
-    'deletedAt': const RuntimeSupabaseColumnDefinition(
-      association: false,
-      columnName: 'deleted_at',
     ),
   };
   @override
@@ -320,12 +309,6 @@ class BusinessAdapter extends OfflineFirstWithSupabaseAdapter<Business> {
     'updatedAt': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'updated_at',
-      iterable: false,
-      type: String,
-    ),
-    'deletedAt': const RuntimeSqliteColumnDefinition(
-      association: false,
-      columnName: 'deleted_at',
       iterable: false,
       type: String,
     ),

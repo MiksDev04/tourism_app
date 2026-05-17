@@ -1,16 +1,14 @@
 // GENERATED CODE DO NOT EDIT
 // This file should be version controlled
 import 'package:brick_sqlite/db.dart';
-part '20260511141400.migration.dart';
-part '20260511130600.migration.dart';
+part '20260517022711.migration.dart';
 
 /// All intelligently-generated migrations from all `@Migratable` classes on disk
-final migrations = <Migration>{
-  const Migration20260511141400(),const Migration20260511130600()};
+final migrations = <Migration>{const Migration20260517022711()};
 
 /// A consumable database structure including the latest generated migration.
 final schema = Schema(
-  20260511130600,
+  20260517022711,
   generatorVersion: 1,
   tables: <SchemaTable>{
     SchemaTable(
@@ -45,7 +43,6 @@ final schema = Schema(
         SchemaColumn('remarks', Column.varchar),
         SchemaColumn('created_at', Column.varchar),
         SchemaColumn('updated_at', Column.varchar),
-        SchemaColumn('deleted_at', Column.varchar),
       },
       indices: <SchemaIndex>{
         SchemaIndex(columns: ['id'], unique: true),
@@ -61,12 +58,12 @@ final schema = Schema(
           nullable: false,
           isPrimaryKey: true,
         ),
+        SchemaColumn('id', Column.varchar, unique: true),
         SchemaColumn('full_name', Column.varchar),
-        SchemaColumn('role', Column.varchar),
+        SchemaColumn('phone', Column.varchar),
+        SchemaColumn('role', Column.integer),
         SchemaColumn('created_at', Column.varchar),
         SchemaColumn('updated_at', Column.varchar),
-        SchemaColumn('id', Column.varchar, unique: true),
-        SchemaColumn('deleted_at', Column.varchar),
       },
       indices: <SchemaIndex>{
         SchemaIndex(columns: ['id'], unique: true),

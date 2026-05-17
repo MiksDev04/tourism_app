@@ -548,10 +548,10 @@ class _ComplianceRow extends StatelessWidget {
 class _TopRegionsCard extends StatelessWidget {
   static const _regions = [
     _RegionData('NCR', 1.0),
-    _RegionData('Laguna', 0.75),
-    _RegionData('Cavite', 0.60),
-    _RegionData('Batangas', 0.45),
-    _RegionData('Quezon', 0.30),
+    _RegionData('Region IV-A', 0.75),
+    _RegionData('Region IV-B', 0.60),
+    _RegionData('CARAGA', 0.45),
+    _RegionData('CAR', 0.30),
   ];
 
   @override
