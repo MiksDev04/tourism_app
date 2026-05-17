@@ -259,7 +259,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       purpose: _purpose,
       transport: _transport,
       status: widget.record.status,
-      demographics: demographics,
+      demographics: demographics, id: '',
     );
 
     // Show success message
@@ -311,7 +311,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     return GuestDemographics(
       ageGroups: ageGroups,
       genderDistribution: genderDistribution,
-      countries: countries,
+      countries: countries, breakdowns: [],
     );
   }
 

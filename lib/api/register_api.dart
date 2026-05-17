@@ -84,8 +84,9 @@ class RegisterApi {
 
       // ── 4. Upsert Profile via Brick (offline-first, auto-syncs) ────────
       final profile = Profile(
-        id: authUser.id, // must match auth.users(id)
+        id: authUser.id,
         fullName: fullName,
+        email: email, // ← add this
         phone: phoneNumber,
         role: Role.business,
       );

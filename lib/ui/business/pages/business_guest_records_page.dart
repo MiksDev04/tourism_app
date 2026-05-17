@@ -3,13 +3,45 @@ import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../widgets/archive_guest_dialog.dart';
 import '../widgets/edit_guest_dialog.dart';
+import '../../../api/business_guest_record_api.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 enum GuestRecordStatus { active, archived }
 
+class GuestBreakdownEntry {
+  const GuestBreakdownEntry({
+    required this.nationality,
+    this.philippinesRegion,
+    required this.gender,
+    required this.ageGroup,
+    required this.count,
+  });
+
+  final String nationality;
+  final String? philippinesRegion;
+  final String gender;
+  final String ageGroup;
+  final int count;
+}
+
+class GuestDemographics {
+  const GuestDemographics({
+    required this.ageGroups,
+    required this.genderDistribution,
+    required this.countries,
+    required this.breakdowns,
+  });
+
+  final Map<String, int> ageGroups;
+  final Map<String, int> genderDistribution;
+  final Map<String, int> countries;
+  final List<GuestBreakdownEntry> breakdowns;
+}
+
 class GuestRecord {
   const GuestRecord({
+    required this.id,
     required this.checkIn,
     required this.checkOut,
     required this.nights,
@@ -21,6 +53,7 @@ class GuestRecord {
     required this.demographics,
   });
 
+  final String id;
   final String checkIn;
   final String checkOut;
   final String nights;
@@ -32,21 +65,9 @@ class GuestRecord {
   final GuestDemographics? demographics;
 }
 
-class GuestDemographics {
-  const GuestDemographics({
-    required this.ageGroups,
-    required this.genderDistribution,
-    required this.countries,
-  });
-
-  final Map<String, int> ageGroups;
-  final Map<String, int> genderDistribution;
-  final Map<String, int> countries;
-}
-
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
-enum _Filter { all, active, archived }
+enum _Filter { active, archived }
 
 // ─── Guest Records Page ───────────────────────────────────────────────────────
 
@@ -59,196 +80,194 @@ class BusinessGuestRecordsPage extends StatefulWidget {
 }
 
 class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
-  final List<GuestRecord> _records = [
-    GuestRecord(
-      checkIn: '2024-04-01',
-      checkOut: '2024-04-03',
-      nights: '2 nights',
-      guests: 10,
-      rooms: 4,
-      purpose: 'Leisure',
-      transport: 'Private Car',
-      status: GuestRecordStatus.active,
-      demographics: const GuestDemographics(
-        ageGroups: {'18-25': 2, '26-35': 5, '36-50': 3},
-        genderDistribution: {'Male': 6, 'Female': 4},
-        countries: {'USA': 5, 'Canada': 3, 'UK': 2},
-      ),
-    ),
-    GuestRecord(
-      checkIn: '2024-04-05',
-      checkOut: '2024-04-07',
-      nights: '2 nights',
-      guests: 5,
-      rooms: 2,
-      purpose: 'Business',
-      transport: 'Airport Shuttle',
-      status: GuestRecordStatus.active,
-      demographics: const GuestDemographics(
-        ageGroups: {'18-25': 1, '26-35': 3, '36-50': 1},
-        genderDistribution: {'Male': 3, 'Female': 2},
-        countries: {'USA': 3, 'Canada': 2},
-      ),
-    ),
-    GuestRecord(
-      checkIn: '2024-04-10',
-      checkOut: '2024-04-12',
-      nights: '2 nights',
-      guests: 8,
-      rooms: 3,
-      purpose: 'Leisure',
-      transport: 'Private Car',
-      status: GuestRecordStatus.archived,
-      demographics: const GuestDemographics(
-        ageGroups: {'18-25': 3, '26-35': 4, '36-50': 1},
-        genderDistribution: {'Male': 5, 'Female': 3},
-        countries: {'USA': 4, 'Canada': 4},
-      ),
-    ),
-    GuestRecord(
-      checkIn: '2024-04-15',
-      checkOut: '2024-04-18',
-      nights: '3 nights',
-      guests: 20,
-      rooms: 8,
-      purpose: 'Conference',
-      transport: 'Bus',
-      status: GuestRecordStatus.active,
-      demographics: const GuestDemographics(
-        ageGroups: {'18-25': 5, '26-35': 10, '36-50': 5},
-        genderDistribution: {'Male': 12, 'Female': 8},
-        countries: {'USA': 10, 'Canada': 6, 'UK': 4},
-      ),
-    ),
-  ];
+  final _api = BusinessGuestRecordApi();
 
-  _Filter _activeFilter = _Filter.all;
+  String? _businessId;
+  List<GuestRecord> _records = [];
+  bool _isLoading = true;
+  String? _loadError;
+
+  _Filter _activeFilter = _Filter.active;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
   bool _showFilters = false;
 
-  // Filter values
+  // Advanced filter values
   DateTime? _checkInFrom;
   DateTime? _checkOutTo;
-  String? _selectedCountry;
   String? _selectedPurpose;
   String? _selectedTransport;
 
-  // Available options
-  final List<String> _countryOptions = ['All', 'USA', 'Canada', 'UK'];
   final List<String> _purposeOptions = [
     'All',
     'Leisure',
     'Business',
-    'Conference',
+    'Education',
+    'Medical',
+    'Religious',
+    'Others',
   ];
   final List<String> _transportOptions = [
     'All',
     'Private Car',
-    'Airport Shuttle',
     'Bus',
+    'Van',
+    'Motorcycle',
+    'Tricycle',
+    'Others',
   ];
 
-  Future<void> _selectCheckInFrom(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _checkInFrom ?? DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.accentGreen,
-              onPrimary: Colors.black,
-              surface: AppColors.cardBackground,
-              onSurface: AppColors.textWhite,
-            ),
-            dialogBackgroundColor: AppColors.cardBackground,
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    final id = await _api.fetchBusinessId();
+    if (!mounted) return;
+    if (id == null) {
       setState(() {
-        _checkInFrom = picked;
+        _isLoading = false;
+        _loadError = 'Business account not found.';
+      });
+      return;
+    }
+    _businessId = id;
+    await _loadRecords();
+  }
+
+  Future<void> _loadRecords() async {
+    if (_businessId == null) return;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+    final result = await _api.fetchGuestRecords(_businessId!);
+    if (!mounted) return;
+    if (result.isSuccess) {
+      setState(() {
+        _records = result.data ?? [];
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+        _loadError = result.error;
       });
     }
   }
 
-  Future<void> _selectCheckOutTo(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
+  // ── Date pickers ────────────────────────────────────────────────────────
+
+  Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
+    final picked = await showDatePicker(
       context: context,
-      initialDate: _checkOutTo ?? DateTime.now(),
+      initialDate:
+          (isCheckIn ? _checkInFrom : _checkOutTo) ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.accentGreen,
-              onPrimary: Colors.black,
-              surface: AppColors.cardBackground,
-              onSurface: AppColors.textWhite,
-            ), dialogTheme: DialogThemeData(backgroundColor: AppColors.cardBackground),
+      builder: (ctx, child) => Theme(
+        data: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.dark(
+            primary: AppColors.primaryCyan,
+            onPrimary: Colors.black,
+            primaryContainer: AppColors.primaryCyan.withOpacity(0.25),
+            onPrimaryContainer: AppColors.primaryCyan,
+            surface: AppColors.cardBackground,
+            onSurface: AppColors.textWhite,
+            onSurfaceVariant: AppColors.textGray,
+            outline: AppColors.cardBorder,
+            surfaceVariant: AppColors.inputBackground,
           ),
-          child: child!,
-        );
-      },
+          dialogTheme: DialogThemeData(
+            backgroundColor: AppColors.cardBackground,
+            surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: AppColors.cardBorder),
+            ),
+          ),
+          textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+                foregroundColor: AppColors.primaryCyan),
+          ),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null) {
-      setState(() {
+    if (picked == null || !mounted) return;
+    setState(() {
+      if (isCheckIn) {
+        _checkInFrom = picked;
+      } else {
         _checkOutTo = picked;
-      });
-    }
+      }
+    });
   }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
 
   Future<void> _onArchive(GuestRecord record) async {
     final confirmed = await showArchiveGuestDialog(context);
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
-    setState(() {
-      final idx = _records.indexOf(record);
-      if (idx == -1) return;
-      _records[idx] = GuestRecord(
-        checkIn: record.checkIn,
-        checkOut: record.checkOut,
-        nights: record.nights,
-        guests: record.guests,
-        rooms: record.rooms,
-        purpose: record.purpose,
-        transport: record.transport,
-        status: GuestRecordStatus.archived,
-        demographics: record.demographics,
-      );
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Guest record archived successfully.'),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 3),
-      ),
-    );
+    final result = await _api.archiveRecord(record.id);
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      _updateLocalStatus(record, GuestRecordStatus.archived);
+      _showSnack('Guest record archived.', color: Colors.orange);
+    } else {
+      _showSnack(result.error ?? 'Failed to archive.', isError: true);
+    }
+  }
+
+  Future<void> _onRestore(GuestRecord record) async {
+    final result = await _api.restoreRecord(record.id);
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      _updateLocalStatus(record, GuestRecordStatus.active);
+      _showSnack('Guest record restored.', color: AppColors.accentGreen);
+    } else {
+      _showSnack(result.error ?? 'Failed to restore.', isError: true);
+    }
   }
 
   Future<void> _onEdit(GuestRecord record) async {
     final updated = await showEditGuestDialog(context, record: record);
-    if (updated == null) return;
+    if (updated == null || !mounted) return;
 
-    setState(() {
-      final idx = _records.indexOf(record);
-      if (idx == -1) return;
-      _records[idx] = updated;
-    });
-    
+    final result = await _api.updateRecord(
+      recordId: updated.id,
+      checkIn: updated.checkIn,
+      checkOut: updated.checkOut,
+      totalGuests: updated.guests,
+      roomsOccupied: updated.rooms,
+      purposeOfVisit: updated.purpose,
+      transportationMode: updated.transport,
+    );
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      setState(() {
+        final idx = _records.indexWhere((r) => r.id == record.id);
+        if (idx != -1) _records[idx] = updated;
+      });
+      _showSnack('Guest record updated.');
+    } else {
+      _showSnack(result.error ?? 'Failed to update.', isError: true);
+    }
   }
 
-  Future<void> _onRestore(GuestRecord record) async {
+  void _updateLocalStatus(GuestRecord record, GuestRecordStatus status) {
     setState(() {
-      final idx = _records.indexOf(record);
+      final idx = _records.indexWhere((r) => r.id == record.id);
       if (idx == -1) return;
       _records[idx] = GuestRecord(
+        id: record.id,
         checkIn: record.checkIn,
         checkOut: record.checkOut,
         nights: record.nights,
@@ -256,94 +275,74 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
         rooms: record.rooms,
         purpose: record.purpose,
         transport: record.transport,
-        status: GuestRecordStatus.active,
+        status: status,
         demographics: record.demographics,
       );
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Guest record restored successfully.'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 3),
-      ),
-    );
+  }
+
+  void _showSnack(String msg,
+      {bool isError = false, Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor:
+          isError ? AppColors.accentRed : (color ?? AppColors.primaryCyan),
+      duration: const Duration(seconds: 3),
+    ));
   }
 
   void _clearAllFilters() {
     setState(() {
       _checkInFrom = null;
       _checkOutTo = null;
-      _selectedCountry = null;
       _selectedPurpose = null;
       _selectedTransport = null;
       _searchQuery = '';
-      _activeFilter = _Filter.all;
       _searchCtrl.clear();
     });
   }
 
-  bool _matchesFilters(GuestRecord record) {
-    // Check-in From filter
+  // ── Filtering ────────────────────────────────────────────────────────────
+
+  bool _matchesAdvancedFilters(GuestRecord r) {
     if (_checkInFrom != null) {
       try {
-        final recordCheckIn = DateTime.parse(record.checkIn);
-        if (recordCheckIn.isBefore(_checkInFrom!)) return false;
-      } catch (e) {
-        // If date parsing fails, skip this filter
-      }
+        if (DateTime.parse(r.checkIn).isBefore(_checkInFrom!)) return false;
+      } catch (_) {}
     }
-
-    // Check-out To filter
     if (_checkOutTo != null) {
       try {
-        final recordCheckOut = DateTime.parse(record.checkOut);
-        if (recordCheckOut.isAfter(_checkOutTo!)) return false;
-      } catch (e) {
-        // If date parsing fails, skip this filter
-      }
+        if (DateTime.parse(r.checkOut).isAfter(_checkOutTo!)) return false;
+      } catch (_) {}
     }
-
-    // Country filter
-    if (_selectedCountry != null && _selectedCountry != 'All') {
-      final hasCountry =
-          record.demographics?.countries.containsKey(_selectedCountry) ?? false;
-      if (!hasCountry) return false;
-    }
-
-    // Purpose filter
     if (_selectedPurpose != null && _selectedPurpose != 'All') {
-      if (record.purpose != _selectedPurpose) return false;
+      if (r.purpose != _selectedPurpose) return false;
     }
-
-    // Transport filter
     if (_selectedTransport != null && _selectedTransport != 'All') {
-      if (record.transport != _selectedTransport) return false;
+      if (r.transport != _selectedTransport) return false;
     }
-
     return true;
+  }
+
+  List<GuestRecord> get _filtered {
+    final q = _searchQuery.toLowerCase();
+    return _records.where((r) {
+      final matchesStatus = switch (_activeFilter) {
+        _Filter.active => r.status == GuestRecordStatus.active,
+        _Filter.archived => r.status == GuestRecordStatus.archived,
+      };
+      final matchesSearch = q.isEmpty ||
+          r.checkIn.contains(q) ||
+          r.purpose.toLowerCase().contains(q) ||
+          r.transport.toLowerCase().contains(q);
+      return matchesStatus && matchesSearch && _matchesAdvancedFilters(r);
+    }).toList();
   }
 
   @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  List<GuestRecord> get _filtered {
-    return _records.where((r) {
-      final matchesFilter = switch (_activeFilter) {
-        _Filter.all => true,
-        _Filter.active => r.status == GuestRecordStatus.active,
-        _Filter.archived => r.status == GuestRecordStatus.archived,
-      };
-      final q = _searchQuery.toLowerCase();
-      final matchesSearch =
-          q.isEmpty ||
-          r.checkIn.contains(q) ||
-          r.purpose.toLowerCase().contains(q) ||
-          r.transport.toLowerCase().contains(q);
-      return matchesFilter && matchesSearch && _matchesFilters(r);
-    }).toList();
   }
 
   @override
@@ -362,7 +361,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
               children: [
                 _PageHeader(
                   activeFilter: _activeFilter,
-                  onFilterChanged: (f) => setState(() => _activeFilter = f),
+                  onFilterChanged: (f) =>
+                      setState(() => _activeFilter = f),
                   showFilters: _showFilters,
                   onFilterToggle: () =>
                       setState(() => _showFilters = !_showFilters),
@@ -378,36 +378,82 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   _FiltersSection(
                     checkInFrom: _checkInFrom,
                     checkOutTo: _checkOutTo,
-                    selectedCountry: _selectedCountry,
                     selectedPurpose: _selectedPurpose,
                     selectedTransport: _selectedTransport,
-                    countryOptions: _countryOptions,
                     purposeOptions: _purposeOptions,
                     transportOptions: _transportOptions,
-                    onCheckInFromTap: () => _selectCheckInFrom(context),
-                    onCheckOutToTap: () => _selectCheckOutTo(context),
-                    onCountryChanged: (value) =>
-                        setState(() => _selectedCountry = value),
-                    onPurposeChanged: (value) =>
-                        setState(() => _selectedPurpose = value),
-                    onTransportChanged: (value) =>
-                        setState(() => _selectedTransport = value),
+                    onCheckInFromTap: () => _pickDate(context, true),
+                    onCheckOutToTap: () => _pickDate(context, false),
+                    onPurposeChanged: (v) =>
+                        setState(() => _selectedPurpose = v),
+                    onTransportChanged: (v) =>
+                        setState(() => _selectedTransport = v),
                     onClearAll: _clearAllFilters,
                     isNarrow: isNarrow,
                   ),
                   const SizedBox(height: 14),
                 ],
-                _GuestTable(
-                  records: _filtered,
-                  isNarrow: isNarrow,
-                  onEdit: _onEdit,
-                  onArchive: _onArchive,
-                  onRestore: _onRestore, // ADD THIS
-                ),
+                if (_isLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                          color: AppColors.primaryCyan),
+                    ),
+                  )
+                else if (_loadError != null)
+                  _ErrorBanner(
+                      message: _loadError!, onRetry: _loadRecords)
+                else
+                  _GuestTable(
+                    records: _filtered,
+                    isNarrow: isNarrow,
+                    onEdit: _onEdit,
+                    onArchive: _onArchive,
+                    onRestore: _onRestore,
+                  ),
               ],
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── Error Banner ─────────────────────────────────────────────────────────────
+
+class _ErrorBanner extends StatelessWidget {
+  const _ErrorBanner({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.accentRed.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accentRed.withOpacity(0.35)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded,
+              color: AppColors.accentRed, size: 18),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message,
+                style: const TextStyle(
+                    color: AppColors.accentRed, fontSize: 13.5)),
+          ),
+          TextButton(
+            onPressed: onRetry,
+            child: const Text('Retry',
+                style: TextStyle(color: AppColors.primaryCyan)),
+          ),
+        ],
       ),
     );
   }
@@ -419,15 +465,12 @@ class _FiltersSection extends StatelessWidget {
   const _FiltersSection({
     required this.checkInFrom,
     required this.checkOutTo,
-    required this.selectedCountry,
     required this.selectedPurpose,
     required this.selectedTransport,
-    required this.countryOptions,
     required this.purposeOptions,
     required this.transportOptions,
     required this.onCheckInFromTap,
     required this.onCheckOutToTap,
-    required this.onCountryChanged,
     required this.onPurposeChanged,
     required this.onTransportChanged,
     required this.onClearAll,
@@ -436,191 +479,139 @@ class _FiltersSection extends StatelessWidget {
 
   final DateTime? checkInFrom;
   final DateTime? checkOutTo;
-  final String? selectedCountry;
   final String? selectedPurpose;
   final String? selectedTransport;
-  final List<String> countryOptions;
   final List<String> purposeOptions;
   final List<String> transportOptions;
   final VoidCallback onCheckInFromTap;
   final VoidCallback onCheckOutToTap;
-  final ValueChanged<String?> onCountryChanged;
   final ValueChanged<String?> onPurposeChanged;
   final ValueChanged<String?> onTransportChanged;
   final VoidCallback onClearAll;
   final bool isNarrow;
 
+  bool get _hasActiveFilters =>
+      checkInFrom != null ||
+      checkOutTo != null ||
+      (selectedPurpose != null && selectedPurpose != 'All') ||
+      (selectedTransport != null && selectedTransport != 'All');
+
   @override
   Widget build(BuildContext context) {
-    final hasActiveFilters =
-        checkInFrom != null ||
-        checkOutTo != null ||
-        (selectedCountry != null && selectedCountry != 'All') ||
-        (selectedPurpose != null && selectedPurpose != 'All') ||
-        (selectedTransport != null && selectedTransport != 'All');
-
     if (isNarrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Check-in From and Check-out To
-          Row(
-            children: [
-              Expanded(
-                child: _buildDatePicker(
-                  label: 'Check-in From',
-                  date: checkInFrom,
-                  onTap: onCheckInFromTap,
-                  hint: 'mm/dd/yyyy',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildDatePicker(
-                  label: 'Check-out To',
-                  date: checkOutTo,
-                  onTap: onCheckOutToTap,
-                  hint: 'mm/dd/yyyy',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Row 2: Country and Purpose
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownWithLabel(
-                  label: 'Country',
-                  value: selectedCountry,
-                  items: countryOptions,
-                  onChanged: onCountryChanged,
-                  hint: 'All',
-                  icon: Icons.public,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildDropdownWithLabel(
-                  label: 'Purpose',
-                  value: selectedPurpose,
-                  items: purposeOptions,
-                  onChanged: onPurposeChanged,
-                  hint: 'All',
-                  icon: Icons.work_outline,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Row 3: Transportation
-          Row(
-            children: [
-              Expanded(
-                child: _buildDropdownWithLabel(
-                  label: 'Transportation',
-                  value: selectedTransport,
-                  items: transportOptions,
-                  onChanged: onTransportChanged,
-                  hint: 'All',
-                  icon: Icons.directions_car_outlined,
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (hasActiveFilters) Expanded(child: _buildClearButton()),
-            ],
-          ),
+          Row(children: [
+            Expanded(
+                child: _DateFilter(
+                    label: 'Check-in From',
+                    date: checkInFrom,
+                    onTap: onCheckInFromTap)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _DateFilter(
+                    label: 'Check-out To',
+                    date: checkOutTo,
+                    onTap: onCheckOutToTap)),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+                child: _DropFilter(
+                    label: 'Purpose',
+                    value: selectedPurpose,
+                    items: purposeOptions,
+                    onChanged: onPurposeChanged,
+                    icon: Icons.work_outline)),
+            const SizedBox(width: 8),
+            Expanded(
+                child: _DropFilter(
+                    label: 'Transportation',
+                    value: selectedTransport,
+                    items: transportOptions,
+                    onChanged: onTransportChanged,
+                    icon: Icons.directions_car_outlined)),
+          ]),
+          if (_hasActiveFilters) ...[
+            const SizedBox(height: 10),
+            _ClearAllBtn(onTap: onClearAll),
+          ],
         ],
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildDatePicker(
+        Expanded(
+            child: _DateFilter(
                 label: 'Check-in From',
                 date: checkInFrom,
-                onTap: onCheckInFromTap,
-                hint: 'mm/dd/yyyy',
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDatePicker(
+                onTap: onCheckInFromTap)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _DateFilter(
                 label: 'Check-out To',
                 date: checkOutTo,
-                onTap: onCheckOutToTap,
-                hint: 'mm/dd/yyyy',
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDropdownWithLabel(
-                label: 'Country',
-                value: selectedCountry,
-                items: countryOptions,
-                onChanged: onCountryChanged,
-                hint: 'All',
-                icon: Icons.public,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDropdownWithLabel(
+                onTap: onCheckOutToTap)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _DropFilter(
                 label: 'Purpose',
                 value: selectedPurpose,
                 items: purposeOptions,
                 onChanged: onPurposeChanged,
-                hint: 'All',
-                icon: Icons.work_outline,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDropdownWithLabel(
+                icon: Icons.work_outline)),
+        const SizedBox(width: 12),
+        Expanded(
+            child: _DropFilter(
                 label: 'Transportation',
                 value: selectedTransport,
                 items: transportOptions,
                 onChanged: onTransportChanged,
-                hint: 'All',
-                icon: Icons.directions_car_outlined,
-              ),
-            ),
-            if (hasActiveFilters) ...[
-              const SizedBox(width: 16),
-              _buildClearButton(),
-            ],
-          ],
-        ),
+                icon: Icons.directions_car_outlined)),
+        if (_hasActiveFilters) ...[
+          const SizedBox(width: 12),
+          _ClearAllBtn(onTap: onClearAll),
+        ],
       ],
     );
   }
+}
 
-  Widget _buildDatePicker({
-    required String label,
-    required DateTime? date,
-    required VoidCallback onTap,
-    required String hint,
-  }) {
+// ─── Filter Widgets ───────────────────────────────────────────────────────────
+
+class _DateFilter extends StatelessWidget {
+  const _DateFilter(
+      {required this.label, required this.date, required this.onTap});
+
+  final String label;
+  final DateTime? date;
+  final VoidCallback onTap;
+
+  String get _display {
+    if (date == null) return 'mm/dd/yyyy';
+    return '${date!.month.toString().padLeft(2, '0')}/'
+        '${date!.day.toString().padLeft(2, '0')}/${date!.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textGray,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(
+                color: AppColors.textGray,
+                fontSize: 11,
+                fontWeight: FontWeight.w500)),
         const SizedBox(height: 4),
         GestureDetector(
           onTap: onTap,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.cardBackground,
               borderRadius: BorderRadius.circular(8),
@@ -628,17 +619,12 @@ class _FiltersSection extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.calendar_today,
-                  color: AppColors.textSubtle,
-                  size: 16,
-                ),
+                const Icon(Icons.calendar_today,
+                    color: AppColors.textSubtle, size: 14),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    date != null
-                        ? '${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}/${date.year}'
-                        : hint,
+                    _display,
                     style: TextStyle(
                       color: date != null
                           ? AppColors.textWhite
@@ -654,29 +640,36 @@ class _FiltersSection extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _buildDropdownWithLabel({
-    required String label,
-    required String? value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-    required String hint,
-    required IconData icon,
-  }) {
+class _DropFilter extends StatelessWidget {
+  const _DropFilter({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    required this.icon,
+  });
+
+  final String label;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textGray,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(
+                color: AppColors.textGray,
+                fontSize: 11,
+                fontWeight: FontWeight.w500)),
         const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(8),
@@ -686,76 +679,66 @@ class _FiltersSection extends StatelessWidget {
             child: DropdownButton<String>(
               value: value,
               isDense: true,
+              isExpanded: true,
               hint: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
-                    Icon(icon, color: AppColors.textSubtle, size: 16),
+                    Icon(icon, color: AppColors.textSubtle, size: 14),
                     const SizedBox(width: 6),
-                    Text(
-                      hint,
-                      style: const TextStyle(
-                        color: AppColors.textSubtle,
-                        fontSize: 12.5,
-                      ),
-                    ),
+                    const Text('All',
+                        style: TextStyle(
+                            color: AppColors.textSubtle, fontSize: 12.5)),
                   ],
                 ),
               ),
-              isExpanded: true,
-              icon: const Icon(
-                Icons.arrow_drop_down,
-                color: AppColors.textGray,
-                size: 20,
-              ),
               dropdownColor: AppColors.cardBackground,
+              iconEnabledColor: AppColors.textGray,
               style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 12.5,
-              ),
-              items: items.map((item) {
-                return DropdownMenuItem(
-                  value: item,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(item),
-                  ),
-                );
-              }).toList(),
+                  color: AppColors.textWhite, fontSize: 12.5),
+              items: items
+                  .map((e) => DropdownMenuItem(
+                      value: e,
+                      child: Padding(
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 10),
+                          child: Text(e))))
+                  .toList(),
               onChanged: onChanged,
-              underline: const SizedBox(),
             ),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildClearButton() {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onClearAll,
+class _ClearAllBtn extends StatelessWidget {
+  const _ClearAllBtn({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.clear_all, color: AppColors.textGray, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                'Clear All',
-                style: TextStyle(color: AppColors.textGray, fontSize: 12),
-              ),
-            ],
-          ),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.clear_all,
+                color: AppColors.textGray, size: 15),
+            const SizedBox(width: 5),
+            const Text('Clear All',
+                style: TextStyle(
+                    color: AppColors.textGray, fontSize: 12)),
+          ],
         ),
       ),
     );
@@ -763,6 +746,7 @@ class _FiltersSection extends StatelessWidget {
 }
 
 // ─── Page Header ──────────────────────────────────────────────────────────────
+
 class _PageHeader extends StatelessWidget {
   const _PageHeader({
     required this.activeFilter,
@@ -781,13 +765,9 @@ class _PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filterRow = _FilterToggle(
-      activeFilter: activeFilter,
-      onChanged: onFilterChanged,
-    );
-    final toggleButton = _FilterPanelButton(
-      isActive: showFilters,
-      onTap: onFilterToggle,
-    );
+        activeFilter: activeFilter, onChanged: onFilterChanged);
+    final toggleBtn =
+        _FilterPanelButton(isActive: showFilters, onTap: onFilterToggle);
 
     if (isNarrow) {
       return Column(
@@ -795,7 +775,11 @@ class _PageHeader extends StatelessWidget {
         children: [
           _TitleSubtitle(),
           const SizedBox(height: 12),
-          Row(children: [filterRow, const SizedBox(width: 10), toggleButton]),
+          Row(children: [
+            filterRow,
+            const SizedBox(width: 10),
+            toggleBtn
+          ]),
         ],
       );
     }
@@ -807,52 +791,8 @@ class _PageHeader extends StatelessWidget {
         const Spacer(),
         filterRow,
         const SizedBox(width: 10),
-        toggleButton,
+        toggleBtn,
       ],
-    );
-  }
-}
-
-class _FilterPanelButton extends StatelessWidget {
-  const _FilterPanelButton({required this.isActive, required this.onTap});
-
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.primaryCyan.withOpacity(0.15)
-              : AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isActive ? AppColors.primaryCyan : AppColors.cardBorder,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.filter_list_rounded,
-              color: isActive ? AppColors.primaryCyan : AppColors.textGray,
-              size: 16,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Filters',
-              style: TextStyle(
-                color: isActive ? AppColors.primaryCyan : AppColors.textGray,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -866,25 +806,66 @@ class _TitleSubtitle extends StatelessWidget {
         Text(
           'Guest Records',
           style: TextStyle(
-            color: AppColors.textWhite,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-          ),
+              color: AppColors.textWhite,
+              fontSize: 22,
+              fontWeight: FontWeight.w700),
         ),
         SizedBox(height: 4),
-        Text(
-          'View and manage all guest entries',
-          style: TextStyle(color: AppColors.textGray, fontSize: 13),
-        ),
+        Text('View and manage all guest entries',
+            style: TextStyle(color: AppColors.textGray, fontSize: 13)),
       ],
     );
   }
 }
 
-// ─── Filter Toggle ────────────────────────────────────────────────────────────
+class _FilterPanelButton extends StatelessWidget {
+  const _FilterPanelButton({required this.isActive, required this.onTap});
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.primaryCyan.withOpacity(0.15)
+              : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+              color:
+                  isActive ? AppColors.primaryCyan : AppColors.cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.filter_list_rounded,
+                color: isActive
+                    ? AppColors.primaryCyan
+                    : AppColors.textGray,
+                size: 16),
+            const SizedBox(width: 6),
+            Text('Filters',
+                style: TextStyle(
+                    color: isActive
+                        ? AppColors.primaryCyan
+                        : AppColors.textGray,
+                    fontSize: 13)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Filter Toggle (Active / Archived only) ───────────────────────────────────
 
 class _FilterToggle extends StatelessWidget {
-  const _FilterToggle({required this.activeFilter, required this.onChanged});
+  const _FilterToggle(
+      {required this.activeFilter, required this.onChanged});
 
   final _Filter activeFilter;
   final ValueChanged<_Filter> onChanged;
@@ -900,11 +881,6 @@ class _FilterToggle extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _FilterTab(
-            label: 'All',
-            isActive: activeFilter == _Filter.all,
-            onTap: () => onChanged(_Filter.all),
-          ),
           _FilterTab(
             label: 'Active',
             isActive: activeFilter == _Filter.active,
@@ -922,11 +898,10 @@ class _FilterToggle extends StatelessWidget {
 }
 
 class _FilterTab extends StatelessWidget {
-  const _FilterTab({
-    required this.label,
-    required this.isActive,
-    required this.onTap,
-  });
+  const _FilterTab(
+      {required this.label,
+      required this.isActive,
+      required this.onTap});
 
   final String label;
   final bool isActive;
@@ -938,12 +913,12 @@ class _FilterTab extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           gradient: isActive
               ? const LinearGradient(
-                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
-                )
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd])
               : null,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -952,7 +927,8 @@ class _FilterTab extends StatelessWidget {
           style: TextStyle(
             color: isActive ? Colors.white : AppColors.textGray,
             fontSize: 13,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            fontWeight:
+                isActive ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
       ),
@@ -964,7 +940,6 @@ class _FilterTab extends StatelessWidget {
 
 class _SearchBar extends StatelessWidget {
   const _SearchBar({required this.controller, required this.onChanged});
-
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
 
@@ -982,15 +957,14 @@ class _SearchBar extends StatelessWidget {
         onChanged: onChanged,
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
         decoration: const InputDecoration(
-          hintText: 'Search by date or purpose...',
-          hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
-          prefixIcon: Icon(
-            Icons.search_rounded,
-            color: AppColors.textSubtle,
-            size: 20,
-          ),
+          hintText: 'Search by date, purpose, or transport...',
+          hintStyle:
+              TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+          prefixIcon: Icon(Icons.search_rounded,
+              color: AppColors.textSubtle, size: 20),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 16, vertical: 5),
         ),
       ),
     );
@@ -1005,14 +979,14 @@ class _GuestTable extends StatelessWidget {
     required this.isNarrow,
     required this.onEdit,
     required this.onArchive,
-    required this.onRestore, // ADD
+    required this.onRestore,
   });
 
   final List<GuestRecord> records;
   final bool isNarrow;
   final ValueChanged<GuestRecord> onEdit;
   final ValueChanged<GuestRecord> onArchive;
-  final ValueChanged<GuestRecord> onRestore; // ADD
+  final ValueChanged<GuestRecord> onRestore;
 
   @override
   Widget build(BuildContext context) {
@@ -1024,42 +998,40 @@ class _GuestTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (!isNarrow) _TableHeader(),
-          if (!isNarrow) const Divider(color: AppColors.cardBorder, height: 1),
-          records.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(
-                    child: Text(
-                      'No records found.',
-                      style: TextStyle(color: AppColors.textGray),
-                    ),
-                  ),
-                )
-              : Column(
-                  children: records.map((r) {
-                    return Column(
-                      children: [
-                        if (isNarrow)
-                          _RecordCard(
-                            record: r,
-                            onEdit: onEdit,
-                            onArchive: onArchive,
-                            onRestore: onRestore, // ADD
-                          )
-                        else
-                          _RecordRow(
-                            record: r,
-                            onEdit: onEdit,
-                            onArchive: onArchive,
-                            onRestore: onRestore, // ADD
-                          ),
-                        if (r != records.last)
-                          const Divider(color: AppColors.cardBorder, height: 1),
-                      ],
-                    );
-                  }).toList(),
-                ),
+          if (!isNarrow) ...[
+            _TableHeader(),
+            const Divider(color: AppColors.cardBorder, height: 1),
+          ],
+          if (records.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(40),
+              child: Center(
+                child: Text('No records found.',
+                    style: TextStyle(color: AppColors.textGray)),
+              ),
+            )
+          else
+            ...records.map((r) {
+              final isLast = r == records.last;
+              return Column(
+                children: [
+                  if (isNarrow)
+                    _RecordCard(
+                        record: r,
+                        onEdit: onEdit,
+                        onArchive: onArchive,
+                        onRestore: onRestore)
+                  else
+                    _RecordRow(
+                        record: r,
+                        onEdit: onEdit,
+                        onArchive: onArchive,
+                        onRestore: onRestore),
+                  if (!isLast)
+                    const Divider(color: AppColors.cardBorder, height: 1),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -1096,141 +1068,112 @@ class _HeaderCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppColors.textGray,
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
+    return Text(label,
+        style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 12,
+            fontWeight: FontWeight.w500));
+  }
+}
+
+// ─── Table Row (wide) ─────────────────────────────────────────────────────────
+
+class _RecordRow extends StatelessWidget {
+  const _RecordRow({
+    required this.record,
+    required this.onEdit,
+    required this.onArchive,
+    required this.onRestore,
+  });
+
+  final GuestRecord record;
+  final ValueChanged<GuestRecord> onEdit;
+  final ValueChanged<GuestRecord> onArchive;
+  final ValueChanged<GuestRecord> onRestore;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = record;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Expanded(
+              flex: 3,
+              child: Text(r.checkIn,
+                  style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 3,
+              child: Text(r.checkOut,
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 13))),
+          Expanded(
+              flex: 2,
+              child: Text(r.nights,
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 13))),
+          Expanded(
+              flex: 1,
+              child: Text('${r.guests}',
+                  style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600))),
+          Expanded(
+              flex: 1,
+              child: Text('${r.rooms}',
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 13))),
+          Expanded(
+              flex: 2,
+              child: Text(r.purpose,
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 13))),
+          Expanded(
+              flex: 3,
+              child: Text(r.transport,
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 13))),
+          Expanded(flex: 2, child: _StatusBadge(status: r.status)),
+          Expanded(
+            flex: 2,
+            child: _ActionButtons(
+              status: r.status,
+              hasDemographics: r.demographics != null,
+              onEdit: () => onEdit(r),
+              onArchive: () => onArchive(r),
+              onRestore: () => onRestore(r),
+              onViewDemographics: () =>
+                  _showDemographicsModal(context, r),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─── Table Row (wide screens) ─────────────────────────────────────────────────
+// ─── Record Card (narrow) ─────────────────────────────────────────────────────
 
-class _RecordRow extends StatefulWidget {
-  const _RecordRow({
-    required this.record,
-    required this.onEdit,
-    required this.onArchive,
-    required this.onRestore,   // ADD
-  });
-
-  final GuestRecord record;
-  final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onArchive;
-  final ValueChanged<GuestRecord> onRestore;   // ADD
-
-  @override
-  State<_RecordRow> createState() => _RecordRowState();
-}
-
-class _RecordRowState extends State<_RecordRow> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final r = widget.record;
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: Text(r.checkIn,
-                    style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600)),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(r.checkOut,
-                    style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 13)),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(r.nights,
-                    style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 13)),
-              ),
-              Expanded(
-                flex: 1,
-                child: Text('${r.guests}',
-                    style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600)),
-              ),
-              Expanded(
-                flex: 1,
-                child: Text('${r.rooms}',
-                    style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 13)),
-              ),
-              Expanded(
-                flex: 2,
-                child: Text(r.purpose,
-                    style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 13)),
-              ),
-              Expanded(
-                flex: 3,
-                child: Text(r.transport,
-                    style: const TextStyle(
-                        color: AppColors.textGray, fontSize: 13)),
-              ),
-              Expanded(flex: 2, child: _StatusBadge(status: r.status)),
-              Expanded(
-                flex: 2,
-                child: _ActionButtons(
-                  status: r.status,
-                  expanded: _expanded,
-                  onToggleExpand: () =>
-                      setState(() => _expanded = !_expanded),
-                  onEdit: () => widget.onEdit(r),
-                  onArchive: () => widget.onArchive(r),
-                  onRestore: () => widget.onRestore(r),   // ADD
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_expanded) _ExpandedDetails(record: r),
-      ],
-    );
-  }
-}
-
-// ─── Record Card (narrow screens) ────────────────────────────────────────────
-
-class _RecordCard extends StatefulWidget {
+class _RecordCard extends StatelessWidget {
   const _RecordCard({
     required this.record,
     required this.onEdit,
     required this.onArchive,
-    required this.onRestore,   // ADD
+    required this.onRestore,
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
   final ValueChanged<GuestRecord> onArchive;
-  final ValueChanged<GuestRecord> onRestore;   // ADD
-
-  @override
-  _RecordCardState createState() => _RecordCardState();
-}
-
-class _RecordCardState extends State<_RecordCard> {
-  bool _expanded = false;
+  final ValueChanged<GuestRecord> onRestore;
 
   @override
   Widget build(BuildContext context) {
-    final r = widget.record;
+    final r = record;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1274,31 +1217,29 @@ class _RecordCardState extends State<_RecordCard> {
               if (r.status == GuestRecordStatus.active) ...[
                 _IconBtn(
                     icon: Icons.edit_outlined,
-                    onTap: () => widget.onEdit(widget.record)),
+                    tooltip: 'Edit',
+                    onTap: () => onEdit(r)),
                 const SizedBox(width: 8),
                 _IconBtn(
                     icon: Icons.archive_outlined,
-                    onTap: () => widget.onArchive(widget.record)),
+                    tooltip: 'Archive',
+                    onTap: () => onArchive(r)),
               ] else ...[
-                // ADD: restore button for archived
                 _IconBtn(
                     icon: Icons.unarchive_outlined,
-                    onTap: () => widget.onRestore(widget.record)),
+                    tooltip: 'Restore',
+                    onTap: () => onRestore(r)),
               ],
-              const Spacer(),
-              GestureDetector(
-                onTap: () => setState(() => _expanded = !_expanded),
-                child: Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textGray,
-                  size: 20,
+              if (r.demographics != null) ...[
+                const SizedBox(width: 8),
+                _IconBtn(
+                  icon: Icons.bar_chart_rounded,
+                  tooltip: 'View Demographics',
+                  onTap: () => _showDemographicsModal(context, r),
                 ),
-              ),
+              ],
             ],
           ),
-          if (_expanded) _ExpandedDetails(record: r),
         ],
       ),
     );
@@ -1317,199 +1258,18 @@ class _InfoChip extends StatelessWidget {
         style: const TextStyle(fontSize: 12),
         children: [
           TextSpan(
-            text: '$label: ',
-            style: const TextStyle(color: AppColors.textSubtle),
-          ),
+              text: '$label: ',
+              style: const TextStyle(color: AppColors.textSubtle)),
           TextSpan(
-            text: value,
-            style: const TextStyle(color: AppColors.textGray),
-          ),
+              text: value,
+              style: const TextStyle(color: AppColors.textGray)),
         ],
       ),
     );
   }
 }
 
-// ─── Expanded Details ─────────────────────────────────────────────────────────
-
-class _ExpandedDetails extends StatelessWidget {
-  const _ExpandedDetails({required this.record});
-  final GuestRecord record;
-
-  @override
-  Widget build(BuildContext context) {
-    final demographics = record.demographics;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.backgroundDark,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Guest Demographic Breakdown',
-            style: TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          if (demographics != null) ...[
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.cardBorder),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Table(
-                border: TableBorder.all(
-                  color: AppColors.cardBorder,
-                  width: 0.5,
-                ),
-                columnWidths: const {
-                  0: FlexColumnWidth(2),
-                  1: FlexColumnWidth(3),
-                },
-                children: [
-                  TableRow(
-                    decoration: BoxDecoration(color: AppColors.cardBackground),
-                    children: const [
-                      Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Category',
-                          style: TextStyle(
-                            color: AppColors.textWhite,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Details',
-                          style: TextStyle(
-                            color: AppColors.textWhite,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TableRow(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Age Groups',
-                          style: TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: demographics.ageGroups.entries.map((entry) {
-                            return Text(
-                              '${entry.key}: ${entry.value}',
-                              style: const TextStyle(
-                                color: AppColors.textWhite,
-                                fontSize: 11,
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TableRow(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Gender',
-                          style: TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: demographics.genderDistribution.entries.map(
-                            (entry) {
-                              return Text(
-                                '${entry.key}: ${entry.value}',
-                                style: const TextStyle(
-                                  color: AppColors.textWhite,
-                                  fontSize: 11,
-                                ),
-                              );
-                            },
-                          ).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  TableRow(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Countries',
-                          style: TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: demographics.countries.entries.map((entry) {
-                            return Text(
-                              '${entry.key}: ${entry.value}',
-                              style: const TextStyle(
-                                color: AppColors.textWhite,
-                                fontSize: 11,
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ] else ...[
-            const Text(
-              'No demographic data available for this entry.',
-              style: TextStyle(color: AppColors.textSubtle, fontSize: 12),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
@@ -1519,8 +1279,6 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final isActive = status == GuestRecordStatus.active;
     final color = isActive ? AppColors.accentGreen : AppColors.textGray;
-    final label = isActive ? 'active' : 'archived';
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -1529,72 +1287,397 @@ class _StatusBadge extends StatelessWidget {
         border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(
-        label,
+        isActive ? 'active' : 'archived',
         style: TextStyle(
-          color: color,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-        ),
+            color: color,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600),
       ),
     );
   }
 }
 
 // ─── Action Buttons ───────────────────────────────────────────────────────────
+
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.status,
-    required this.expanded,
-    required this.onToggleExpand,
+    required this.hasDemographics,
     required this.onEdit,
     required this.onArchive,
-    required this.onRestore,   // ADD
+    required this.onRestore,
+    required this.onViewDemographics,
   });
 
   final GuestRecordStatus status;
-  final bool expanded;
-  final VoidCallback onToggleExpand;
+  final bool hasDemographics;
   final VoidCallback onEdit;
   final VoidCallback onArchive;
-  final VoidCallback onRestore;   // ADD
+  final VoidCallback onRestore;
+  final VoidCallback onViewDemographics;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         if (status == GuestRecordStatus.active) ...[
-          _IconBtn(icon: Icons.edit_outlined, onTap: onEdit),
+          _IconBtn(
+              icon: Icons.edit_outlined, tooltip: 'Edit', onTap: onEdit),
           const SizedBox(width: 8),
-          _IconBtn(icon: Icons.archive_outlined, onTap: onArchive),
-          const SizedBox(width: 8),
+          _IconBtn(
+              icon: Icons.archive_outlined,
+              tooltip: 'Archive',
+              onTap: onArchive),
         ] else ...[
-          // ADD: restore button for archived rows
-          _IconBtn(icon: Icons.unarchive_outlined, onTap: onRestore),
-          const SizedBox(width: 8),
+          _IconBtn(
+              icon: Icons.unarchive_outlined,
+              tooltip: 'Restore',
+              onTap: onRestore),
         ],
-        _IconBtn(
-          icon: expanded
-              ? Icons.keyboard_arrow_up_rounded
-              : Icons.keyboard_arrow_down_rounded,
-          onTap: onToggleExpand,
-        ),
+        if (hasDemographics) ...[
+          const SizedBox(width: 8),
+          _IconBtn(
+            icon: Icons.bar_chart_rounded,
+            tooltip: 'View Demographics',
+            onTap: onViewDemographics,
+          ),
+        ],
       ],
     );
   }
 }
 
-
-
 class _IconBtn extends StatelessWidget {
-  const _IconBtn({required this.icon, required this.onTap});
+  const _IconBtn(
+      {required this.icon, required this.onTap, this.tooltip});
   final IconData icon;
   final VoidCallback onTap;
+  final String? tooltip;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    final btn = GestureDetector(
       onTap: onTap,
       child: Icon(icon, color: AppColors.textGray, size: 17),
+    );
+    return tooltip != null
+        ? Tooltip(message: tooltip!, child: btn)
+        : btn;
+  }
+}
+
+// ─── Demographics Modal ───────────────────────────────────────────────────────
+
+void _showDemographicsModal(BuildContext context, GuestRecord record) {
+  showDialog(
+    context: context,
+    barrierColor: Colors.black.withOpacity(0.6),
+    builder: (_) => _DemographicsModal(record: record),
+  );
+}
+
+class _DemographicsModal extends StatelessWidget {
+  const _DemographicsModal({required this.record});
+  final GuestRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final demo = record.demographics;
+    final isNarrow = MediaQuery.of(context).size.width < 560;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isNarrow ? 16 : 40,
+        vertical: 32,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 560),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Header ───────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+              decoration: BoxDecoration(
+                border: Border(
+                    bottom: BorderSide(color: AppColors.cardBorder)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.bar_chart_rounded,
+                        color: AppColors.primaryCyan, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Guest Demographics',
+                          style: TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${record.checkIn}  →  ${record.checkOut}  •  ${record.nights}  •  ${record.guests} guests',
+                          style: const TextStyle(
+                              color: AppColors.textGray, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded,
+                        color: AppColors.textGray, size: 20),
+                    splashRadius: 18,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Body ─────────────────────────────────────────────────────
+            if (demo == null)
+              const Padding(
+                padding: EdgeInsets.all(32),
+                child: Text(
+                  'No demographic data available for this entry.',
+                  style: TextStyle(
+                      color: AppColors.textSubtle, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.65,
+                ),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Breakdown table ───────────────────────────
+                      const _ModalSectionLabel('Breakdown by Segment'),
+                      const SizedBox(height: 10),
+                      _BreakdownTable(breakdowns: demo.breakdowns),
+                      const SizedBox(height: 20),
+
+                      // ── Age groups ────────────────────────────────
+                      const _ModalSectionLabel('Age Groups'),
+                      const SizedBox(height: 10),
+                      _StatGrid(entries: demo.ageGroups),
+                      const SizedBox(height: 20),
+
+                      // ── Gender ────────────────────────────────────
+                      const _ModalSectionLabel('Gender Distribution'),
+                      const SizedBox(height: 10),
+                      _StatGrid(entries: demo.genderDistribution),
+                      const SizedBox(height: 20),
+
+                      // ── Countries / Regions ───────────────────────
+                      const _ModalSectionLabel('Nationality / Region'),
+                      const SizedBox(height: 10),
+                      _StatGrid(entries: demo.countries),
+                    ],
+                  ),
+                ),
+              ),
+
+            // ── Footer ───────────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+              decoration: BoxDecoration(
+                border:
+                    Border(top: BorderSide(color: AppColors.cardBorder)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModalSectionLabel extends StatelessWidget {
+  const _ModalSectionLabel(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppColors.textWhite,
+        fontSize: 12.5,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
+      ),
+    );
+  }
+}
+
+/// Full breakdown table: one row per GuestBreakdownEntry.
+class _BreakdownTable extends StatelessWidget {
+  const _BreakdownTable({required this.breakdowns});
+  final List<GuestBreakdownEntry> breakdowns;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Table(
+          border: TableBorder.symmetric(
+            inside: BorderSide(color: AppColors.cardBorder, width: 0.5),
+          ),
+          columnWidths: const {
+            0: FlexColumnWidth(2.5),
+            1: FlexColumnWidth(2),
+            2: FlexColumnWidth(1.5),
+            3: FlexColumnWidth(1.5),
+            4: FlexColumnWidth(1),
+          },
+          children: [
+            // Header row
+            TableRow(
+              decoration: BoxDecoration(
+                  color: AppColors.inputBackground),
+              children: const [
+                _TCell('Nationality', isHeader: true),
+                _TCell('Region', isHeader: true),
+                _TCell('Gender', isHeader: true),
+                _TCell('Age Group', isHeader: true),
+                _TCell('Count', isHeader: true),
+              ],
+            ),
+            ...breakdowns.map((b) => TableRow(
+                  children: [
+                    _TCell(b.nationality),
+                    _TCell(b.philippinesRegion ?? '—'),
+                    _TCell(b.gender),
+                    _TCell(b.ageGroup),
+                    _TCell('${b.count}'),
+                  ],
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TCell extends StatelessWidget {
+  const _TCell(this.text, {this.isHeader = false});
+  final String text;
+  final bool isHeader;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: isHeader ? AppColors.textGray : AppColors.textWhite,
+          fontSize: 11.5,
+          fontWeight:
+              isHeader ? FontWeight.w600 : FontWeight.w400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact pill grid for age groups, gender, nationality counts.
+class _StatGrid extends StatelessWidget {
+  const _StatGrid({required this.entries});
+  final Map<String, int> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return const Text('—',
+          style: TextStyle(color: AppColors.textSubtle, fontSize: 12));
+    }
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: entries.entries.map((e) {
+        return Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.inputBackground,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: e.key,
+                  style: const TextStyle(
+                      color: AppColors.textGray, fontSize: 12),
+                ),
+                const TextSpan(
+                  text: '  ',
+                  style: TextStyle(fontSize: 12),
+                ),
+                TextSpan(
+                  text: '${e.value}',
+                  style: const TextStyle(
+                    color: AppColors.primaryCyan,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }

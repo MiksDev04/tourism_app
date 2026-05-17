@@ -61,7 +61,7 @@ class Accommodation {
       name: map['business_name'] as String,
       type: map['business_type'] as String,
       owner: map['owner_name'] as String? ?? '—',
-      email: null, // We'll fetch this on demand in the details modal
+      email: profile?['email'] as String? ?? '—', // We'll fetch this on demand in the details modal
       contact: profile?['phone'] as String? ?? '—',
       rooms: map['total_rooms'] as int,
       status: _parseStatus(map['status'] as String),

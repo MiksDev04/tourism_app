@@ -10,6 +10,7 @@ Future<Profile> _$ProfileFromSupabase(
     id: data['id'] as String,
     fullName: data['full_name'] as String,
     phone: data['phone'] as String,
+    email: data['email'] as String,
     role: Role.values.byName(data['role']),
     createdAt: data['created_at'] as String?,
     updatedAt: data['updated_at'] as String?,
@@ -25,6 +26,7 @@ Future<Map<String, dynamic>> _$ProfileToSupabase(
     'id': instance.id,
     'full_name': instance.fullName,
     'phone': instance.phone,
+    'email': instance.email,
     'role': instance.role.name,
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
@@ -40,6 +42,7 @@ Future<Profile> _$ProfileFromSqlite(
     id: data['id'] as String,
     fullName: data['full_name'] as String,
     phone: data['phone'] as String,
+    email: data['email'] as String,
     role: Role.values[data['role'] as int],
     createdAt: data['created_at'] as String,
     updatedAt: data['updated_at'] as String,
@@ -55,6 +58,7 @@ Future<Map<String, dynamic>> _$ProfileToSqlite(
     'id': instance.id,
     'full_name': instance.fullName,
     'phone': instance.phone,
+    'email': instance.email,
     'role': Role.values.indexOf(instance.role),
     'created_at': instance.createdAt,
     'updated_at': instance.updatedAt,
@@ -82,6 +86,10 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'phone': const RuntimeSupabaseColumnDefinition(
       association: false,
       columnName: 'phone',
+    ),
+    'email': const RuntimeSupabaseColumnDefinition(
+      association: false,
+      columnName: 'email',
     ),
     'role': const RuntimeSupabaseColumnDefinition(
       association: false,
@@ -123,6 +131,12 @@ class ProfileAdapter extends OfflineFirstWithSupabaseAdapter<Profile> {
     'phone': const RuntimeSqliteColumnDefinition(
       association: false,
       columnName: 'phone',
+      iterable: false,
+      type: String,
+    ),
+    'email': const RuntimeSqliteColumnDefinition(
+      association: false,
+      columnName: 'email',
       iterable: false,
       type: String,
     ),

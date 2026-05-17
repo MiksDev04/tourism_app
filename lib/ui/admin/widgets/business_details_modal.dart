@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/accommodation_models.dart';
 
@@ -17,7 +18,8 @@ class BusinessDetails {
     required this.address,
     required this.phone,
     required this.email,
-    this.documents = const ['Business Permit', 'Valid ID'],
+    required this.permitFileUrl,
+    required this.validIdUrl,
   });
 
   final String name;
@@ -31,43 +33,29 @@ class BusinessDetails {
   final String address;
   final String phone;
   final String email;
-  final List<String> documents;
+  final String permitFileUrl;
+  final String validIdUrl;
 }
 
 // ─── Show Helper ──────────────────────────────────────────────────────────────
 
 Future<void> showBusinessDetailsModal(
   BuildContext context,
-  BusinessDetails details, {
-  VoidCallback? onApprove,
-  VoidCallback? onReject,
-}) {
+  BusinessDetails details,
+) {
   return showDialog(
     context: context,
-    // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.6),
     barrierDismissible: true,
-    builder: (_) => BusinessDetailsModal(
-      details: details,
-      onApprove: onApprove,
-      onReject: onReject,
-    ),
+    builder: (_) => BusinessDetailsModal(details: details),
   );
 }
 
 // ─── Modal Widget ─────────────────────────────────────────────────────────────
 
 class BusinessDetailsModal extends StatefulWidget {
-  const BusinessDetailsModal({
-    super.key,
-    required this.details,
-    this.onApprove,
-    this.onReject,
-  });
-
+  const BusinessDetailsModal({super.key, required this.details});
   final BusinessDetails details;
-  final VoidCallback? onApprove;
-  final VoidCallback? onReject;
 
   @override
   State<BusinessDetailsModal> createState() => _BusinessDetailsModalState();
@@ -79,7 +67,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
   late final Animation<double> _fadeAnim;
   late final Animation<Offset> _slideAnim;
 
-  static const _modalMaxWidth = 460.0;
+  static const _modalMaxWidth = 480.0;
 
   @override
   void initState() {
@@ -104,8 +92,6 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
 
   @override
   Widget build(BuildContext context) {
-    final showActions = widget.details.status == AccommodationStatus.pending;
-
     return Center(
       child: GestureDetector(
         onTap: () => Navigator.of(context).pop(),
@@ -113,7 +99,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
           width: double.infinity,
           height: double.infinity,
           child: GestureDetector(
-            onTap: () {}, // Prevents tap from bubbling to the outer GestureDetector
+            onTap: () {},
             child: FadeTransition(
               opacity: _fadeAnim,
               child: SlideTransition(
@@ -122,6 +108,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: _modalMaxWidth),
                     child: Container(
+                      margin: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
                         color: AppColors.cardBackground,
                         borderRadius: BorderRadius.circular(16),
@@ -137,7 +124,9 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _ModalHeader(onClose: () => Navigator.of(context).pop()),
+                          _ModalHeader(
+                            onClose: () => Navigator.of(context).pop(),
+                          ),
                           const Divider(color: AppColors.cardBorder, height: 1),
                           Flexible(
                             child: SingleChildScrollView(
@@ -147,34 +136,34 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
                                 children: [
                                   _BusinessIdentity(details: widget.details),
                                   const SizedBox(height: 20),
-                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const Divider(
+                                    color: AppColors.cardBorder,
+                                    height: 1,
+                                  ),
                                   const SizedBox(height: 20),
                                   _DetailsGrid(details: widget.details),
                                   const SizedBox(height: 20),
-                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const Divider(
+                                    color: AppColors.cardBorder,
+                                    height: 1,
+                                  ),
                                   const SizedBox(height: 20),
                                   _ContactInfo(details: widget.details),
                                   const SizedBox(height: 20),
-                                  const Divider(color: AppColors.cardBorder, height: 1),
+                                  const Divider(
+                                    color: AppColors.cardBorder,
+                                    height: 1,
+                                  ),
                                   const SizedBox(height: 20),
-                                  _DocumentsSection(documents: widget.details.documents),
+                                  _DocumentsSection(
+                                    permitFileUrl: widget.details.permitFileUrl,
+                                    validIdUrl: widget.details.validIdUrl,
+                                  ),
+                                  const SizedBox(height: 4),
                                 ],
                               ),
                             ),
                           ),
-                          if (showActions) ...[
-                            const Divider(color: AppColors.cardBorder, height: 1),
-                            _ActionRow(
-                              onApprove: () {
-                                Navigator.of(context).pop();
-                                widget.onApprove?.call();
-                              },
-                              onReject: () {
-                                Navigator.of(context).pop();
-                                widget.onReject?.call();
-                              },
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -193,7 +182,6 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal>
 
 class _ModalHeader extends StatelessWidget {
   const _ModalHeader({required this.onClose});
-
   final VoidCallback onClose;
 
   @override
@@ -212,22 +200,7 @@ class _ModalHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          GestureDetector(
-            onTap: onClose,
-            child: Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.cardBorder,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.close_rounded,
-                color: AppColors.textGray,
-                size: 16,
-              ),
-            ),
-          ),
+          _HoverIconButton(icon: Icons.close_rounded, onTap: onClose),
         ],
       ),
     );
@@ -238,7 +211,6 @@ class _ModalHeader extends StatelessWidget {
 
 class _BusinessIdentity extends StatelessWidget {
   const _BusinessIdentity({required this.details});
-
   final BusinessDetails details;
 
   @override
@@ -292,74 +264,48 @@ class _BusinessIdentity extends StatelessWidget {
   }
 }
 
-// ─── Details Grid ────────────────────────────────────────────────────────────
+// ─── Details Grid ─────────────────────────────────────────────────────────────
 
 class _DetailsGrid extends StatelessWidget {
   const _DetailsGrid({required this.details});
-
   final BusinessDetails details;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 300;
-        if (isNarrow) {
-          return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _DetailField(label: 'Owner', value: details.owner),
-              const SizedBox(height: 14),
-              _DetailField(label: 'Permit #', value: details.permitNumber),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               _DetailField(
                 label: 'Registration #',
                 value: details.registrationNumber,
               ),
-              const SizedBox(height: 14),
+            ],
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _DetailField(label: 'Permit #', value: details.permitNumber),
+              const SizedBox(height: 16),
               _DetailField(label: 'Registered', value: details.registeredDate),
             ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DetailField(label: 'Owner', value: details.owner),
-                  const SizedBox(height: 16),
-                  _DetailField(
-                    label: 'Registration #',
-                    value: details.registrationNumber,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _DetailField(label: 'Permit #', value: details.permitNumber),
-                  const SizedBox(height: 16),
-                  _DetailField(
-                    label: 'Registered',
-                    value: details.registeredDate,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _DetailField extends StatelessWidget {
   const _DetailField({required this.label, required this.value});
-
   final String label;
   final String value;
 
@@ -394,17 +340,13 @@ class _DetailField extends StatelessWidget {
 
 class _ContactInfo extends StatelessWidget {
   const _ContactInfo({required this.details});
-
   final BusinessDetails details;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _ContactRow(
-          icon: Icons.location_on_outlined,
-          text: details.address,
-        ),
+        _ContactRow(icon: Icons.location_on_outlined, text: details.address),
         const SizedBox(height: 10),
         _ContactRow(icon: Icons.phone_outlined, text: details.phone),
         const SizedBox(height: 10),
@@ -416,7 +358,6 @@ class _ContactInfo extends StatelessWidget {
 
 class _ContactRow extends StatelessWidget {
   const _ContactRow({required this.icon, required this.text});
-
   final IconData icon;
   final String text;
 
@@ -430,10 +371,7 @@ class _ContactRow extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: const TextStyle(
-              color: AppColors.textGray,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: AppColors.textGray, fontSize: 13),
           ),
         ),
       ],
@@ -444,9 +382,32 @@ class _ContactRow extends StatelessWidget {
 // ─── Documents Section ────────────────────────────────────────────────────────
 
 class _DocumentsSection extends StatelessWidget {
-  const _DocumentsSection({required this.documents});
+  const _DocumentsSection({
+    required this.permitFileUrl,
+    required this.validIdUrl,
+  });
 
-  final List<String> documents;
+  final String permitFileUrl;
+  final String validIdUrl;
+
+  Future<void> _openUrl(BuildContext context, String url) async {
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Document URL not available.')),
+      );
+      return;
+    }
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open document.')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -462,130 +423,126 @@ class _DocumentsSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: documents
-              .map((doc) => _DocumentChip(label: doc))
-              .toList(),
+        Row(
+          children: [
+            _DocumentChip(
+              label: 'Business Permit',
+              onTap: () => _openUrl(context, permitFileUrl),
+            ),
+            const SizedBox(width: 8),
+            _DocumentChip(
+              label: 'Valid ID',
+              onTap: () => _openUrl(context, validIdUrl),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _DocumentChip extends StatelessWidget {
-  const _DocumentChip({required this.label});
-
+class _DocumentChip extends StatefulWidget {
+  const _DocumentChip({required this.label, required this.onTap});
   final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.insert_drive_file_outlined,
-            color: AppColors.textGray,
-            size: 13,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textGray,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Action Row (NO CONFIRMATION - immediate actions) ────────────────────────
-
-class _ActionRow extends StatelessWidget {
-  const _ActionRow({required this.onApprove, required this.onReject});
-
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: _ModalButton(
-              label: 'Reject',
-              icon: Icons.cancel_outlined,
-              color: const Color(0xFFFF4D6A),
-              onTap: onReject,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _ModalButton(
-              label: 'Approve',
-              icon: Icons.check_circle_outline_rounded,
-              color: const Color(0xFF00C48C),
-              onTap: onApprove,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ModalButton extends StatelessWidget {
-  const _ModalButton({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color color;
   final VoidCallback onTap;
 
   @override
+  State<_DocumentChip> createState() => _DocumentChipState();
+}
+
+class _DocumentChipState extends State<_DocumentChip> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.25)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 16),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? AppColors.primaryCyan.withOpacity(0.1)
+                : AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _hovered
+                  ? AppColors.primaryCyan.withOpacity(0.5)
+                  : AppColors.cardBorder,
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.insert_drive_file_outlined,
+                color: _hovered ? AppColors.primaryCyan : AppColors.textGray,
+                size: 13,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                widget.label,
+                style: TextStyle(
+                  color: _hovered ? AppColors.primaryCyan : AppColors.textGray,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.open_in_new_rounded,
+                color: _hovered ? AppColors.primaryCyan : AppColors.textSubtle,
+                size: 11,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Hover Icon Button ────────────────────────────────────────────────────────
+
+class _HoverIconButton extends StatefulWidget {
+  const _HoverIconButton({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  State<_HoverIconButton> createState() => _HoverIconButtonState();
+}
+
+class _HoverIconButtonState extends State<_HoverIconButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? AppColors.cardBorder.withOpacity(0.8)
+                : AppColors.cardBorder,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            widget.icon,
+            color: _hovered ? AppColors.textWhite : AppColors.textGray,
+            size: 16,
+          ),
         ),
       ),
     );
@@ -596,7 +553,6 @@ class _ModalButton extends StatelessWidget {
 
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
-
   final AccommodationStatus status;
 
   static ({String label, Color color}) _styleFor(AccommodationStatus s) {

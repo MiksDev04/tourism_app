@@ -32,7 +32,10 @@ class Repository extends OfflineFirstWithSupabaseRepository {
     await Supabase.initialize(
       url: 'https://vhnuvhmvozzeufgzvzbt.supabase.co',
       anonKey: 'sb_publishable_VgX-aoJBn6FooTfEo2MADA_zzt9KLL9',
-      httpClient: client,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.pkce,
+        autoRefreshToken: true, // ← keeps session alive
+      ),
     );
 
     final provider = SupabaseProvider(

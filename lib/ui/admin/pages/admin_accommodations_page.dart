@@ -204,7 +204,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
 }
 
 // ─── Page Header ──────────────────────────────────────────────────────────────
-
 class _PageHeader extends StatelessWidget {
   const _PageHeader({required this.onRefresh});
   final VoidCallback onRefresh;
@@ -214,23 +213,29 @@ class _PageHeader extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Accommodations',
-              style: TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
+        Expanded(                          // ← wrap with Expanded
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Accommodations',
+                style: TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            SizedBox(height: 4),
-            Text(
-              'Manage registered accommodation establishments',
-              style: TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
-          ],
+              const SizedBox(height: 4),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: const Text(
+                  'Manage registered accommodation establishments',
+                  style: TextStyle(color: AppColors.textGray, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
         ),
         IconButton(
           onPressed: onRefresh,
@@ -443,7 +448,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 3, child: _HeaderCell('Contact')),
           Expanded(flex: 1, child: _HeaderCell('Rooms')),
           Expanded(flex: 2, child: _HeaderCell('Status')),
-          Expanded(flex: 1, child: _HeaderCell('Actions')),
+          Expanded(flex: 3, child: _HeaderCell('Actions')),
         ],
       ),
     );
@@ -545,7 +550,7 @@ class _TableRow extends StatelessWidget {
           ),
           Expanded(flex: 2, child: _StatusBadge(status: item.status)),
           Expanded(
-            flex: 1,
+            flex: 3,
             child: Align(
               alignment: Alignment.center,
               child: _ActionButtons(item: item, onStatusUpdate: onStatusUpdate),
@@ -784,62 +789,280 @@ class _ActionButtons extends StatelessWidget {
   final Function(Accommodation, AccommodationStatus, {String? remarks})
   onStatusUpdate;
 
+  Future<void> _confirm(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required Color color,
+    required IconData icon,
+    required VoidCallback onConfirm,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      // ignore: deprecated_member_use
+      barrierColor: Colors.black.withOpacity(0.7),
+      builder: (ctx) => Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: color.withOpacity(0.3)),
+                  ),
+                  child: Icon(icon, color: color, size: 26),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 13,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _ConfirmButton(
+                        label: 'Cancel',
+                        color: AppColors.textGray,
+                        onTap: () => Navigator.of(ctx).pop(false),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _ConfirmButton(
+                        label: title,
+                        color: color,
+                        filled: true,
+                        onTap: () => Navigator.of(ctx).pop(true),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) onConfirm();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final showApproveReject = item.status == AccommodationStatus.pending;
+    final isPending = item.status == AccommodationStatus.pending;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // ── View Details ──────────────────────────────────────────────────
         _ActionIcon(
           icon: Icons.remove_red_eye_outlined,
           tooltip: 'View Details',
           onTap: () {
-            final businessDetails = BusinessDetails(
-              name: item.name,
-              type: item.type,
-              rooms: item.rooms,
-              status: item.status,
-              owner: item.owner,
-              permitNumber: item.permitNumber,
-              registrationNumber: item.registrationNumber,
-              registeredDate: item.createdAt ?? '—',
-              address: item.address,
-              phone: item.contact,
-              email: '—',
-            );
-
             showBusinessDetailsModal(
               context,
-              businessDetails,
-              onApprove: showApproveReject
-                  ? () => onStatusUpdate(item, AccommodationStatus.approved)
-                  : null,
-              onReject: showApproveReject
-                  ? () => onStatusUpdate(item, AccommodationStatus.rejected)
-                  : null,
+              BusinessDetails(
+                name: item.name,
+                type: item.type,
+                rooms: item.rooms,
+                status: item.status,
+                owner: item.owner,
+                permitNumber: item.permitNumber,
+                registrationNumber: item.registrationNumber,
+                registeredDate: item.createdAt ?? '—',
+                address: item.address,
+                phone: item.contact,
+                email: item.email ?? '—',
+                permitFileUrl: item.permitFileUrl,
+                validIdUrl: item.validIdUrl,
+              ),
             );
           },
         ),
+
+        // ── Approve (pending only) ────────────────────────────────────────
+        if (isPending) ...[
+          const SizedBox(width: 8),
+          _ActionIcon(
+            icon: Icons.check_circle_outline_rounded,
+            tooltip: 'Approve',
+            color: const Color(0xFF00C48C),
+            onTap: () => _confirm(
+              context,
+              title: 'Approve',
+              message: 'Approve "${item.name}"? They will be able to log in.',
+              color: const Color(0xFF00C48C),
+              icon: Icons.check_circle_outline_rounded,
+              onConfirm: () =>
+                  onStatusUpdate(item, AccommodationStatus.approved),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // ── Reject (pending only) ───────────────────────────────────────
+          _ActionIcon(
+            icon: Icons.cancel_outlined,
+            tooltip: 'Reject',
+            color: const Color(0xFFFF4D6A),
+            onTap: () => _confirm(
+              context,
+              title: 'Reject',
+              message:
+                  'Reject "${item.name}"? This will deny their application.',
+              color: const Color(0xFFFF4D6A),
+              icon: Icons.cancel_outlined,
+              onConfirm: () =>
+                  onStatusUpdate(item, AccommodationStatus.rejected),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
-class _ActionIcon extends StatelessWidget {
-  const _ActionIcon({required this.icon, required this.onTap, this.tooltip});
+class _ActionIcon extends StatefulWidget {
+  const _ActionIcon({
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.color,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
   final String? tooltip;
+  final Color? color;
+
+  @override
+  State<_ActionIcon> createState() => _ActionIconState();
+}
+
+class _ActionIconState extends State<_ActionIcon> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip ?? '',
+    final color = widget.color ?? AppColors.textGray;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: widget.tooltip ?? '',
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: _hovered ? color.withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(
+              widget.icon,
+              color: _hovered ? color : color.withOpacity(0.7),
+              size: 18,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConfirmButton extends StatefulWidget {
+  const _ConfirmButton({
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.filled = false,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  final bool filled;
+
+  @override
+  State<_ConfirmButton> createState() => _ConfirmButtonState();
+}
+
+class _ConfirmButtonState extends State<_ConfirmButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.filled
+        ? (_hovered ? widget.color : widget.color.withOpacity(0.85))
+        : (_hovered
+              ? widget.color.withOpacity(0.15)
+              : widget.color.withOpacity(0.08));
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: onTap,
-        child: Icon(icon, color: AppColors.textGray, size: 20),
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 11),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: widget.filled
+                  ? Colors.transparent
+                  : widget.color.withOpacity(_hovered ? 0.5 : 0.25),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              widget.label,
+              style: TextStyle(
+                color: widget.filled ? Colors.white : widget.color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

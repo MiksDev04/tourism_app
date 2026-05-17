@@ -14,6 +14,7 @@ class Profile extends OfflineFirstWithSupabaseModel {
 
   final String fullName;
   final String phone;
+  final String email; // ← add this
 
   @Supabase(enumAsString: true)  // ← add here
   final Role role;
@@ -25,6 +26,7 @@ class Profile extends OfflineFirstWithSupabaseModel {
     required this.id,
     required this.fullName,
     required this.phone,
+    required this.email, // ← add this
     this.role = Role.business,
     String? createdAt,
     String? updatedAt,

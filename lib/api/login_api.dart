@@ -1,9 +1,8 @@
 import 'dart:io';
-import 'package:brick_core/query.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tourism_app/brick/models/profile.model.dart';
-import 'package:tourism_app/brick/repository.dart';
+
+enum Role { business, admin }
 
 class LoginResult {
   final bool success;
@@ -24,7 +23,7 @@ class LoginApi {
     required String email,
     required String password,
   }) async {
-    // ── 1. Check internet first ───────────────────────────────────────────
+    // ── 1. Check internet ─────────────────────────────────────────────────
     try {
       final result = await InternetAddress.lookup('google.com');
       if (result.isEmpty || result.first.rawAddress.isEmpty) {
@@ -49,33 +48,41 @@ class LoginApi {
         return LoginResult.err('Login failed. Please try again.');
       }
 
-      // ── 3. Fetch profile ────────────────────────────────────────────────
-      final profiles = await Repository().get<Profile>(
-        query: Query(where: [Where.exact('id', response.user!.id)], limit: 1),
-      );
+      final userId = response.user!.id;
 
-      if (profiles.isEmpty) {
+      // ── 3. Fetch profile ────────────────────────────────────────────────
+      final profileData = await _supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (profileData == null) {
         return LoginResult.err('Profile not found. Please contact support.');
       }
 
-      final profile = profiles.first;
+      final roleStr = profileData['role'] as String?;
+      if (roleStr == null) {
+        return LoginResult.err('Profile not found. Please contact support.');
+      }
+
+      final role = roleStr == 'admin' ? Role.admin : Role.business;
 
       // ── 4. Business: check approval status ─────────────────────────────
-      // ── 4. Business: check approval status ─────────────────────────────
-      if (profile.role == Role.business) {
-        final data = await _supabase
+      if (role == Role.business) {
+        final businessData = await _supabase
             .from('businesses')
             .select('status')
-            .eq('profile_id', profile.id)
+            .eq('profile_id', userId)
             .maybeSingle();
 
-        if (data == null) {
+        if (businessData == null) {
           return LoginResult.err(
             'Business profile not found. Please contact support.',
           );
         }
 
-        final status = data['status'] as String;
+        final status = businessData['status'] as String? ?? 'pending';
 
         if (status == 'pending') {
           return LoginResult.err(
@@ -92,11 +99,10 @@ class LoginApi {
         }
       }
 
-      return LoginResult.ok(profile.role);
+      return LoginResult.ok(role);
     } on AuthException catch (e) {
       return LoginResult.err(_friendlyAuthError(e.message));
     } catch (e) {
-      // ← just change _ to e here
       debugPrint('❌ Login error: ${e.runtimeType} — $e');
       return LoginResult.err('Something went wrong. Please try again.');
     }

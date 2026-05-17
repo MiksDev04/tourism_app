@@ -38,12 +38,11 @@ class AdminAccommodationApi {
           status,
           remarks,
           created_at,
-          profiles(full_name, phone)
+          profiles(full_name, email, phone)
         ''')
           .isFilter('deleted_at', null)
           .order('created_at', ascending: false);
 
-      debugPrint('📦 fetchAll raw: $data');
 
       return (data as List)
           .map((e) => Accommodation.fromMap(e as Map<String, dynamic>))

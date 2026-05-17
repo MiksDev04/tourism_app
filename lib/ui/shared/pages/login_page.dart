@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:tourism_app/api/login_api.dart';
-import 'package:tourism_app/brick/models/profile.model.dart';
 import '../../../router/app_router.dart';
 import '../../../core/constants/app_colors.dart';
 
@@ -12,8 +11,6 @@ class LoginPage extends StatelessWidget {
     return const Scaffold(body: LoginScreen());
   }
 }
-
-// ─── Login Screen ─────────────────────────────────────────────────────────────
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -38,10 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SafeArea(
             child: Center(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 40,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
@@ -60,8 +54,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
-
-// ─── Logo ─────────────────────────────────────────────────────────────────────
 
 class _AppLogo extends StatelessWidget {
   const _AppLogo();
@@ -86,16 +78,10 @@ class _AppLogo extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(
-        Icons.location_on_rounded,
-        color: Colors.white,
-        size: 36,
-      ),
+      child: const Icon(Icons.location_on_rounded, color: Colors.white, size: 36),
     );
   }
 }
-
-// ─── Title ────────────────────────────────────────────────────────────────────
 
 class _AppTitle extends StatelessWidget {
   const _AppTitle();
@@ -128,8 +114,6 @@ class _AppTitle extends StatelessWidget {
   }
 }
 
-// ─── Login Card ───────────────────────────────────────────────────────────────
-
 class _LoginCard extends StatefulWidget {
   const _LoginCard();
 
@@ -143,7 +127,6 @@ class _LoginCardState extends State<_LoginCard> {
   bool _obscurePassword = true;
   bool _isLoading = false;
   String? _errorMessage;
-  bool _isOffline = false;
 
   final _api = LoginApi();
 
@@ -153,8 +136,6 @@ class _LoginCardState extends State<_LoginCard> {
     _passwordController.dispose();
     super.dispose();
   }
-
-  // ── Sign In ────────────────────────────────────────────────────────────────
 
   Future<void> _handleSignIn() async {
     final email = _emailController.text.trim();
@@ -168,7 +149,6 @@ class _LoginCardState extends State<_LoginCard> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _isOffline = false;
     });
 
     final result = await _api.login(email: email, password: password);
@@ -177,9 +157,6 @@ class _LoginCardState extends State<_LoginCard> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      
-
-      // ── Route based on role ──────────────────────────────────────────
       if (result.role == Role.admin) {
         Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
       } else {
@@ -219,8 +196,6 @@ class _LoginCardState extends State<_LoginCard> {
             ),
           ),
           const SizedBox(height: 24),
-
-          // ── Email ──────────────────────────────────────────────────────
           const _FieldLabel(label: 'Email Address'),
           const SizedBox(height: 8),
           _InputField(
@@ -229,19 +204,14 @@ class _LoginCardState extends State<_LoginCard> {
             keyboardType: TextInputType.emailAddress,
           ),
           const SizedBox(height: 18),
-
-          // ── Password ───────────────────────────────────────────────────
           const _FieldLabel(label: 'Password'),
           const SizedBox(height: 8),
           _PasswordField(
             controller: _passwordController,
             obscure: _obscurePassword,
-            onToggle: () =>
-                setState(() => _obscurePassword = !_obscurePassword),
+            onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
           ),
           const SizedBox(height: 22),
-
-          // ── Error banner ───────────────────────────────────────────────
           if (_errorMessage != null) ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -265,37 +235,10 @@ class _LoginCardState extends State<_LoginCard> {
               ),
             ),
           ],
-
-          // ── Offline banner ─────────────────────────────────────────────
-          if (_isOffline) ...[
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.withOpacity(0.4)),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.wifi_off, color: Colors.orange, size: 16),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'You are offline. Showing cached data.',
-                      style: TextStyle(color: Colors.orange, fontSize: 12.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // ── Sign In button ─────────────────────────────────────────────
-          _isLoading ? const _LoadingButton() : _SignInButton(onPressed: _handleSignIn),
+          _isLoading
+              ? const _LoadingButton()
+              : _SignInButton(onPressed: _handleSignIn),
           const SizedBox(height: 16),
-
-          // ── Register link ──────────────────────────────────────────────
           Center(
             child: GestureDetector(
               onTap: () =>
@@ -316,8 +259,6 @@ class _LoginCardState extends State<_LoginCard> {
   }
 }
 
-// ─── Field Label ──────────────────────────────────────────────────────────────
-
 class _FieldLabel extends StatelessWidget {
   const _FieldLabel({required this.label});
   final String label;
@@ -334,8 +275,6 @@ class _FieldLabel extends StatelessWidget {
     );
   }
 }
-
-// ─── Input Field ──────────────────────────────────────────────────────────────
 
 class _InputField extends StatelessWidget {
   const _InputField({
@@ -376,8 +315,6 @@ class _InputField extends StatelessWidget {
     );
   }
 }
-
-// ─── Password Field ───────────────────────────────────────────────────────────
 
 class _PasswordField extends StatelessWidget {
   const _PasswordField({
@@ -427,8 +364,6 @@ class _PasswordField extends StatelessWidget {
   }
 }
 
-// ─── Sign In Button ───────────────────────────────────────────────────────────
-
 class _SignInButton extends StatelessWidget {
   const _SignInButton({required this.onPressed});
   final VoidCallback onPressed;
@@ -457,26 +392,18 @@ class _SignInButton extends StatelessWidget {
           icon: const Icon(Icons.login_rounded, size: 18, color: Colors.white),
           label: const Text(
             'Sign In',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         ),
       ),
     );
   }
 }
-
-// ─── Loading Button ───────────────────────────────────────────────────────────
 
 class _LoadingButton extends StatelessWidget {
   const _LoadingButton();
