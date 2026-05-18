@@ -1,31 +1,29 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/session_service.dart';
 import '../../../router/app_router.dart';
-
 
 // ─── Business Header ──────────────────────────────────────────────────────────
 
+/// Drop-in replacement — no longer needs displayName / businessName / initials
+/// passed in. It reads them directly from [SessionService].
 class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
   const BusinessHeader({
     super.key,
     required this.title,
     this.hasNotification = true,
-    required this.displayName,
-    required this.businessName,
-    required this.initials,
   });
 
   final String title;
   final bool hasNotification;
-    final String displayName;
-  final String businessName;
-  final String initials;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
 
   @override
   Widget build(BuildContext context) {
+    final session = SessionService.instance.current;
+
     return Container(
       height: 56,
       decoration: const BoxDecoration(
@@ -51,9 +49,9 @@ class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
               Container(width: 1, height: 24, color: AppColors.cardBorder),
               const SizedBox(width: 12),
               _ProfileButton(
-                displayName: displayName,
-                businessName: businessName,
-                initials: initials,
+                displayName: session?.displayName ?? '—',
+                businessName: session?.businessName ?? '—',
+                initials: session?.initials ?? '?',
               ),
             ],
           ),
@@ -101,6 +99,8 @@ class _NotificationBell extends StatelessWidget {
   }
 }
 
+// ─── Profile Button ───────────────────────────────────────────────────────────
+
 class _ProfileButton extends StatefulWidget {
   const _ProfileButton({
     required this.displayName,
@@ -132,14 +132,14 @@ class _ProfileButtonState extends State<_ProfileButton> {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
-            color: _isHovered 
+            color: _isHovered
                 ? AppColors.cardBorder.withOpacity(0.3)
                 : Colors.transparent,
           ),
           child: Row(
             children: [
               Container(
-                width: 30,  
+                width: 30,
                 height: 30,
                 decoration: const BoxDecoration(
                   color: AppColors.primaryCyan,

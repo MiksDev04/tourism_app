@@ -29,9 +29,6 @@ class BusinessLayout extends StatelessWidget {
   final ValueChanged<int> onNavSelected;
   final Widget child;
   final bool hasNotification;
-    final String displayName = 'Juan Dela Cruz';
-    final String businessName = 'Traveler\'s Lodge';
-    final String initials = 'JD';
 
   @override
   Widget build(BuildContext context) {
@@ -56,9 +53,6 @@ class BusinessLayout extends StatelessWidget {
               BusinessHeader(
                 title: title,
                 hasNotification: hasNotification,
-                displayName: displayName,
-                businessName: businessName,
-                initials: initials,
               ),
               Expanded(
                 child: Container(
@@ -81,9 +75,6 @@ class BusinessLayout extends StatelessWidget {
           BusinessHeader(
             title: title,
             hasNotification: hasNotification,
-            displayName: displayName,
-            businessName: businessName,
-            initials: initials,
           ),
           Expanded(
             child: Container(
@@ -96,31 +87,22 @@ class BusinessLayout extends StatelessWidget {
       bottomNavigationBar: BusinessBottomNavBar(
         selectedIndex: selectedIndex,
         onItemSelected: onNavSelected,
-        displayName: displayName,
-        businessName: businessName,
-        initials: initials,
       ),
     );
   }
 }
 
-// ─── Business Bottom Nav Bar (Mobile) ────────────────────────────────────────────
+// ─── Business Bottom Nav Bar (Mobile) ────────────────────────────────────────
 
 class BusinessBottomNavBar extends StatelessWidget {
   const BusinessBottomNavBar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
-    required this.displayName,
-    required this.businessName,
-    required this.initials,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
-  final String displayName;
-  final String businessName;
-  final String initials;
 
   static const _navItems = [
     BizNavItem(
@@ -159,11 +141,9 @@ class BusinessBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.sidebarBg,
-        border: const Border(
-          top: BorderSide(color: AppColors.cardBorder),
-        ),
+        border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
       child: SafeArea(
         child: Row(
@@ -185,6 +165,8 @@ class BusinessBottomNavBar extends StatelessWidget {
   }
 }
 
+// ─── Bottom Nav Tile ──────────────────────────────────────────────────────────
+
 class _BottomNavTile extends StatelessWidget {
   const _BottomNavTile({
     required this.item,
@@ -202,7 +184,7 @@ class _BottomNavTile extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -255,7 +237,8 @@ class _BottomNavTile extends StatelessWidget {
                       ? AppColors.primaryCyan
                       : AppColors.textGray,
                   fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
             ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/foundation.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
@@ -12,6 +13,8 @@ void main() async {
     url: 'https://vhnuvhmvozzeufgzvzbt.supabase.co',
     anonKey: 'sb_publishable_VgX-aoJBn6FooTfEo2MADA_zzt9KLL9',
   );
+  await SessionService.instance.loadAndCache();
+  // then check .current != null to decide login vs dashboard
 
   if (!kIsWeb) {
     await windowManager.ensureInitialized();

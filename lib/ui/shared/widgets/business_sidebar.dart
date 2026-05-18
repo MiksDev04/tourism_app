@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/session_service.dart';
 import '../../../router/app_router.dart';
 
 // ─── Nav Item Model ───────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ class BizNavItem {
   final IconData icon;
   final String label;
   final int index;
-  final int? badge; // notification count
+  final int? badge;
   final String route;
 }
 
@@ -64,7 +65,6 @@ class BusinessSidebar extends StatelessWidget {
       badge: 1,
       route: AppRoutes.businessMessages,
     ),
- 
   ];
 
   @override
@@ -159,21 +159,22 @@ class _SidebarBrand extends StatelessWidget {
   }
 }
 
-// ─── Business Badge ───────────────────────────────────────────────────────────
+// ─── Business Badge ── reads from SessionService ──────────────────────────────
 
 class _BusinessBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final businessName =
+        SessionService.instance.current?.businessName ?? 'My Business';
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          // ignore: deprecated_member_use
           color: AppColors.accentPurple.withOpacity(0.1),
           borderRadius: BorderRadius.circular(20),
-          // ignore: deprecated_member_use
           border: Border.all(color: AppColors.accentPurple.withOpacity(0.35)),
         ),
         child: Row(
@@ -188,10 +189,10 @@ class _BusinessBadge extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            const Flexible(
+            Flexible(
               child: Text(
-                'Grand Hotel San Pablo',
-                style: TextStyle(
+                businessName,
+                style: const TextStyle(
                   color: AppColors.accentPurple,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -235,7 +236,9 @@ class _NavTile extends StatelessWidget {
               color: isSelected ? AppColors.activeNavBg : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: isSelected
-                  ? Border.all(color: AppColors.primaryCyan.withOpacity(0.2))
+                  ? Border.all(
+                      color: AppColors.primaryCyan.withOpacity(0.2),
+                    )
                   : null,
             ),
             child: Row(
@@ -291,6 +294,7 @@ class _NavTile extends StatelessWidget {
 }
 
 // ─── Sidebar Footer ───────────────────────────────────────────────────────────
+
 class _SidebarFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -301,17 +305,17 @@ class _SidebarFooter extends StatelessWidget {
       ),
       child: Center(
         child: GestureDetector(
-          onTap: () {
-            Navigator.pushReplacementNamed(context, AppRoutes.login);
+          onTap: () async {
+            // Clear local session before navigating away
+            await SessionService.instance.clear();
+            if (context.mounted) {
+              Navigator.pushReplacementNamed(context, AppRoutes.login);
+            }
           },
           child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.logout_rounded,
-                color: AppColors.textGray,
-                size: 16,
-              ),
+              Icon(Icons.logout_rounded, color: AppColors.textGray, size: 16),
               SizedBox(width: 8),
               Text(
                 'Logout',

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 
 enum Role { business, admin }
 
@@ -50,10 +51,10 @@ class LoginApi {
 
       final userId = response.user!.id;
 
-      // ── 3. Fetch profile ────────────────────────────────────────────────
+      // ── 3. Fetch profile (full row) ────────────────────────────────────
       final profileData = await _supabase
           .from('profiles')
-          .select('role')
+          .select('full_name, phone, role, email')
           .eq('id', userId)
           .maybeSingle();
 
@@ -62,6 +63,7 @@ class LoginApi {
           'Account does not exist. Please register first.',
         );
       }
+
       final roleStr = profileData['role'] as String?;
       if (roleStr == null) {
         return LoginResult.err('Profile not found. Please contact support.');
@@ -69,11 +71,17 @@ class LoginApi {
 
       final role = roleStr == 'admin' ? Role.admin : Role.business;
 
-      // ── 4. Business: check approval status ─────────────────────────────
+      // ── 4. Business: check approval + fetch business row ───────────────
+      String? businessId;
+      String? businessName;
+      String? businessType;
+      String? ownerName;
+      String? status;
+
       if (role == Role.business) {
         final businessData = await _supabase
             .from('businesses')
-            .select('status')
+            .select('id, business_name, business_type, owner_name, status')
             .eq('profile_id', userId)
             .maybeSingle();
 
@@ -83,7 +91,7 @@ class LoginApi {
           );
         }
 
-        final status = businessData['status'] as String? ?? 'pending';
+        status = businessData['status'] as String? ?? 'pending';
 
         if (status == 'pending') {
           return LoginResult.err(
@@ -98,7 +106,30 @@ class LoginApi {
             'Please visit the tourism office for more information.',
           );
         }
+
+        businessId   = businessData['id']            as String?;
+        businessName = businessData['business_name'] as String?;
+        businessType = businessData['business_type'] as String?;
+        ownerName    = businessData['owner_name']    as String?;
       }
+
+      // ── 5. Persist session locally ─────────────────────────────────────
+      final session = SessionData(
+        userId:       userId,
+        fullName:     profileData['full_name'] as String? ?? '',
+        email:        profileData['email']     as String? ?? email,
+        phone:        profileData['phone']     as String? ?? '',
+        role:         roleStr,
+        businessId:   businessId,
+        businessName: businessName,
+        businessType: businessType,
+        ownerName:    ownerName,
+        status:       status,
+      );
+
+      await SessionService.instance.save(session);
+      // Also warm the in-memory cache so widgets can use it immediately
+      await SessionService.instance.loadAndCache();
 
       return LoginResult.ok(role);
     } on AuthException catch (e) {
@@ -124,6 +155,7 @@ class LoginApi {
   }
 
   Future<void> logout() async {
+    await SessionService.instance.clear(); // wipe local storage
     await _supabase.auth.signOut();
   }
 }
