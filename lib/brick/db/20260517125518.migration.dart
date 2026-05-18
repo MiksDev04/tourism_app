@@ -9,10 +9,12 @@ part of 'schema.g.dart';
 
 // The migration version must **always** mirror the file name
 
+// ignore: constant_identifier_names
 const List<MigrationCommand> _migration_20260517125518_up = [
   InsertColumn('email', Column.varchar, onTable: 'Profile')
 ];
 
+// ignore: constant_identifier_names
 const List<MigrationCommand> _migration_20260517125518_down = [
   DropColumn('email', onTable: 'Profile')
 ];

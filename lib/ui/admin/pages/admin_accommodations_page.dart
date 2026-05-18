@@ -1,5 +1,7 @@
 // lib/ui/admin/pages/admin_accommodations_page.dart
 
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -424,7 +426,7 @@ class _AccommodationTable extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: rows.length,
-              separatorBuilder: (_, __) =>
+              separatorBuilder: (_, _) =>
                   const Divider(color: AppColors.cardBorder, height: 1),
               itemBuilder: (_, i) =>
                   _TableRow(item: rows[i], onStatusUpdate: onStatusUpdate),
@@ -588,7 +590,7 @@ class _AccommodationCardList extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: rows.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (_, i) =>
           _AccommodationCard(item: rows[i], onStatusUpdate: onStatusUpdate),
     );
@@ -799,6 +801,7 @@ class _ActionButtons extends StatelessWidget {
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
+      // ignore: duplicate_ignore
       // ignore: deprecated_member_use
       barrierColor: Colors.black.withOpacity(0.7),
       builder: (ctx) => Center(

@@ -15,14 +15,14 @@ class GuestBreakdownData {
   const GuestBreakdownData({
     required this.nationality,
     this.philippinesRegion,
-    required this.gender,
+    required this.sex,
     required this.ageGroup,
     required this.count,
   });
 
   final String nationality;
   final String? philippinesRegion;
-  final String gender;
+  final String sex;
   final String ageGroup;
   final int count;
 }
@@ -98,7 +98,7 @@ class BusinessGuestEntryApi {
         'guest_record_id': guestRecordId,
         'nationality': b.nationality,
         'philippines_region': b.philippinesRegion,
-        'gender': _mapGender(b.gender),
+        'sex': _mapSex(b.sex),
         'age_group': _mapAgeGroup(b.ageGroup),
         'count': b.count,
       }).toList();
@@ -112,14 +112,12 @@ class BusinessGuestEntryApi {
     }
   }
 
-  // ── Map gender string to enum value ──────────────────────────────────────
-  String _mapGender(String gender) {
-    switch (gender.toLowerCase()) {
+  // ── Map sex string to enum value ──────────────────────────────────────
+  String _mapSex(String sex) {
+    switch (sex.toLowerCase()) {
       case 'male': return 'male';
       case 'female': return 'female';
-      case 'lgbt+': return 'lgbt';
-      case 'prefer not to say': return 'prefer_not_to_say';
-      default: return 'prefer_not_to_say';
+      default: return 'male'; // default to male if unrecognized
     }
   }
 

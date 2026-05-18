@@ -58,9 +58,10 @@ class LoginApi {
           .maybeSingle();
 
       if (profileData == null) {
-        return LoginResult.err('Profile not found. Please contact support.');
+        return LoginResult.err(
+          'Account does not exist. Please register first.',
+        );
       }
-
       final roleStr = profileData['role'] as String?;
       if (roleStr == null) {
         return LoginResult.err('Profile not found. Please contact support.');
@@ -94,7 +95,7 @@ class LoginApi {
         if (status == 'rejected') {
           return LoginResult.err(
             'Your account application was not approved. '
-            'Please contact support for assistance.',
+            'Please visit the tourism office for more information.',
           );
         }
       }

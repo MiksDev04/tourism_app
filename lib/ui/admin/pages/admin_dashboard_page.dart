@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
@@ -722,7 +724,7 @@ class _DonutChart extends StatefulWidget {
 class _DonutChartState extends State<_DonutChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  int _hoveredIndex = -1;
+  final int _hoveredIndex = -1;
 
   @override
   void initState() {

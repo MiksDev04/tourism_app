@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:tourism_app/api/register_api.dart';
-import 'package:tourism_app/brick/models/business.model.dart';
+import 'package:tourism_app/core/enums/business_enums.dart';
 import 'package:tourism_app/router/app_router.dart';
 import 'package:tourism_app/core/constants/app_colors.dart';
+
+
 
 class RegisterPage extends StatelessWidget {
   const RegisterPage({super.key});
@@ -399,7 +401,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         color: Colors.black.withOpacity(0.75),
         child: Center(
           child: Container(
-            width: 340, // ← fixed width, won't stretch on desktop
+            width: 340,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
             decoration: BoxDecoration(
               color: AppColors.cardBackground,

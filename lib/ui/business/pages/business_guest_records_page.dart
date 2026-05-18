@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
-import '../widgets/archive_guest_dialog.dart';
 import '../widgets/edit_guest_dialog.dart';
 import '../../../api/business_guest_record_api.dart';
 
@@ -13,14 +12,14 @@ class GuestBreakdownEntry {
   const GuestBreakdownEntry({
     required this.nationality,
     this.philippinesRegion,
-    required this.gender,
+    required this.sex,
     required this.ageGroup,
     required this.count,
   });
 
   final String nationality;
   final String? philippinesRegion;
-  final String gender;
+  final String sex;
   final String ageGroup;
   final int count;
 }
@@ -28,13 +27,13 @@ class GuestBreakdownEntry {
 class GuestDemographics {
   const GuestDemographics({
     required this.ageGroups,
-    required this.genderDistribution,
+    required this.sexDistribution,
     required this.countries,
     required this.breakdowns,
   });
 
   final Map<String, int> ageGroups;
-  final Map<String, int> genderDistribution;
+  final Map<String, int> sexDistribution;
   final Map<String, int> countries;
   final List<GuestBreakdownEntry> breakdowns;
 }
@@ -163,8 +162,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
     final picked = await showDatePicker(
       context: context,
-      initialDate:
-          (isCheckIn ? _checkInFrom : _checkOutTo) ?? DateTime.now(),
+      initialDate: (isCheckIn ? _checkInFrom : _checkOutTo) ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (ctx, child) => Theme(
@@ -209,21 +207,6 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
 
   // ── Actions ─────────────────────────────────────────────────────────────
 
-  Future<void> _onArchive(GuestRecord record) async {
-    final confirmed = await showArchiveGuestDialog(context);
-    if (confirmed != true || !mounted) return;
-
-    final result = await _api.archiveRecord(record.id);
-    if (!mounted) return;
-
-    if (result.isSuccess) {
-      _updateLocalStatus(record, GuestRecordStatus.archived);
-      _showSnack('Guest record archived.', color: Colors.orange);
-    } else {
-      _showSnack(result.error ?? 'Failed to archive.', isError: true);
-    }
-  }
-
   Future<void> _onRestore(GuestRecord record) async {
     final result = await _api.restoreRecord(record.id);
     if (!mounted) return;
@@ -248,6 +231,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
       roomsOccupied: updated.rooms,
       purposeOfVisit: updated.purpose,
       transportationMode: updated.transport,
+      breakdowns: updated.demographics?.breakdowns ?? [],
     );
     if (!mounted) return;
 
@@ -281,8 +265,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     });
   }
 
-  void _showSnack(String msg,
-      {bool isError = false, Color? color}) {
+  void _showSnack(String msg, {bool isError = false, Color? color}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor:
@@ -361,8 +344,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
               children: [
                 _PageHeader(
                   activeFilter: _activeFilter,
-                  onFilterChanged: (f) =>
-                      setState(() => _activeFilter = f),
+                  onFilterChanged: (f) => setState(() => _activeFilter = f),
                   showFilters: _showFilters,
                   onFilterToggle: () =>
                       setState(() => _showFilters = !_showFilters),
@@ -402,14 +384,12 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                     ),
                   )
                 else if (_loadError != null)
-                  _ErrorBanner(
-                      message: _loadError!, onRetry: _loadRecords)
+                  _ErrorBanner(message: _loadError!, onRetry: _loadRecords)
                 else
                   _GuestTable(
                     records: _filtered,
                     isNarrow: isNarrow,
                     onEdit: _onEdit,
-                    onArchive: _onArchive,
                     onRestore: _onRestore,
                   ),
               ],
@@ -722,22 +702,20 @@ class _ClearAllBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.cardBorder),
         ),
-        child: Row(
+        child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.clear_all,
-                color: AppColors.textGray, size: 15),
-            const SizedBox(width: 5),
-            const Text('Clear All',
-                style: TextStyle(
-                    color: AppColors.textGray, fontSize: 12)),
+            Icon(Icons.clear_all, color: AppColors.textGray, size: 15),
+            SizedBox(width: 5),
+            Text('Clear All',
+                style:
+                    TextStyle(color: AppColors.textGray, fontSize: 12)),
           ],
         ),
       ),
@@ -764,8 +742,8 @@ class _PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filterRow = _FilterToggle(
-        activeFilter: activeFilter, onChanged: onFilterChanged);
+    final filterRow =
+        _FilterToggle(activeFilter: activeFilter, onChanged: onFilterChanged);
     final toggleBtn =
         _FilterPanelButton(isActive: showFilters, onTap: onFilterToggle);
 
@@ -778,7 +756,7 @@ class _PageHeader extends StatelessWidget {
           Row(children: [
             filterRow,
             const SizedBox(width: 10),
-            toggleBtn
+            toggleBtn,
           ]),
         ],
       );
@@ -828,8 +806,7 @@ class _FilterPanelButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isActive
               ? AppColors.primaryCyan.withOpacity(0.15)
@@ -861,7 +838,7 @@ class _FilterPanelButton extends StatelessWidget {
   }
 }
 
-// ─── Filter Toggle (Active / Archived only) ───────────────────────────────────
+// ─── Filter Toggle (Active / Archived) ───────────────────────────────────────
 
 class _FilterToggle extends StatelessWidget {
   const _FilterToggle(
@@ -899,9 +876,7 @@ class _FilterToggle extends StatelessWidget {
 
 class _FilterTab extends StatelessWidget {
   const _FilterTab(
-      {required this.label,
-      required this.isActive,
-      required this.onTap});
+      {required this.label, required this.isActive, required this.onTap});
 
   final String label;
   final bool isActive;
@@ -913,8 +888,7 @@ class _FilterTab extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           gradient: isActive
               ? const LinearGradient(
@@ -927,8 +901,7 @@ class _FilterTab extends StatelessWidget {
           style: TextStyle(
             color: isActive ? Colors.white : AppColors.textGray,
             fontSize: 13,
-            fontWeight:
-                isActive ? FontWeight.w600 : FontWeight.w400,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
       ),
@@ -955,7 +928,8 @@ class _SearchBar extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+        style:
+            const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
         decoration: const InputDecoration(
           hintText: 'Search by date, purpose, or transport...',
           hintStyle:
@@ -978,14 +952,12 @@ class _GuestTable extends StatelessWidget {
     required this.records,
     required this.isNarrow,
     required this.onEdit,
-    required this.onArchive,
     required this.onRestore,
   });
 
   final List<GuestRecord> records;
   final bool isNarrow;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onArchive;
   final ValueChanged<GuestRecord> onRestore;
 
   @override
@@ -1019,13 +991,11 @@ class _GuestTable extends StatelessWidget {
                     _RecordCard(
                         record: r,
                         onEdit: onEdit,
-                        onArchive: onArchive,
                         onRestore: onRestore)
                   else
                     _RecordRow(
                         record: r,
                         onEdit: onEdit,
-                        onArchive: onArchive,
                         onRestore: onRestore),
                   if (!isLast)
                     const Divider(color: AppColors.cardBorder, height: 1),
@@ -1082,13 +1052,11 @@ class _RecordRow extends StatelessWidget {
   const _RecordRow({
     required this.record,
     required this.onEdit,
-    required this.onArchive,
     required this.onRestore,
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onArchive;
   final ValueChanged<GuestRecord> onRestore;
 
   @override
@@ -1142,12 +1110,9 @@ class _RecordRow extends StatelessWidget {
             flex: 2,
             child: _ActionButtons(
               status: r.status,
-              hasDemographics: r.demographics != null,
               onEdit: () => onEdit(r),
-              onArchive: () => onArchive(r),
               onRestore: () => onRestore(r),
-              onViewDemographics: () =>
-                  _showDemographicsModal(context, r),
+              onView: () => _showRecordModal(context, r),
             ),
           ),
         ],
@@ -1162,13 +1127,11 @@ class _RecordCard extends StatelessWidget {
   const _RecordCard({
     required this.record,
     required this.onEdit,
-    required this.onArchive,
     required this.onRestore,
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onArchive;
   final ValueChanged<GuestRecord> onRestore;
 
   @override
@@ -1214,29 +1177,24 @@ class _RecordCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
+              // Always show the View button
+              _IconBtn(
+                icon: Icons.visibility_outlined,
+                tooltip: 'View Record',
+                onTap: () => _showRecordModal(context, r),
+              ),
               if (r.status == GuestRecordStatus.active) ...[
+                const SizedBox(width: 8),
                 _IconBtn(
                     icon: Icons.edit_outlined,
                     tooltip: 'Edit',
                     onTap: () => onEdit(r)),
-                const SizedBox(width: 8),
-                _IconBtn(
-                    icon: Icons.archive_outlined,
-                    tooltip: 'Archive',
-                    onTap: () => onArchive(r)),
               ] else ...[
+                const SizedBox(width: 8),
                 _IconBtn(
                     icon: Icons.unarchive_outlined,
                     tooltip: 'Restore',
                     onTap: () => onRestore(r)),
-              ],
-              if (r.demographics != null) ...[
-                const SizedBox(width: 8),
-                _IconBtn(
-                  icon: Icons.bar_chart_rounded,
-                  tooltip: 'View Demographics',
-                  onTap: () => _showDemographicsModal(context, r),
-                ),
               ],
             ],
           ),
@@ -1302,46 +1260,37 @@ class _StatusBadge extends StatelessWidget {
 class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.status,
-    required this.hasDemographics,
     required this.onEdit,
-    required this.onArchive,
     required this.onRestore,
-    required this.onViewDemographics,
+    required this.onView,
   });
 
   final GuestRecordStatus status;
-  final bool hasDemographics;
   final VoidCallback onEdit;
-  final VoidCallback onArchive;
   final VoidCallback onRestore;
-  final VoidCallback onViewDemographics;
+  final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        if (status == GuestRecordStatus.active) ...[
+        // Always show View button
+        _IconBtn(
+          icon: Icons.visibility_outlined,
+          tooltip: 'View Record',
+          onTap: onView,
+        ),
+        const SizedBox(width: 8),
+        if (status == GuestRecordStatus.active)
           _IconBtn(
-              icon: Icons.edit_outlined, tooltip: 'Edit', onTap: onEdit),
-          const SizedBox(width: 8),
-          _IconBtn(
-              icon: Icons.archive_outlined,
-              tooltip: 'Archive',
-              onTap: onArchive),
-        ] else ...[
+              icon: Icons.edit_outlined,
+              tooltip: 'Edit',
+              onTap: onEdit)
+        else
           _IconBtn(
               icon: Icons.unarchive_outlined,
               tooltip: 'Restore',
               onTap: onRestore),
-        ],
-        if (hasDemographics) ...[
-          const SizedBox(width: 8),
-          _IconBtn(
-            icon: Icons.bar_chart_rounded,
-            tooltip: 'View Demographics',
-            onTap: onViewDemographics,
-          ),
-        ],
       ],
     );
   }
@@ -1366,18 +1315,18 @@ class _IconBtn extends StatelessWidget {
   }
 }
 
-// ─── Demographics Modal ───────────────────────────────────────────────────────
+// ─── Full Record Modal ────────────────────────────────────────────────────────
 
-void _showDemographicsModal(BuildContext context, GuestRecord record) {
+void _showRecordModal(BuildContext context, GuestRecord record) {
   showDialog(
     context: context,
     barrierColor: Colors.black.withOpacity(0.6),
-    builder: (_) => _DemographicsModal(record: record),
+    builder: (_) => _RecordDetailModal(record: record),
   );
 }
 
-class _DemographicsModal extends StatelessWidget {
-  const _DemographicsModal({required this.record});
+class _RecordDetailModal extends StatelessWidget {
+  const _RecordDetailModal({required this.record});
   final GuestRecord record;
 
   @override
@@ -1392,7 +1341,7 @@ class _DemographicsModal extends StatelessWidget {
         vertical: 32,
       ),
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 560),
+        constraints: const BoxConstraints(maxWidth: 600),
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(16),
@@ -1423,28 +1372,17 @@ class _DemographicsModal extends StatelessWidget {
                       color: AppColors.primaryCyan.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.bar_chart_rounded,
+                    child: const Icon(Icons.receipt_long_rounded,
                         color: AppColors.primaryCyan, size: 18),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Guest Demographics',
-                          style: TextStyle(
-                              color: AppColors.textWhite,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${record.checkIn}  →  ${record.checkOut}  •  ${record.nights}  •  ${record.guests} guests',
-                          style: const TextStyle(
-                              color: AppColors.textGray, fontSize: 11.5),
-                        ),
-                      ],
+                  const Expanded(
+                    child: Text(
+                      'Guest Record Details',
+                      style: TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700),
                     ),
                   ),
                   IconButton(
@@ -1460,52 +1398,55 @@ class _DemographicsModal extends StatelessWidget {
             ),
 
             // ── Body ─────────────────────────────────────────────────────
-            if (demo == null)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'No demographic data available for this entry.',
-                  style: TextStyle(
-                      color: AppColors.textSubtle, fontSize: 13),
-                  textAlign: TextAlign.center,
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.65,
-                ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── Breakdown table ───────────────────────────
-                      const _ModalSectionLabel('Breakdown by Segment'),
-                      const SizedBox(height: 10),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Stay Info ───────────────────────────────────────
+                    const _ModalSectionLabel('Stay Information'),
+                    const SizedBox(height: 10),
+                    _StayInfoGrid(record: record),
+                    const SizedBox(height: 20),
+
+                    const Divider(color: AppColors.cardBorder, height: 1),
+                    const SizedBox(height: 20),
+
+                    // ── Guest Breakdown ─────────────────────────────────
+                    const _ModalSectionLabel('Guest Breakdown by Segment'),
+                    const SizedBox(height: 10),
+                    if (demo == null || demo.breakdowns.isEmpty)
+                      const Text(
+                        'No demographic data available.',
+                        style: TextStyle(
+                            color: AppColors.textSubtle, fontSize: 13),
+                      )
+                    else ...[
                       _BreakdownTable(breakdowns: demo.breakdowns),
                       const SizedBox(height: 20),
 
-                      // ── Age groups ────────────────────────────────
                       const _ModalSectionLabel('Age Groups'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.ageGroups),
                       const SizedBox(height: 20),
 
-                      // ── Gender ────────────────────────────────────
-                      const _ModalSectionLabel('Gender Distribution'),
+                      const _ModalSectionLabel('Sex Distribution'),
                       const SizedBox(height: 10),
-                      _StatGrid(entries: demo.genderDistribution),
+                      _StatGrid(entries: demo.sexDistribution),
                       const SizedBox(height: 20),
 
-                      // ── Countries / Regions ───────────────────────
                       const _ModalSectionLabel('Nationality / Region'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.countries),
                     ],
-                  ),
+                  ],
                 ),
               ),
+            ),
 
             // ── Footer ───────────────────────────────────────────────────
             Container(
@@ -1536,6 +1477,77 @@ class _DemographicsModal extends StatelessWidget {
   }
 }
 
+// ─── Stay Info Grid ───────────────────────────────────────────────────────────
+
+class _StayInfoGrid extends StatelessWidget {
+  const _StayInfoGrid({required this.record});
+  final GuestRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      ('Check-in', record.checkIn),
+      ('Check-out', record.checkOut),
+      ('Length of Stay', record.nights),
+      ('Total Guests', '${record.guests}'),
+      ('Rooms Occupied', '${record.rooms}'),
+      ('Purpose of Visit', record.purpose),
+      ('Mode of Transport', record.transport),
+    ];
+
+    const spacing = 10.0;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Always 2 columns regardless of screen size.
+        final itemWidth = (constraints.maxWidth - spacing) / 2;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: items.map((item) {
+            return SizedBox(
+              width: itemWidth,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBackground,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.cardBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.$1,
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.$2,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+}
+
+// ─── Modal Helpers ────────────────────────────────────────────────────────────
+
 class _ModalSectionLabel extends StatelessWidget {
   const _ModalSectionLabel(this.label);
   final String label;
@@ -1554,7 +1566,6 @@ class _ModalSectionLabel extends StatelessWidget {
   }
 }
 
-/// Full breakdown table: one row per GuestBreakdownEntry.
 class _BreakdownTable extends StatelessWidget {
   const _BreakdownTable({required this.breakdowns});
   final List<GuestBreakdownEntry> breakdowns;
@@ -1570,7 +1581,8 @@ class _BreakdownTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         child: Table(
           border: TableBorder.symmetric(
-            inside: BorderSide(color: AppColors.cardBorder, width: 0.5),
+            inside:
+                BorderSide(color: AppColors.cardBorder, width: 0.5),
           ),
           columnWidths: const {
             0: FlexColumnWidth(2.5),
@@ -1580,14 +1592,13 @@ class _BreakdownTable extends StatelessWidget {
             4: FlexColumnWidth(1),
           },
           children: [
-            // Header row
             TableRow(
-              decoration: BoxDecoration(
-                  color: AppColors.inputBackground),
+              decoration:
+                  BoxDecoration(color: AppColors.inputBackground),
               children: const [
                 _TCell('Nationality', isHeader: true),
                 _TCell('Region', isHeader: true),
-                _TCell('Gender', isHeader: true),
+                _TCell('Sex', isHeader: true),
                 _TCell('Age Group', isHeader: true),
                 _TCell('Count', isHeader: true),
               ],
@@ -1596,7 +1607,7 @@ class _BreakdownTable extends StatelessWidget {
                   children: [
                     _TCell(b.nationality),
                     _TCell(b.philippinesRegion ?? '—'),
-                    _TCell(b.gender),
+                    _TCell(b.sex),
                     _TCell(b.ageGroup),
                     _TCell('${b.count}'),
                   ],
@@ -1620,7 +1631,8 @@ class _TCell extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: isHeader ? AppColors.textGray : AppColors.textWhite,
+          color:
+              isHeader ? AppColors.textGray : AppColors.textWhite,
           fontSize: 11.5,
           fontWeight:
               isHeader ? FontWeight.w600 : FontWeight.w400,
@@ -1630,7 +1642,6 @@ class _TCell extends StatelessWidget {
   }
 }
 
-/// Compact pill grid for age groups, gender, nationality counts.
 class _StatGrid extends StatelessWidget {
   const _StatGrid({required this.entries});
   final Map<String, int> entries;

@@ -1,9 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:tourism_app/brick/models/business.model.dart';
-import 'package:tourism_app/brick/models/profile.model.dart';
-import 'package:tourism_app/brick/repository.dart';
+import 'package:tourism_app/core/enums/business_enums.dart';
 import 'package:uuid/uuid.dart';
 
 class RegisterResult {
@@ -82,21 +80,20 @@ class RegisterApi {
         return const RegisterResult.err("Failed to upload owner's valid ID.");
       }
 
-      // ── 4. Upsert Profile via Brick (offline-first, auto-syncs) ────────
-      final profile = Profile(
-        id: authUser.id,
-        fullName: fullName,
-        email: email, // ← add this
-        phone: phoneNumber,
-        role: Role.business,
-      );
-      await Repository().upsert<Profile>(profile);
+      // ── 4. Upsert Profile directly via Supabase ────────────────────────
+      await _supabase.from('profiles').upsert({
+        'id': authUser.id,
+        'full_name': fullName,
+        'email': email,
+        'phone': phoneNumber,
+        'role': 'business',
+      });
 
-      // ── 5. Insert Business directly via Supabase (Brick FK serialization workaround) ──
+      // ── 5. Insert Business directly via Supabase ───────────────────────
       final businessId = const Uuid().v4();
       await _supabase.from('businesses').insert({
         'id': businessId,
-        'profile_id': profile.id,
+        'profile_id': authUser.id,
         'business_name': businessName,
         'business_type': businessType.name,
         'owner_name': ownerName,
@@ -109,28 +106,7 @@ class RegisterApi {
         'status': 'pending',
       });
 
-      // ── 6. Save Business to SQLite only (for offline dashboard use) ────
-      final business = Business(
-        id: businessId,
-        profile: profile,
-        businessName: businessName,
-        businessType: businessType,
-        ownerName: ownerName,
-        totalRooms: totalRooms,
-        permitNumber: permitNumber,
-        registrationNumber: registrationNumber,
-        address: address,
-        permitFileUrl: permitUrl,
-        validIdUrl: validIdUrl,
-        status: BusinessStatus.pending,
-      );
-
-      await Repository().sqliteProvider.upsert<Business>(
-        business,
-        repository: Repository(),
-      );
-      debugPrint('✅ Business saved to SQLite only (no remote sync)');
-
+      debugPrint('✅ Profile and Business saved to Supabase');
       return const RegisterResult.ok();
     } on AuthException catch (e) {
       return RegisterResult.err(_friendlyAuthError(e.message));
@@ -158,12 +134,12 @@ class RegisterApi {
 
       return _supabase.storage.from(bucket).getPublicUrl(path);
     } catch (e) {
-      debugPrint('❌ Upload failed [$bucket/$label]: $e'); // ← add this
+      debugPrint('❌ Upload failed [$bucket/$label]: $e');
       return null;
     }
   }
 
-  // ── Field-level validation (mirrors _V in register_page.dart) ───────────
+  // ── Field-level validation ───────────────────────────────────────────────
 
   String? _validate({
     required String fullName,
@@ -187,8 +163,9 @@ class RegisterApi {
     if (ownerName.trim().isEmpty) return 'Owner name is required.';
     if (totalRooms <= 0) return 'Total rooms must be at least 1.';
     if (permitNumber.trim().isEmpty) return 'Permit number is required.';
-    if (registrationNumber.trim().isEmpty)
+    if (registrationNumber.trim().isEmpty) {
       return 'Registration number is required.';
+    }
     if (address.trim().isEmpty) return 'Business address is required.';
     return null;
   }
@@ -201,10 +178,12 @@ class RegisterApi {
         m.contains('already been registered')) {
       return 'An account with this email already exists.';
     }
-    if (m.contains('invalid email'))
+    if (m.contains('invalid email')) {
       return 'Please enter a valid email address.';
-    if (m.contains('password'))
+    }
+    if (m.contains('password')) {
       return 'Password must be at least 6 characters.';
+    }
     return message;
   }
 }

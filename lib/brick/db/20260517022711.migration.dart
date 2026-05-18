@@ -9,6 +9,7 @@ part of 'schema.g.dart';
 
 // The migration version must **always** mirror the file name
 
+// ignore: constant_identifier_names
 const List<MigrationCommand> _migration_20260517022711_up = [
   InsertTable('Business'),
   InsertTable('Profile'),
@@ -37,6 +38,7 @@ const List<MigrationCommand> _migration_20260517022711_up = [
   CreateIndex(columns: ['id'], onTable: 'Profile', unique: true)
 ];
 
+// ignore: constant_identifier_names
 const List<MigrationCommand> _migration_20260517022711_down = [
   DropTable('Business'),
   DropTable('Profile'),
