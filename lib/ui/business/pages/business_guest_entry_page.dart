@@ -4,27 +4,30 @@ import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../../api/business_guest_entry_api.dart';
 
-// ─── Light input colours (mirrors edit-guest dialog) ─────────────────────────
+// ─── Light input colours ──────────────────────────────────────────────────────
 
-const _kInputFill   = Color(0xFFF8FAFC); // near-white field background
-const _kInputBorder = Color(0xFFD1D5DB); // subtle grey border
-const _kInputFocused = Color(0xFF3B82F6); // blue focus ring
-const _kDropBg      = Color(0xFFFFFFFF); // pure white dropdown menu
-const _kInputText   = Color(0xFF111827); // near-black text in fields
-const _kInputHint   = Color(0xFF9CA3AF); // grey hint / placeholder
-const _kReadOnlyFill = Color(0xFFEFF2F5); // dimmer read-only background
+const _kInputFill    = Color(0xFFF8FAFC);
+const _kInputBorder  = Color(0xFFD1D5DB);
+const _kInputFocused = Color(0xFF3B82F6);
+const _kDropBg       = Color(0xFFFFFFFF);
+const _kInputText    = Color(0xFF111827);
+const _kInputHint    = Color(0xFF9CA3AF);
+const _kReadOnlyFill = Color(0xFFEFF2F5);
+
+/// Single source-of-truth height for every input, dropdown, and read-only field.
+const _kFieldHeight = 40.0;
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 class DemographicRow {
   DemographicRow()
-      : nationality = null,
+      : country = null,
         region = null,
         sex = null,
         ageGroup = null,
         countCtrl = TextEditingController(text: '');
 
-  String? nationality;
+  String? country;
   String? region;
   String? sex;
   String? ageGroup;
@@ -53,7 +56,7 @@ const _transportOptions = [
   'Others',
 ];
 
-const _nationalityOptions = [
+const _countryOptions = [
   'Philippines',
   'USA',
   'Japan',
@@ -269,11 +272,11 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     final seen = <String>{};
     for (int i = 0; i < _rows.length; i++) {
       final row = _rows[i];
-      if (row.nationality == null) {
-        rowErrors[i]['nationality'] = 'Required';
+      if (row.country == null) {
+        rowErrors[i]['country'] = 'Required';
         hasError = true;
       }
-      if (row.nationality == 'Philippines' && row.region == null) {
+      if (row.country == 'Philippines' && row.region == null) {
         rowErrors[i]['region'] = 'Required for Philippine entries';
         hasError = true;
       }
@@ -290,11 +293,11 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         rowErrors[i]['count'] = 'Min 1';
         hasError = true;
       }
-      if (row.nationality != null && row.sex != null && row.ageGroup != null) {
+      if (row.country != null && row.sex != null && row.ageGroup != null) {
         final key =
-            '${row.nationality}|${row.region}|${row.sex}|${row.ageGroup}';
+            '${row.country}|${row.region}|${row.sex}|${row.ageGroup}';
         if (!seen.add(key)) {
-          rowErrors[i]['nationality'] = 'Duplicate row — merge counts instead';
+          rowErrors[i]['country'] = 'Duplicate row — merge counts instead';
           hasError = true;
         }
       }
@@ -345,9 +348,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         transportationMode: transportValue,
         breakdowns: _rows
             .map((r) => GuestBreakdownData(
-                  nationality: r.nationality!,
+                  country: r.country!,
                   philippinesRegion:
-                      r.nationality == 'Philippines' ? r.region : null,
+                      r.country == 'Philippines' ? r.region : null,
                   sex: r.sex!,
                   ageGroup: r.ageGroup!,
                   count: int.parse(r.countCtrl.text),
@@ -370,14 +373,14 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   }
 
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
-    final now     = DateTime.now();
-    final today   = DateTime(now.year, now.month, now.day);
+    final now       = DateTime.now();
+    final today     = DateTime(now.year, now.month, now.day);
     final firstDate = isCheckIn
         ? DateTime(2020)
         : (_checkIn != null
             ? _checkIn!.add(const Duration(days: 1))
             : today);
-    final lastDate = isCheckIn ? today : today.add(const Duration(days: 730));
+    final lastDate    = isCheckIn ? today : today.add(const Duration(days: 730));
     final initialDate = isCheckIn
         ? today
         : (_checkIn != null
@@ -389,7 +392,6 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       initialDate: initialDate,
       firstDate: firstDate,
       lastDate: lastDate,
-      // Light date-picker to match edit dialog
       builder: (ctx, child) => Theme(
         data: ThemeData(
           useMaterial3: true,
@@ -582,8 +584,7 @@ class _GlobalErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style:
-                  const TextStyle(color: AppColors.accentRed, fontSize: 13),
+              style: const TextStyle(color: AppColors.accentRed, fontSize: 13),
             ),
           ),
         ],
@@ -649,6 +650,8 @@ class _StayInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
+    final nightsLabel =
+        nights > 0 ? '$nights night${nights > 1 ? 's' : ''}' : '—';
 
     return _SectionCard(
       title: 'Stay Information',
@@ -656,8 +659,6 @@ class _StayInfoCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Check-in / Check-out / Nights ─────────────────────────────────
-          // On mobile: check-in + check-out side-by-side (row), length below.
-          // On desktop: all three in one row.
           if (isMobile) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -690,9 +691,7 @@ class _StayInfoCard extends StatelessWidget {
             const SizedBox(height: 12),
             _FieldCol(
               label: 'Length of Stay',
-              child: _EntryReadOnlyField(
-                value: nights > 0 ? '$nights night${nights > 1 ? 's' : ''}' : '—',
-              ),
+              child: _EntryReadOnlyField(value: nightsLabel),
             ),
           ] else ...[
             Row(
@@ -725,11 +724,7 @@ class _StayInfoCard extends StatelessWidget {
                 Expanded(
                   child: _FieldCol(
                     label: 'Length of Stay',
-                    child: _EntryReadOnlyField(
-                      value: nights > 0
-                          ? '$nights night${nights > 1 ? 's' : ''}'
-                          : '—',
-                    ),
+                    child: _EntryReadOnlyField(value: nightsLabel),
                   ),
                 ),
               ],
@@ -922,7 +917,7 @@ class _DemographicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile  = MediaQuery.of(context).size.width < 600;
+    final isMobile   = MediaQuery.of(context).size.width < 600;
     final totalLabel = total > 0 ? '$total' : '?';
     final sumMatch   = total > 0 && currentSum == total;
     final sumColor   = currentSum == 0
@@ -965,7 +960,7 @@ class _DemographicCard extends StatelessWidget {
               padding: EdgeInsets.only(bottom: 10),
               child: Row(
                 children: [
-                  Expanded(flex: 3, child: _ColHeader('Nationality')),
+                  Expanded(flex: 3, child: _ColHeader('Country')),
                   SizedBox(width: 8),
                   Expanded(flex: 3, child: _ColHeader('Region (If PH)')),
                   SizedBox(width: 8),
@@ -982,7 +977,7 @@ class _DemographicCard extends StatelessWidget {
           ...List.generate(rows.length, (i) {
             final row  = rows[i];
             final rErr = i < rowErrors.length ? rowErrors[i] : <String, String?>{};
-            final isPhilippines = row.nationality == 'Philippines';
+            final isPhilippines = row.country == 'Philippines';
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: isMobile
@@ -1009,11 +1004,13 @@ class _DemographicCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              Icon(Icons.lightbulb_outline, color: Color(0xFFD4A017), size: 13),
+              Icon(Icons.lightbulb_outline,
+                  color: Color(0xFFD4A017), size: 13),
               SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  'Each row represents a unique combination of nationality, region, sex, and age group. Add multiple rows to cover all guest segments.',
+                  'Each row represents a unique combination of country, region, sex, and age group. '
+                  'Add multiple rows to cover all guest segments.',
                   style: TextStyle(
                     color: AppColors.textSubtle,
                     fontSize: 11,
@@ -1050,104 +1047,96 @@ class _DesktopDemoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              flex: 3,
-              child: _CompactDropWithError(
-                errorText: rowErrors['nationality'],
-                child: _CompactDrop(
-                  hint: 'Country',
-                  value: row.nationality,
-                  items: _nationalityOptions,
-                  onChanged: (v) {
-                    row.nationality = v;
-                    if (v != 'Philippines') row.region = null;
-                    onChanged('nationality');
-                  },
-                ),
-              ),
+        Expanded(
+          flex: 3,
+          child: _CompactDropWithError(
+            errorText: rowErrors['country'],
+            child: _CompactDrop(
+              hint: 'Country',
+              value: row.country,
+              items: _countryOptions,
+              onChanged: (v) {
+                row.country = v;
+                if (v != 'Philippines') row.region = null;
+                onChanged('country');
+              },
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 3,
-              child: _CompactDropWithError(
-                errorText: rowErrors['region'],
-                child: _CompactDrop(
-                  hint: 'N/A',
-                  value: isPhilippines ? row.region : null,
-                  items: _regionOptions,
-                  enabled: isPhilippines,
-                  onChanged: (v) {
-                    row.region = v;
-                    onChanged('region');
-                  },
-                ),
-              ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 3,
+          child: _CompactDropWithError(
+            errorText: rowErrors['region'],
+            child: _CompactDrop(
+              hint: 'N/A',
+              value: isPhilippines ? row.region : null,
+              items: _regionOptions,
+              enabled: isPhilippines,
+              onChanged: (v) {
+                row.region = v;
+                onChanged('region');
+              },
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: _CompactDropWithError(
-                errorText: rowErrors['sex'],
-                child: _CompactDrop(
-                  hint: 'Sex',
-                  value: row.sex,
-                  items: _sexOptions,
-                  onChanged: (v) {
-                    row.sex = v;
-                    onChanged('sex');
-                  },
-                ),
-              ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _CompactDropWithError(
+            errorText: rowErrors['sex'],
+            child: _CompactDrop(
+              hint: 'Sex',
+              value: row.sex,
+              items: _sexOptions,
+              onChanged: (v) {
+                row.sex = v;
+                onChanged('sex');
+              },
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: _CompactDropWithError(
-                errorText: rowErrors['ageGroup'],
-                child: _CompactDrop(
-                  hint: 'Age Group',
-                  value: row.ageGroup,
-                  items: _ageGroupOptions,
-                  onChanged: (v) {
-                    row.ageGroup = v;
-                    onChanged('ageGroup');
-                  },
-                ),
-              ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 2,
+          child: _CompactDropWithError(
+            errorText: rowErrors['ageGroup'],
+            child: _CompactDrop(
+              hint: 'Age Group',
+              value: row.ageGroup,
+              items: _ageGroupOptions,
+              onChanged: (v) {
+                row.ageGroup = v;
+                onChanged('ageGroup');
+              },
             ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 60,
-              child: _CompactDropWithError(
-                errorText: rowErrors['count'],
-                child: _CompactCountField(
-                  controller: row.countCtrl,
-                  hasError: rowErrors['count'] != null,
-                  onChanged: (_) => onChanged('count'),
-                ),
-              ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 60,
+          child: _CompactDropWithError(
+            errorText: rowErrors['count'],
+            child: _CompactCountField(
+              controller: row.countCtrl,
+              hasError: rowErrors['count'] != null,
+              onChanged: (_) => onChanged('count'),
             ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 20,
-              child: showDelete
-                  ? GestureDetector(
-                      onTap: onDelete,
-                      child: const Icon(
-                        Icons.delete_rounded,
-                        color: AppColors.accentRed,
-                        size: 16,
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 20,
+          child: showDelete
+              ? GestureDetector(
+                  onTap: onDelete,
+                  child: const Icon(Icons.delete_rounded,
+                      color: AppColors.accentRed, size: 16),
+                )
+              : const SizedBox.shrink(),
         ),
       ],
     );
@@ -1189,21 +1178,21 @@ class _MobileDemoRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Nationality + Region (+ delete)
+          // Row 1: country + Region (+ delete)
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
                 child: _CompactDropWithError(
-                  errorText: rowErrors['nationality'],
+                  errorText: rowErrors['country'],
                   child: _CompactDrop(
                     hint: 'Country',
-                    value: row.nationality,
-                    items: _nationalityOptions,
+                    value: row.country,
+                    items: _countryOptions,
                     onChanged: (v) {
-                      row.nationality = v;
+                      row.country = v;
                       if (v != 'Philippines') row.region = null;
-                      onChanged('nationality');
+                      onChanged('country');
                     },
                   ),
                 ),
@@ -1228,11 +1217,8 @@ class _MobileDemoRow extends StatelessWidget {
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: onDelete,
-                  child: const Icon(
-                    Icons.delete_rounded,
-                    color: AppColors.accentRed,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.delete_rounded,
+                      color: AppColors.accentRed, size: 16),
                 ),
               ],
             ],
@@ -1334,8 +1320,7 @@ class _FormActions extends StatelessWidget {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(9),
-          ),
+              borderRadius: BorderRadius.circular(9)),
         ),
       ),
     );
@@ -1348,8 +1333,7 @@ class _FormActions extends StatelessWidget {
           side: const BorderSide(color: AppColors.cardBorder),
           foregroundColor: AppColors.textGray,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(9),
-          ),
+              borderRadius: BorderRadius.circular(9)),
           padding: const EdgeInsets.symmetric(horizontal: 22),
         ),
         child: const Text(
@@ -1413,23 +1397,19 @@ class _SectionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        )),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        subtitle!,
-                        style: const TextStyle(
-                          color: AppColors.primaryCyan,
-                          fontSize: 11.5,
-                        ),
-                      ),
+                      Text(subtitle!,
+                          style: const TextStyle(
+                            color: AppColors.primaryCyan,
+                            fontSize: 11.5,
+                          )),
                     ],
                   ],
                 ),
@@ -1445,7 +1425,7 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-// ─── Field Column (label + child + optional error) ────────────────────────────
+// ─── Field Column ─────────────────────────────────────────────────────────────
 
 class _FieldCol extends StatelessWidget {
   const _FieldCol({
@@ -1463,14 +1443,12 @@ class _FieldCol extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppColors.textGray,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        Text(label,
+            style: const TextStyle(
+              color: AppColors.textGray,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            )),
         const SizedBox(height: 6),
         child,
         if (errorText != null) ...[
@@ -1496,14 +1474,12 @@ class _InlineError extends StatelessWidget {
             size: 12, color: AppColors.accentRed),
         const SizedBox(width: 5),
         Expanded(
-          child: Text(
-            message,
-            style: const TextStyle(
-              color: AppColors.accentRed,
-              fontSize: 11,
-              height: 1.3,
-            ),
-          ),
+          child: Text(message,
+              style: const TextStyle(
+                color: AppColors.accentRed,
+                fontSize: 11,
+                height: 1.3,
+              )),
         ),
       ],
     );
@@ -1525,22 +1501,20 @@ class _AddRowButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-              color: const Color(0xFF3B82F6).withOpacity(0.4)),
+          border:
+              Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.add, color: AppColors.textWhite, size: 14),
             SizedBox(width: 4),
-            Text(
-              '+ Add Row',
-              style: TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            Text('+ Add Row',
+                style: TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                )),
           ],
         ),
       ),
@@ -1556,14 +1530,12 @@ class _ColHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppColors.textSubtle,
-        fontSize: 11.5,
-        fontWeight: FontWeight.w500,
-      ),
-    );
+    return Text(label,
+        style: const TextStyle(
+          color: AppColors.textSubtle,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w500,
+        ));
   }
 }
 
@@ -1589,18 +1561,21 @@ class _CompactDropWithError extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  INPUT WIDGETS — light style matching the edit-guest dialog
+//  INPUT WIDGETS — all sized to _kFieldHeight (40 px)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// Shared InputDecoration for text / number fields.
+/// isDense + vertical: 11 keeps the intrinsic height at _kFieldHeight.
 InputDecoration _lightDecoration({String? hint, bool hasError = false}) {
   final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
   final focusColor  = hasError ? AppColors.accentRed : _kInputFocused;
   return InputDecoration(
     hintText: hint,
-    hintStyle: const TextStyle(color: _kInputHint, fontSize: 12.5),
+    hintStyle: const TextStyle(color: _kInputHint, fontSize: 13),
     filled: true,
     fillColor: hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    isDense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(color: borderColor),
@@ -1630,18 +1605,19 @@ class _EntryDateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 44,
+        height: _kFieldHeight,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: hasError
               ? AppColors.accentRed.withOpacity(0.04)
               : _kInputFill,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: borderColor),
+          border: Border.all(
+            color: hasError ? AppColors.accentRed : _kInputBorder,
+          ),
         ),
         child: Row(
           children: [
@@ -1675,7 +1651,7 @@ class _EntryReadOnlyField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      height: _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: _kReadOnlyFill,
@@ -1683,10 +1659,8 @@ class _EntryReadOnlyField extends StatelessWidget {
         border: Border.all(color: _kInputBorder),
       ),
       alignment: Alignment.centerLeft,
-      child: Text(
-        value,
-        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
-      ),
+      child: Text(value,
+          style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
     );
   }
 }
@@ -1707,13 +1681,16 @@ class _EntryNumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      onChanged: onChanged,
-      style: const TextStyle(color: _kInputText, fontSize: 13),
-      decoration: _lightDecoration(hint: hint, hasError: hasError),
+    return SizedBox(
+      height: _kFieldHeight,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        onChanged: onChanged,
+        style: const TextStyle(color: _kInputText, fontSize: 13),
+        decoration: _lightDecoration(hint: hint, hasError: hasError),
+      ),
     );
   }
 }
@@ -1734,16 +1711,19 @@ class _EntryTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      style: const TextStyle(color: _kInputText, fontSize: 13),
-      decoration: _lightDecoration(hint: hint, hasError: hasError),
+    return SizedBox(
+      height: _kFieldHeight,
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: const TextStyle(color: _kInputText, fontSize: 13),
+        decoration: _lightDecoration(hint: hint, hasError: hasError),
+      ),
     );
   }
 }
 
-// ── Dropdown field ────────────────────────────────────────────────────────────
+// ── Dropdown field (Purpose / Transport) ──────────────────────────────────────
 
 class _EntryDropdownField extends StatelessWidget {
   const _EntryDropdownField({
@@ -1761,30 +1741,30 @@ class _EntryDropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      height: _kFieldHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: hasError
             ? AppColors.accentRed.withOpacity(0.04)
             : _kInputFill,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
+        border: Border.all(
+          color: hasError ? AppColors.accentRed : _kInputBorder,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           isDense: true,
           value: value,
           isExpanded: true,
-          hint: Text(
-            hint,
-            style: const TextStyle(color: _kInputHint, fontSize: 13),
-          ),
+          hint: Text(hint,
+              style: const TextStyle(color: _kInputHint, fontSize: 13)),
           dropdownColor: _kDropBg,
-          iconEnabledColor: hasError ? AppColors.accentRed : _kInputHint,
-          icon: const Icon(
+          icon: Icon(
             Icons.keyboard_arrow_down_rounded,
             size: 18,
+            color: hasError ? AppColors.accentRed : _kInputHint,
           ),
           style: const TextStyle(color: _kInputText, fontSize: 13),
           items: items
@@ -1822,18 +1802,14 @@ class _CompactDrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveValue =
         (value != null && items.contains(value)) ? value : null;
-    final fillColor = enabled ? _kInputFill : _kReadOnlyFill;
-    final textColor =
-        enabled ? _kInputText : const Color(0xFF9CA3AF);
-    final hintColor =
-        enabled ? _kInputHint : const Color(0xFFD1D5DB);
-    final iconColor =
-        enabled ? _kInputHint : const Color(0xFFD1D5DB);
-    final borderColor =
-        enabled ? _kInputBorder : const Color(0xFFE5E7EB);
+    final fillColor   = enabled ? _kInputFill : _kReadOnlyFill;
+    final textColor   = enabled ? _kInputText : const Color(0xFF9CA3AF);
+    final hintColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
+    final iconColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
+    final borderColor = enabled ? _kInputBorder : const Color(0xFFE5E7EB);
 
     return Container(
-      height: 36,
+      height: _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: fillColor,
@@ -1844,19 +1820,19 @@ class _CompactDrop extends StatelessWidget {
         child: DropdownButton<String>(
           value: effectiveValue,
           hint: Text(hint,
-              style: TextStyle(color: hintColor, fontSize: 12)),
-          style: TextStyle(color: textColor, fontSize: 12),
+              style: TextStyle(color: hintColor, fontSize: 12.5)),
+          style: TextStyle(color: textColor, fontSize: 12.5),
           dropdownColor: _kDropBg,
           icon: Icon(Icons.keyboard_arrow_down_rounded,
               color: iconColor, size: 16),
           isExpanded: true,
+          isDense: true,
           onChanged: enabled ? onChanged : null,
           items: items
               .map((e) => DropdownMenuItem<String>(
                     value: e,
                     child: Text(e,
-                        style: TextStyle(
-                            color: textColor, fontSize: 12)),
+                        style: TextStyle(color: textColor, fontSize: 12.5)),
                   ))
               .toList(),
         ),
@@ -1881,7 +1857,7 @@ class _CompactCountField extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
     return SizedBox(
-      height: 36,
+      height: _kFieldHeight,
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
@@ -1891,13 +1867,14 @@ class _CompactCountField extends StatelessWidget {
         onChanged: onChanged,
         decoration: InputDecoration(
           hintText: '0',
-          hintStyle: const TextStyle(color: _kInputHint, fontSize: 12),
+          hintStyle: const TextStyle(color: _kInputHint, fontSize: 12.5),
           filled: true,
           fillColor: hasError
               ? AppColors.accentRed.withOpacity(0.04)
               : _kInputFill,
+          isDense: true,
           contentPadding:
-              const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(7),
             borderSide: BorderSide(color: borderColor),

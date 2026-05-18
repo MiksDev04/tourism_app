@@ -10,14 +10,14 @@ enum GuestRecordStatus { active, archived }
 
 class GuestBreakdownEntry {
   const GuestBreakdownEntry({
-    required this.nationality,
+    required this.country,
     this.philippinesRegion,
     required this.sex,
     required this.ageGroup,
     required this.count,
   });
 
-  final String nationality;
+  final String country;
   final String? philippinesRegion;
   final String sex;
   final String ageGroup;
@@ -349,6 +349,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                   onFilterToggle: () =>
                       setState(() => _showFilters = !_showFilters),
                   isNarrow: isNarrow,
+                  totalRecords: _filtered.length,
                 ),
                 const SizedBox(height: 16),
                 _SearchBar(
@@ -732,6 +733,7 @@ class _PageHeader extends StatelessWidget {
     required this.showFilters,
     required this.onFilterToggle,
     required this.isNarrow,
+    required this.totalRecords,
   });
 
   final _Filter activeFilter;
@@ -739,6 +741,7 @@ class _PageHeader extends StatelessWidget {
   final bool showFilters;
   final VoidCallback onFilterToggle;
   final bool isNarrow;
+  final int totalRecords;
 
   @override
   Widget build(BuildContext context) {
@@ -751,7 +754,7 @@ class _PageHeader extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _TitleSubtitle(),
+          _TitleSubtitle(totalRecords: totalRecords),
           const SizedBox(height: 12),
           Row(children: [
             filterRow,
@@ -765,7 +768,7 @@ class _PageHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        _TitleSubtitle(),
+        _TitleSubtitle(totalRecords: totalRecords),
         const Spacer(),
         filterRow,
         const SizedBox(width: 10),
@@ -776,20 +779,23 @@ class _PageHeader extends StatelessWidget {
 }
 
 class _TitleSubtitle extends StatelessWidget {
+  const _TitleSubtitle({required this.totalRecords});
+  final int totalRecords;
+
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Guest Records',
-          style: TextStyle(
+          'Guest Records (${totalRecords})',
+          style: const TextStyle(
               color: AppColors.textWhite,
               fontSize: 22,
               fontWeight: FontWeight.w700),
         ),
-        SizedBox(height: 4),
-        Text('View and manage all guest entries',
+        const SizedBox(height: 4),
+        const Text('View and manage all guest entries',
             style: TextStyle(color: AppColors.textGray, fontSize: 13)),
       ],
     );
@@ -947,7 +953,7 @@ class _SearchBar extends StatelessWidget {
 
 // ─── Guest Table ──────────────────────────────────────────────────────────────
 
-class _GuestTable extends StatelessWidget {
+class _GuestTable extends StatefulWidget {
   const _GuestTable({
     required this.records,
     required this.isNarrow,
@@ -961,7 +967,57 @@ class _GuestTable extends StatelessWidget {
   final ValueChanged<GuestRecord> onRestore;
 
   @override
+  State<_GuestTable> createState() => _GuestTableState();
+}
+
+class _GuestTableState extends State<_GuestTable> {
+  int _currentPage = 1;
+  int _pageSize = 10;
+
+  List<GuestRecord> get _records => widget.records;
+
+  int get _totalPages {
+    if (_records.isEmpty) return 1;
+    return (_records.length / _pageSize).ceil();
+  }
+
+  void _prev() {
+    setState(() {
+      if (_currentPage > 1) _currentPage--;
+    });
+  }
+
+  void _next() {
+    setState(() {
+      if (_currentPage < _totalPages) _currentPage++;
+    });
+  }
+
+  void _setPageSize(int size) {
+    setState(() {
+      _pageSize = size;
+      _currentPage = 1; // reset to first page on size change
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _GuestTable oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Ensure current page is valid if the records length changed externally
+    final total = _totalPages;
+    if (_currentPage > total) {
+      setState(() => _currentPage = total);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isNarrow = widget.isNarrow;
+
+    // compute page slice
+    final start = (_currentPage - 1) * _pageSize;
+    final pageRecords = _records.skip(start).take(_pageSize).toList();
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
@@ -974,7 +1030,7 @@ class _GuestTable extends StatelessWidget {
             _TableHeader(),
             const Divider(color: AppColors.cardBorder, height: 1),
           ],
-          if (records.isEmpty)
+          if (_records.isEmpty)
             const Padding(
               padding: EdgeInsets.all(40),
               child: Center(
@@ -983,25 +1039,131 @@ class _GuestTable extends StatelessWidget {
               ),
             )
           else
-            ...records.map((r) {
-              final isLast = r == records.last;
+            ...pageRecords.map((r) {
+              final isLast = r == pageRecords.last;
               return Column(
                 children: [
                   if (isNarrow)
-                    _RecordCard(
-                        record: r,
-                        onEdit: onEdit,
-                        onRestore: onRestore)
+                    _RecordCard(record: r, onEdit: widget.onEdit, onRestore: widget.onRestore)
                   else
-                    _RecordRow(
-                        record: r,
-                        onEdit: onEdit,
-                        onRestore: onRestore),
-                  if (!isLast)
-                    const Divider(color: AppColors.cardBorder, height: 1),
+                    _RecordRow(record: r, onEdit: widget.onEdit, onRestore: widget.onRestore),
+                  if (!isLast) const Divider(color: AppColors.cardBorder, height: 1),
                 ],
               );
             }),
+
+          // Pagination controls
+          if (_records.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: LayoutBuilder(builder: (context, constraints) {
+                final narrowControls = constraints.maxWidth < 420 || isNarrow;
+                return narrowControls
+                    ? Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _SmallIconBtn(
+                                  icon: Icons.chevron_left, onTap: _prev, enabled: _currentPage > 1),
+                              const SizedBox(width: 8),
+                              Text('Page $_currentPage of $_totalPages',
+                                  style: const TextStyle(color: AppColors.textGray, fontSize: 12)),
+                              const SizedBox(width: 8),
+                              _SmallIconBtn(
+                                  icon: Icons.chevron_right,
+                                  onTap: _next,
+                                  enabled: _currentPage < _totalPages),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          _CompactPageSizeDropdown(value: _pageSize, onChanged: _setPageSize),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          _SmallIconBtn(icon: Icons.chevron_left, onTap: _prev, enabled: _currentPage > 1),
+                          const SizedBox(width: 8),
+                          Text('Page $_currentPage of $_totalPages',
+                              style: const TextStyle(color: AppColors.textGray, fontSize: 12)),
+                          const Spacer(),
+                          _CompactPageSizeDropdown(value: _pageSize, onChanged: _setPageSize),
+                          const SizedBox(width: 8),
+                          _SmallIconBtn(icon: Icons.chevron_right, onTap: _next, enabled: _currentPage < _totalPages),
+                        ],
+                      );
+              }),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// Small pagination button used for prev/next to keep controls compact
+class _SmallIconBtn extends StatelessWidget {
+  const _SmallIconBtn({required this.icon, required this.onTap, this.enabled = true});
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        height: 30,
+        width: 34,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.primaryCyan : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Icon(icon, size: 18, color: enabled ? Colors.white : AppColors.textGray),
+      ),
+    );
+  }
+
+}
+
+// Compact dropdown for selecting page size (items per page)
+class _CompactPageSizeDropdown extends StatelessWidget {
+  const _CompactPageSizeDropdown({required this.value, required this.onChanged});
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    const options = [5, 10, 20, 50];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Show', style: TextStyle(color: AppColors.textGray, fontSize: 12)),
+          const SizedBox(width: 8),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: value,
+              isDense: true,
+              items: options
+                  .map((o) => DropdownMenuItem<int>(value: o, child: Text('$o', style: const TextStyle(fontSize: 13))))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
+              dropdownColor: AppColors.cardBackground,
+              style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+              iconEnabledColor: AppColors.textGray,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Text('per page', style: TextStyle(color: AppColors.textGray, fontSize: 12)),
         ],
       ),
     );
@@ -1023,7 +1185,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 1, child: _HeaderCell('Guests')),
           Expanded(flex: 1, child: _HeaderCell('Rooms')),
           Expanded(flex: 2, child: _HeaderCell('Purpose')),
-          Expanded(flex: 3, child: _HeaderCell('Transport')),
+          Expanded(flex: 2, child: _HeaderCell('Transport')),
           Expanded(flex: 2, child: _HeaderCell('Status')),
           Expanded(flex: 2, child: _HeaderCell('Actions')),
         ],
@@ -1101,11 +1263,19 @@ class _RecordRow extends StatelessWidget {
                   style: const TextStyle(
                       color: AppColors.textGray, fontSize: 13))),
           Expanded(
-              flex: 3,
+              flex: 2,
               child: Text(r.transport,
                   style: const TextStyle(
                       color: AppColors.textGray, fontSize: 13))),
-          Expanded(flex: 2, child: _StatusBadge(status: r.status)),
+          Expanded(
+              flex: 2,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 0),
+                  child: _StatusBadge(status: r.status),
+                ),
+              )),
           Expanded(
             flex: 2,
             child: _ActionButtons(
@@ -1238,7 +1408,7 @@ class _StatusBadge extends StatelessWidget {
     final isActive = status == GuestRecordStatus.active;
     final color = isActive ? AppColors.accentGreen : AppColors.textGray;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
@@ -1248,7 +1418,7 @@ class _StatusBadge extends StatelessWidget {
         isActive ? 'active' : 'archived',
         style: TextStyle(
             color: color,
-            fontSize: 11.5,
+            fontSize: 11,
             fontWeight: FontWeight.w600),
       ),
     );
@@ -1439,7 +1609,7 @@ class _RecordDetailModal extends StatelessWidget {
                       _StatGrid(entries: demo.sexDistribution),
                       const SizedBox(height: 20),
 
-                      const _ModalSectionLabel('Nationality / Region'),
+                      const _ModalSectionLabel('Country / Region'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.countries),
                     ],
@@ -1572,46 +1742,118 @@ class _BreakdownTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final isNarrow = constraints.maxWidth < 520;
+
+      // Narrow layout: stacked cards with compact chips for readability on phones
+      if (isNarrow) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: breakdowns.map((b) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.inputBackground,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.cardBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(b.country,
+                      style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _BreakdownInfoChip(label: 'Region', value: b.philippinesRegion ?? '—'),
+                      _BreakdownInfoChip(label: 'Sex', value: b.sex),
+                      _BreakdownInfoChip(label: 'Age', value: b.ageGroup),
+                      _BreakdownInfoChip(label: 'Count', value: '${b.count}'),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      }
+
+      // Wide layout: keep original table presentation for desktop/tablet
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Table(
+            border: TableBorder.symmetric(
+              inside: BorderSide(color: AppColors.cardBorder, width: 0.5),
+            ),
+            columnWidths: const {
+              0: FlexColumnWidth(2.5),
+              1: FlexColumnWidth(2),
+              2: FlexColumnWidth(1.5),
+              3: FlexColumnWidth(1.5),
+              4: FlexColumnWidth(1),
+            },
+            children: [
+              TableRow(
+                decoration: BoxDecoration(color: AppColors.inputBackground),
+                children: const [
+                  _TCell('Country', isHeader: true),
+                  _TCell('Region', isHeader: true),
+                  _TCell('Sex', isHeader: true),
+                  _TCell('Age Group', isHeader: true),
+                  _TCell('Count', isHeader: true),
+                ],
+              ),
+              ...breakdowns.map((b) => TableRow(
+                    children: [
+                      _TCell(b.country),
+                      _TCell(b.philippinesRegion ?? '—'),
+                      _TCell(b.sex),
+                      _TCell(b.ageGroup),
+                      _TCell('${b.count}'),
+                    ],
+                  )),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _BreakdownInfoChip extends StatelessWidget {
+  const _BreakdownInfoChip({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Table(
-          border: TableBorder.symmetric(
-            inside:
-                BorderSide(color: AppColors.cardBorder, width: 0.5),
-          ),
-          columnWidths: const {
-            0: FlexColumnWidth(2.5),
-            1: FlexColumnWidth(2),
-            2: FlexColumnWidth(1.5),
-            3: FlexColumnWidth(1.5),
-            4: FlexColumnWidth(1),
-          },
+      child: RichText(
+        text: TextSpan(
           children: [
-            TableRow(
-              decoration:
-                  BoxDecoration(color: AppColors.inputBackground),
-              children: const [
-                _TCell('Nationality', isHeader: true),
-                _TCell('Region', isHeader: true),
-                _TCell('Sex', isHeader: true),
-                _TCell('Age Group', isHeader: true),
-                _TCell('Count', isHeader: true),
-              ],
-            ),
-            ...breakdowns.map((b) => TableRow(
-                  children: [
-                    _TCell(b.nationality),
-                    _TCell(b.philippinesRegion ?? '—'),
-                    _TCell(b.sex),
-                    _TCell(b.ageGroup),
-                    _TCell('${b.count}'),
-                  ],
-                )),
+            TextSpan(
+                text: '$label: ',
+                style: const TextStyle(color: AppColors.textSubtle, fontSize: 12)),
+            TextSpan(
+                text: value,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 12)),
           ],
         ),
       ),

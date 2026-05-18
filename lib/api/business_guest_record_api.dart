@@ -55,7 +55,7 @@ class BusinessGuestRecordApi {
             transportation_mode,
             status,
             guest_breakdowns (
-              nationality,
+              country,
               philippines_region,
               sex,
               age_group,
@@ -84,7 +84,7 @@ class BusinessGuestRecordApi {
             final s = b['sex'] as String? ?? 'Unknown';
             sex[s] = (sex[s] ?? 0) + count;
 
-            final nat = b['nationality'] as String? ?? 'Unknown';
+            final nat = b['country'] as String? ?? 'Unknown';
             final region = b['philippines_region'] as String?;
             final countryKey =
                 (nat == 'Philippines' && region != null && region != 'N/A')
@@ -100,7 +100,7 @@ class BusinessGuestRecordApi {
             breakdowns: breakdowns
                 .map(
                   (b) => GuestBreakdownEntry(
-                    nationality: b['nationality'] as String? ?? '',
+                    country: b['country'] as String? ?? '',
                     philippinesRegion: b['philippines_region'] as String?,
                     sex: b['sex'] as String? ?? '',
                     ageGroup: b['age_group'] as String? ?? '',
@@ -198,9 +198,9 @@ class BusinessGuestRecordApi {
       if (breakdowns.isNotEmpty) {
         final rows = breakdowns.map((b) => {
           'guest_record_id': recordId,
-          'nationality': b.nationality,
+          'country': b.country,
           'philippines_region':
-              b.nationality == 'Philippines' ? b.philippinesRegion : null,
+              b.country == 'Philippines' ? b.philippinesRegion : null,
           'sex': _mapSex(b.sex),
           'age_group': _mapAgeGroup(b.ageGroup),
           'count': b.count,

@@ -13,14 +13,14 @@ class GuestEntryResult {
 
 class GuestBreakdownData {
   const GuestBreakdownData({
-    required this.nationality,
+    required this.country,
     this.philippinesRegion,
     required this.sex,
     required this.ageGroup,
     required this.count,
   });
 
-  final String nationality;
+  final String country;
   final String? philippinesRegion;
   final String sex;
   final String ageGroup;
@@ -96,7 +96,7 @@ class BusinessGuestEntryApi {
       // 2. Insert all breakdowns
       final breakdowns = data.breakdowns.map((b) => {
         'guest_record_id': guestRecordId,
-        'nationality': b.nationality,
+        'country': b.country,
         'philippines_region': b.philippinesRegion,
         'sex': _mapSex(b.sex),
         'age_group': _mapAgeGroup(b.ageGroup),
