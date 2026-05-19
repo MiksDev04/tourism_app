@@ -11,11 +11,13 @@ String _residenceCategoryLabel(String cat) {
     case 'philippine_resident':
       return 'PH Resident';
     case 'overseas_filipino':
-      return 'OFW';
+      return 'Overseas Fil.';
     case 'foreign_resident':
       return 'Foreign';
+    case 'unspecified_guest':
+      return 'Unspecified';
     default:
-      return '—';
+      return 'Unspecified';
   }
 }
 
@@ -27,6 +29,8 @@ Color _residenceCategoryColor(String cat) {
       return const Color(0xFF3B82F6); // blue
     case 'foreign_resident':
       return const Color(0xFFF59E0B); // amber
+    case 'unspecified_guest':
+      return AppColors.textGray;
     default:
       return AppColors.textGray;
   }
@@ -1827,8 +1831,6 @@ class _BreakdownTable extends StatelessWidget {
                       _BreakdownInfoChip(
                           label: 'Region',
                           value: b.philippinesRegion ?? '—'),
-                      if (b.isOverseas)
-                        _BreakdownInfoChip(label: 'OFW', value: 'Yes'),
                       _BreakdownInfoChip(label: 'Sex',   value: b.sex),
                       _BreakdownInfoChip(label: 'Age',   value: b.ageGroup),
                       _BreakdownInfoChip(label: 'Count', value: '${b.count}'),
@@ -1856,11 +1858,10 @@ class _BreakdownTable extends StatelessWidget {
             columnWidths: const {
               0: FlexColumnWidth(2.0), // Country
               1: FlexColumnWidth(1.8), // Region
-              2: FlexColumnWidth(0.7), // OFW
-              3: FlexColumnWidth(1.6), // Residence Category
-              4: FlexColumnWidth(1.0), // Sex
-              5: FlexColumnWidth(1.3), // Age Group
-              6: FlexColumnWidth(0.7), // Count
+              2: FlexColumnWidth(1.6), // Residence Category
+              3: FlexColumnWidth(1.0), // Sex
+              4: FlexColumnWidth(1.3), // Age Group
+              5: FlexColumnWidth(0.7), // Count
             },
             children: [
               TableRow(
@@ -1869,7 +1870,6 @@ class _BreakdownTable extends StatelessWidget {
                 children: const [
                   _TCell('Country',    isHeader: true),
                   _TCell('Region',     isHeader: true),
-                  _TCell('OFW',        isHeader: true),
                   _TCell('Residence',  isHeader: true),
                   _TCell('Sex',        isHeader: true),
                   _TCell('Age Group',  isHeader: true),
@@ -1881,7 +1881,6 @@ class _BreakdownTable extends StatelessWidget {
                   children: [
                     _TCell(b.country),
                     _TCell(b.philippinesRegion ?? '—'),
-                    _TCell(b.isOverseas ? 'Yes' : '—'),
                     _TCellBadge(
                       label: _residenceCategoryLabel(b.residenceCategory),
                       color: _residenceCategoryColor(b.residenceCategory),

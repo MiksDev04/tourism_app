@@ -52,12 +52,12 @@ class BusinessSidebar extends StatelessWidget {
       index: 2,
       route: AppRoutes.businessGuestRecord,
     ),
-    BizNavItem(
-      icon: Icons.bar_chart_rounded,
-      label: 'Reports',
-      index: 3,
-      route: AppRoutes.businessReports,
-    ),
+    // BizNavItem(
+    //   icon: Icons.bar_chart_rounded,
+    //   label: 'Reports',
+    //   index: 3,
+    //   route: AppRoutes.businessReports,
+    // ),
     BizNavItem(
       icon: Icons.chat_bubble_outline_rounded,
       label: 'Messages',
