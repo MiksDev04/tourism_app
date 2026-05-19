@@ -26,7 +26,11 @@ class RegisterApi {
     required int totalRooms,
     required String permitNumber,
     required String registrationNumber,
-    required String address,
+    required String street,
+    required String barangay,
+    required String cityMunicipality,
+    required String province,
+    required String region,
     required File permitFile,
     required File validIdFile,
   }) async {
@@ -41,7 +45,11 @@ class RegisterApi {
         totalRooms: totalRooms,
         permitNumber: permitNumber,
         registrationNumber: registrationNumber,
-        address: address,
+        street: street,
+        barangay: barangay,
+        cityMunicipality: cityMunicipality,
+        province: province,
+        region: region,
       );
       if (validationError != null) return RegisterResult.err(validationError);
 
@@ -100,7 +108,11 @@ class RegisterApi {
         'total_rooms': totalRooms,
         'permit_number': permitNumber,
         'registration_number': registrationNumber,
-        'address': address,
+        'street': street,
+        'barangay': barangay,
+        'city_municipality': cityMunicipality,
+        'province': province,
+        'region': region,
         'permit_file_url': permitUrl,
         'valid_id_url': validIdUrl,
         'status': 'pending',
@@ -150,7 +162,11 @@ class RegisterApi {
     required int totalRooms,
     required String permitNumber,
     required String registrationNumber,
-    required String address,
+    required String street,
+    required String barangay,
+    required String cityMunicipality,
+    required String province,
+    required String region,
   }) {
     final emailRe = RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
     final phoneRe = RegExp(r'^(09|\+639)\d{9}$');
@@ -166,7 +182,11 @@ class RegisterApi {
     if (registrationNumber.trim().isEmpty) {
       return 'Registration number is required.';
     }
-    if (address.trim().isEmpty) return 'Business address is required.';
+    if (street.trim().isEmpty) return 'Street is required.';
+    if (barangay.trim().isEmpty) return 'Barangay is required.';
+    if (cityMunicipality.trim().isEmpty) return 'City / Municipality is required.';
+    if (province.trim().isEmpty) return 'Province is required.';
+    if (region.trim().isEmpty) return 'Region is required.';
     return null;
   }
 

@@ -83,9 +83,20 @@ class _V {
   static String? registrationNumber(String v) =>
       v.trim().isEmpty ? 'Registration number is required' : null;
 
-  static String? address(String v) =>
-      v.trim().isEmpty ? 'Business address is required' : null;
+    static String? street(String v) =>
+      v.trim().isEmpty ? 'Street is required' : null;
 
+    static String? barangay(String v) =>
+      v.trim().isEmpty ? 'Barangay is required' : null;
+
+    static String? cityMunicipality(String v) =>
+      v.trim().isEmpty ? 'City / Municipality is required' : null;
+
+    static String? province(String v) =>
+      v.trim().isEmpty ? 'Province is required' : null;
+
+    static String? region(String v) =>
+      v.trim().isEmpty ? 'Region is required' : null;
   static String? file(File? f) =>
       f == null ? 'Please upload the required file' : null;
 }
@@ -123,7 +134,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _totalRoomsCtrl = TextEditingController();
   final _permitNumberCtrl = TextEditingController();
   final _registrationCtrl = TextEditingController();
-  final _businessAddrCtrl = TextEditingController();
+  final _streetCtrl = TextEditingController();
+  final _barangayCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController();
+  final _provinceCtrl = TextEditingController();
+  final _regionCtrl = TextEditingController();
   String _businessType = 'Hotel';
 
   File? _permitFile;
@@ -159,7 +174,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _totalRoomsCtrl,
       _permitNumberCtrl,
       _registrationCtrl,
-      _businessAddrCtrl,
+      _streetCtrl,
+      _barangayCtrl,
+      _cityCtrl,
+      _provinceCtrl,
+      _regionCtrl,
     ]) {
       c.dispose();
     }
@@ -221,7 +240,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _V.totalRooms(_totalRoomsCtrl.text) == null &&
       _V.permitNumber(_permitNumberCtrl.text) == null &&
       _V.registrationNumber(_registrationCtrl.text) == null &&
-      _V.address(_businessAddrCtrl.text) == null &&
+      _V.street(_streetCtrl.text) == null &&
+      _V.barangay(_barangayCtrl.text) == null &&
+      _V.cityMunicipality(_cityCtrl.text) == null &&
+      _V.province(_provinceCtrl.text) == null &&
+      _V.region(_regionCtrl.text) == null &&
       _V.file(_permitFile) == null &&
       _V.file(_validIdFile) == null;
 
@@ -265,7 +288,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       totalRooms: int.parse(_totalRoomsCtrl.text.trim()),
       permitNumber: _permitNumberCtrl.text.trim(),
       registrationNumber: _registrationCtrl.text.trim(),
-      address: _businessAddrCtrl.text.trim(),
+      street: _streetCtrl.text.trim(),
+      barangay: _barangayCtrl.text.trim(),
+      cityMunicipality: _cityCtrl.text.trim(),
+      province: _provinceCtrl.text.trim(),
+      region: _regionCtrl.text.trim(),
       permitFile: _permitFile!,
       validIdFile: _validIdFile!,
     );
@@ -375,7 +402,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           totalRoomsCtrl: _totalRoomsCtrl,
                           permitNumberCtrl: _permitNumberCtrl,
                           registrationCtrl: _registrationCtrl,
-                          businessAddrCtrl: _businessAddrCtrl,
+                          streetCtrl: _streetCtrl,
+                          barangayCtrl: _barangayCtrl,
+                          cityCtrl: _cityCtrl,
+                          provinceCtrl: _provinceCtrl,
+                          regionCtrl: _regionCtrl,
                           permitFile: _permitFile,
                           validIdFile: _validIdFile,
                           onPickPermitFile: _pickPermitFile,
@@ -551,7 +582,11 @@ class _FormCard extends StatelessWidget {
     required this.totalRoomsCtrl,
     required this.permitNumberCtrl,
     required this.registrationCtrl,
-    required this.businessAddrCtrl,
+    required this.streetCtrl,
+    required this.barangayCtrl,
+    required this.cityCtrl,
+    required this.provinceCtrl,
+    required this.regionCtrl,
     required this.permitFile,
     required this.validIdFile,
     required this.onPickPermitFile,
@@ -577,7 +612,11 @@ class _FormCard extends StatelessWidget {
   final TextEditingController totalRoomsCtrl;
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
-  final TextEditingController businessAddrCtrl;
+  final TextEditingController streetCtrl;
+  final TextEditingController barangayCtrl;
+  final TextEditingController cityCtrl;
+  final TextEditingController provinceCtrl;
+  final TextEditingController regionCtrl;
   final File? permitFile;
   final File? validIdFile;
   final VoidCallback onPickPermitFile;
@@ -628,7 +667,11 @@ class _FormCard extends StatelessWidget {
               totalRoomsCtrl: totalRoomsCtrl,
               permitNumberCtrl: permitNumberCtrl,
               registrationCtrl: registrationCtrl,
-              businessAddrCtrl: businessAddrCtrl,
+              streetCtrl: streetCtrl,
+              barangayCtrl: barangayCtrl,
+              cityCtrl: cityCtrl,
+              provinceCtrl: provinceCtrl,
+              regionCtrl: regionCtrl,
               permitFile: permitFile,
               validIdFile: validIdFile,
               onPickPermitFile: onPickPermitFile,
@@ -908,7 +951,11 @@ class _Step2Form extends StatefulWidget {
     required this.totalRoomsCtrl,
     required this.permitNumberCtrl,
     required this.registrationCtrl,
-    required this.businessAddrCtrl,
+    required this.streetCtrl,
+    required this.barangayCtrl,
+    required this.cityCtrl,
+    required this.provinceCtrl,
+    required this.regionCtrl,
     required this.permitFile,
     required this.validIdFile,
     required this.onPickPermitFile,
@@ -927,7 +974,11 @@ class _Step2Form extends StatefulWidget {
   final TextEditingController totalRoomsCtrl;
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
-  final TextEditingController businessAddrCtrl;
+  final TextEditingController streetCtrl;
+  final TextEditingController barangayCtrl;
+  final TextEditingController cityCtrl;
+  final TextEditingController provinceCtrl;
+  final TextEditingController regionCtrl;
   final File? permitFile;
   final File? validIdFile;
   final VoidCallback onPickPermitFile;
@@ -1070,20 +1121,79 @@ class _Step2FormState extends State<_Step2Form> {
         ),
         const SizedBox(height: 16),
         _LabeledField(
-          label: 'Business Address',
-          error: _show('address')
-              ? _V.address(widget.businessAddrCtrl.text)
-              : null,
+          label: 'Street',
+          error: _show('street') ? _V.street(widget.streetCtrl.text) : null,
           child: _Input(
-            controller: widget.businessAddrCtrl,
-            hint: 'Complete address in San Pablo City',
-            hasError:
-                _show('address') &&
-                _V.address(widget.businessAddrCtrl.text) != null,
-            onChanged: (_) => _touch('address'),
+            controller: widget.streetCtrl,
+            hint: 'House number, street',
+            hasError: _show('street') && _V.street(widget.streetCtrl.text) != null,
+            onChanged: (_) => _touch('street'),
           ),
         ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _LabeledField(
+                label: 'Barangay',
+                error: _show('barangay') ? _V.barangay(widget.barangayCtrl.text) : null,
+                child: _Input(
+                  controller: widget.barangayCtrl,
+                  hint: 'Barangay',
+                  hasError: _show('barangay') && _V.barangay(widget.barangayCtrl.text) != null,
+                  onChanged: (_) => _touch('barangay'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _LabeledField(
+                label: 'City / Municipality',
+                error: _show('city') ? _V.cityMunicipality(widget.cityCtrl.text) : null,
+                child: _Input(
+                  controller: widget.cityCtrl,
+                  hint: 'City / Municipality',
+                  hasError: _show('city') && _V.cityMunicipality(widget.cityCtrl.text) != null,
+                  onChanged: (_) => _touch('city'),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _LabeledField(
+                label: 'Province',
+                error: _show('province') ? _V.province(widget.provinceCtrl.text) : null,
+                child: _Input(
+                  controller: widget.provinceCtrl,
+                  hint: 'Province',
+                  hasError: _show('province') && _V.province(widget.provinceCtrl.text) != null,
+                  onChanged: (_) => _touch('province'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _LabeledField(
+                label: 'Region',
+                error: _show('region') ? _V.region(widget.regionCtrl.text) : null,
+                child: _Input(
+                  controller: widget.regionCtrl,
+                  hint: 'Region',
+                  hasError: _show('region') && _V.region(widget.regionCtrl.text) != null,
+                  onChanged: (_) => _touch('region'),
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
+        
         _LabeledField(
           label: 'Business Permit',
           error: widget.showErrors ? _V.file(widget.permitFile) : null,

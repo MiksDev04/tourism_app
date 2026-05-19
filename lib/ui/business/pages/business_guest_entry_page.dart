@@ -25,13 +25,22 @@ class DemographicRow {
         region = null,
         sex = null,
         ageGroup = null,
+        isOverseas = false,
         countCtrl = TextEditingController(text: '');
 
   String? country;
   String? region;
   String? sex;
   String? ageGroup;
+  bool isOverseas;
   final TextEditingController countCtrl;
+
+  /// Auto-derives residence_category based on country + isOverseas
+  String get residenceCategory {
+    if (country == null) return 'unspecified_guest';
+    if (country != 'Philippines') return 'foreign_resident';
+    return isOverseas ? 'overseas_filipino' : 'philippine_resident';
+  }
 
   void dispose() => countCtrl.dispose();
 }
@@ -276,8 +285,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         rowErrors[i]['country'] = 'Required';
         hasError = true;
       }
-      if (row.country == 'Philippines' && row.region == null) {
-        rowErrors[i]['region'] = 'Required for Philippine entries';
+      // Region only required for Philippine residents (not OFW)
+      if (row.country == 'Philippines' && !row.isOverseas && row.region == null) {
+        rowErrors[i]['region'] = 'Required for Philippine residents';
         hasError = true;
       }
       if (row.sex == null) {
@@ -295,7 +305,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       }
       if (row.country != null && row.sex != null && row.ageGroup != null) {
         final key =
-            '${row.country}|${row.region}|${row.sex}|${row.ageGroup}';
+            '${row.country}|${row.region}|${row.isOverseas}|${row.sex}|${row.ageGroup}';
         if (!seen.add(key)) {
           rowErrors[i]['country'] = 'Duplicate row — merge counts instead';
           hasError = true;
@@ -350,10 +360,13 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
             .map((r) => GuestBreakdownData(
                   country: r.country!,
                   philippinesRegion:
-                      r.country == 'Philippines' ? r.region : null,
+                      r.country == 'Philippines' && !r.isOverseas
+                          ? r.region
+                          : null,
                   sex: r.sex!,
                   ageGroup: r.ageGroup!,
                   count: int.parse(r.countCtrl.text),
+                  residenceCategory: r.residenceCategory,
                 ))
             .toList(),
       ),
@@ -964,6 +977,8 @@ class _DemographicCard extends StatelessWidget {
                   SizedBox(width: 8),
                   Expanded(flex: 3, child: _ColHeader('Region (If PH)')),
                   SizedBox(width: 8),
+                  SizedBox(width: 52, child: _ColHeader('OFW?')),
+                  SizedBox(width: 8),
                   Expanded(flex: 2, child: _ColHeader('Sex')),
                   SizedBox(width: 8),
                   Expanded(flex: 2, child: _ColHeader('Age Group')),
@@ -977,7 +992,10 @@ class _DemographicCard extends StatelessWidget {
           ...List.generate(rows.length, (i) {
             final row  = rows[i];
             final rErr = i < rowErrors.length ? rowErrors[i] : <String, String?>{};
-            final isPhilippines = row.country == 'Philippines';
+
+            // Region is only enabled for Philippine residents (not OFW)
+            final isPhilippines = row.country == 'Philippines' && !row.isOverseas;
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: isMobile
@@ -1047,9 +1065,12 @@ class _DesktopDemoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCountryPhilippines = row.country == 'Philippines';
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
+        // Country
         Expanded(
           flex: 3,
           child: _CompactDropWithError(
@@ -1060,19 +1081,24 @@ class _DesktopDemoRow extends StatelessWidget {
               items: _countryOptions,
               onChanged: (v) {
                 row.country = v;
-                if (v != 'Philippines') row.region = null;
+                if (v != 'Philippines') {
+                  row.region = null;
+                  row.isOverseas = false;
+                }
                 onChanged('country');
               },
             ),
           ),
         ),
         const SizedBox(width: 8),
+
+        // Region — disabled for OFW or non-PH
         Expanded(
           flex: 3,
           child: _CompactDropWithError(
             errorText: rowErrors['region'],
             child: _CompactDrop(
-              hint: 'N/A',
+              hint: isCountryPhilippines && row.isOverseas ? 'N/A (OFW)' : 'N/A',
               value: isPhilippines ? row.region : null,
               items: _regionOptions,
               enabled: isPhilippines,
@@ -1084,6 +1110,39 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
+
+        // OFW Checkbox — only active when country = Philippines
+        SizedBox(
+          width: 52,
+          height: _kFieldHeight,
+          child: Tooltip(
+            message: isCountryPhilippines
+                ? 'Check if guest is an Overseas Filipino (OFW / migrant)'
+                : 'Only applicable for Filipino nationals',
+            child: Center(
+              child: Checkbox(
+                value: isCountryPhilippines ? row.isOverseas : false,
+                onChanged: isCountryPhilippines
+                    ? (v) {
+                        row.isOverseas = v ?? false;
+                        if (row.isOverseas) row.region = null;
+                        onChanged('isOverseas');
+                      }
+                    : null,
+                activeColor: const Color(0xFF3B82F6),
+                side: BorderSide(
+                  color: isCountryPhilippines
+                      ? _kInputBorder
+                      : const Color(0xFFE5E7EB),
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Sex
         Expanded(
           flex: 2,
           child: _CompactDropWithError(
@@ -1100,6 +1159,8 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
+
+        // Age Group
         Expanded(
           flex: 2,
           child: _CompactDropWithError(
@@ -1116,6 +1177,8 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
+
+        // Count
         SizedBox(
           width: 60,
           child: _CompactDropWithError(
@@ -1128,6 +1191,8 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 8),
+
+        // Delete
         SizedBox(
           width: 20,
           child: showDelete
@@ -1164,6 +1229,8 @@ class _MobileDemoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCountryPhilippines = row.country == 'Philippines';
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1178,7 +1245,7 @@ class _MobileDemoRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: country + Region (+ delete)
+          // Row 1: Country + Region + Delete
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1191,7 +1258,10 @@ class _MobileDemoRow extends StatelessWidget {
                     items: _countryOptions,
                     onChanged: (v) {
                       row.country = v;
-                      if (v != 'Philippines') row.region = null;
+                      if (v != 'Philippines') {
+                        row.region = null;
+                        row.isOverseas = false;
+                      }
                       onChanged('country');
                     },
                   ),
@@ -1202,7 +1272,9 @@ class _MobileDemoRow extends StatelessWidget {
                 child: _CompactDropWithError(
                   errorText: rowErrors['region'],
                   child: _CompactDrop(
-                    hint: 'Region',
+                    hint: isCountryPhilippines && row.isOverseas
+                        ? 'N/A (OFW)'
+                        : 'Region',
                     value: isPhilippines ? row.region : null,
                     items: _regionOptions,
                     enabled: isPhilippines,
@@ -1223,7 +1295,48 @@ class _MobileDemoRow extends StatelessWidget {
               ],
             ],
           ),
+
+          // Row 1b: OFW checkbox — only shown when country = Philippines
+          if (isCountryPhilippines) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () {
+                row.isOverseas = !row.isOverseas;
+                if (row.isOverseas) row.region = null;
+                onChanged('isOverseas');
+              },
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: Checkbox(
+                      value: row.isOverseas,
+                      onChanged: (v) {
+                        row.isOverseas = v ?? false;
+                        if (row.isOverseas) row.region = null;
+                        onChanged('isOverseas');
+                      },
+                      activeColor: const Color(0xFF3B82F6),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Overseas Filipino (OFW / migrant)?',
+                    style: TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 8),
+
           // Row 2: Sex + Age Group + Count
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -1565,7 +1678,6 @@ class _CompactDropWithError extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Shared InputDecoration for text / number fields.
-/// isDense + vertical: 11 keeps the intrinsic height at _kFieldHeight.
 InputDecoration _lightDecoration({String? hint, bool hasError = false}) {
   final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
   final focusColor  = hasError ? AppColors.accentRed : _kInputFocused;

@@ -111,13 +111,14 @@ class BusinessDashboardApi {
   Future<BusinessDetails> fetchBusinessDetails(String businessId) async {
     final response = await _supabase
         .from('businesses')
-        .select('address, total_rooms')
+        .select('street, total_rooms')
         .eq('id', businessId)
         .maybeSingle();
 
     final data = response as Map<String, dynamic>?;
+    final street = (data?['street'] as String?) ?? '';
     return BusinessDetails(
-      address: (data?['address'] as String?) ?? '',
+      address: street,
       totalRooms: (data?['total_rooms'] as int?) ?? 0,
     );
   }

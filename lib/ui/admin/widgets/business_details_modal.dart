@@ -18,6 +18,11 @@ class BusinessDetails {
     required this.registrationNumber,
     required this.registeredDate,
     required this.address,
+    required this.street,
+    required this.barangay,
+    required this.cityMunicipality,
+    required this.province,
+    required this.region,
     required this.phone,
     required this.email,
     required this.permitFileUrl,
@@ -33,6 +38,11 @@ class BusinessDetails {
   final String registrationNumber;
   final String registeredDate;
   final String address;
+  final String street;
+  final String barangay;
+  final String cityMunicipality;
+  final String province;
+  final String region;
   final String phone;
   final String email;
   final String permitFileUrl;
@@ -271,7 +281,6 @@ class _BusinessIdentity extends StatelessWidget {
 class _DetailsGrid extends StatelessWidget {
   const _DetailsGrid({required this.details});
   final BusinessDetails details;
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -282,7 +291,7 @@ class _DetailsGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _DetailField(label: 'Owner', value: details.owner),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _DetailField(
                 label: 'Registration #',
                 value: details.registrationNumber,
@@ -296,14 +305,47 @@ class _DetailsGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _DetailField(label: 'Permit #', value: details.permitNumber),
-              const SizedBox(height: 16),
-              _DetailField(label: 'Registered', value: details.registeredDate),
+              const SizedBox(height: 12),
+              _DetailField(
+                label: 'Registered',
+                value: _formatRegisteredDate(details.registeredDate),
+              ),
             ],
           ),
         ),
       ],
     );
   }
+}
+
+String _formatRegisteredDate(String rawValue) {
+  final value = rawValue.trim();
+  if (value.isEmpty || value == '—') {
+    return '—';
+  }
+
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    return value;
+  }
+
+  const monthNames = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  final local = parsed.toLocal();
+  return '${monthNames[local.month - 1]} ${local.day}, ${local.year}';
 }
 
 class _DetailField extends StatelessWidget {
@@ -346,9 +388,18 @@ class _ContactInfo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Compose structured address if available
+    final parts = <String>[];
+    if (details.street.isNotEmpty && details.street != '—') parts.add(details.street);
+    if (details.barangay.isNotEmpty && details.barangay != '—') parts.add(details.barangay);
+    if (details.cityMunicipality.isNotEmpty && details.cityMunicipality != '—') parts.add(details.cityMunicipality);
+    if (details.province.isNotEmpty && details.province != '—') parts.add(details.province);
+    if (details.region.isNotEmpty && details.region != '—') parts.add(details.region);
+    final addressText = parts.isNotEmpty ? parts.join(', ') : details.address;
+
     return Column(
       children: [
-        _ContactRow(icon: Icons.location_on_outlined, text: details.address),
+        _ContactRow(icon: Icons.location_on_outlined, text: addressText),
         const SizedBox(height: 10),
         _ContactRow(icon: Icons.phone_outlined, text: details.phone),
         const SizedBox(height: 10),

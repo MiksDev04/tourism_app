@@ -16,35 +16,77 @@ const _kReadOnlyFill = Color(0xFFEFF2F5);
 /// Uniform height for every input, dropdown, and read-only field.
 const _kFieldHeight = 40.0;
 
+// ─── Residence category helpers ───────────────────────────────────────────────
+
+String _residenceCategoryLabel(String cat) {
+  switch (cat) {
+    case 'philippine_resident':
+      return 'PH Resident';
+    case 'overseas_filipino':
+      return 'OFW';
+    case 'foreign_resident':
+      return 'Foreign';
+    default:
+      return 'Unspecified';
+  }
+}
+
+Color _residenceCategoryColor(String cat) {
+  switch (cat) {
+    case 'philippine_resident':
+      return const Color(0xFF10B981); // green
+    case 'overseas_filipino':
+      return const Color(0xFF3B82F6); // blue
+    case 'foreign_resident':
+      return const Color(0xFFF59E0B); // amber
+    default:
+      return const Color(0xFF9CA3AF); // gray
+  }
+}
+
 // ─── Public model for one demographic row ─────────────────────────────────────
 
 class DemographicEntry {
   DemographicEntry({
-    this.country = '',
-    this.region = 'N/A',
-    this.sex = '',
-    this.ageGroup = '',
-    this.count = 0,
+    this.country   = '',
+    this.region    = 'N/A',
+    this.sex       = '',
+    this.ageGroup  = '',
+    this.count     = 0,
+    this.isOverseas = false,
   });
 
   String country;
   String region;
   String sex;
   String ageGroup;
-  int count;
+  int    count;
+  bool   isOverseas;
+
+  /// Auto-derived from country + isOverseas — never stored separately.
+  String get residenceCategory {
+    if (country.isEmpty) return 'unspecified_guest';
+    if (country == 'Philippines') {
+      return isOverseas ? 'overseas_filipino' : 'philippine_resident';
+    }
+    return 'foreign_resident';
+  }
 
   DemographicEntry copyWith({
     String? country,
     String? region,
     String? sex,
     String? ageGroup,
-    int? count,
-  }) => DemographicEntry(
-        country: country ?? this.country,
-        region: region ?? this.region,
-        sex: sex ?? this.sex,
-        ageGroup: ageGroup ?? this.ageGroup,
-        count: count ?? this.count,
+    int?    count,
+    bool?   isOverseas,
+  }) =>
+      DemographicEntry(
+        country:    country    ?? this.country,
+        region:     region     ?? this.region,
+        sex:        sex        ?? this.sex,
+        ageGroup:   ageGroup   ?? this.ageGroup,
+        count:      count      ?? this.count,
+        isOverseas: isOverseas ?? this.isOverseas,
       );
 }
 
@@ -87,99 +129,50 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
   late List<DemographicEntry> _demoRows;
 
   // ── Inline validation state ───────────────────────────────────────────────
-  Map<String, String?> _errors   = {};
-  List<Map<String, String?>> _rowErrors = [];
+  Map<String, String?>        _errors    = {};
+  List<Map<String, String?>>  _rowErrors = [];
 
   // ─── Options ────────────────────────────────────────────────────────────────
 
   static const _purposes = [
-    'Leisure',
-    'Business',
-    'Education',
-    'Medical',
-    'Religious',
-    'Others',
+    'Leisure', 'Business', 'Education', 'Medical', 'Religious', 'Others',
   ];
 
   static const _transports = [
-    'Private Car',
-    'Bus',
-    'Van',
-    'Motorcycle',
-    'Tricycle',
-    'Others',
+    'Private Car', 'Bus', 'Van', 'Motorcycle', 'Tricycle', 'Others',
   ];
 
   static const _sexOptions = ['Male', 'Female'];
 
-  // Uses en-dash (–) to match what the UI displays.
-  // _normaliseAgeGroup() maps DB hyphens → en-dashes on load.
   static const _ageGroupOptions = [
-    '0–9',
-    '10–17',
-    '18–25',
-    '26–35',
-    '36–45',
-    '46–55',
-    '56+',
+    '0–9', '10–17', '18–25', '26–35', '36–45', '46–55', '56+',
     'Prefer not to say',
   ];
 
   static const _countries = [
-    'Philippines',
-    'USA',
-    'Japan',
-    'South Korea',
-    'Australia',
-    'UK',
-    'Canada',
-    'Germany',
-    'France',
-    'China',
-    'Other',
+    'Philippines', 'USA', 'Japan', 'South Korea', 'Australia',
+    'UK', 'Canada', 'Germany', 'France', 'China', 'Other',
   ];
 
   static const _phRegions = [
-  'NCR',
-  'CAR',
-  'Region I',
-  'Region II',
-  'Region III',
-  'Region IV-A (CALABARZON)',
-  'Region IV-B (MIMAROPA)',
-  'Region V',
-  'Region VI',
-  'Region VII',
-  'Region VIII',
-  'Region IX',
-  'Region X',
-  'Region XI',
-  'Region XII',
-  'Region XIII',
-  'BARMM',
+    'NCR', 'CAR', 'Region I', 'Region II', 'Region III',
+    'Region IV-A (CALABARZON)', 'Region IV-B (MIMAROPA)',
+    'Region V', 'Region VI', 'Region VII', 'Region VIII',
+    'Region IX', 'Region X', 'Region XI', 'Region XII',
+    'Region XIII', 'BARMM',
   ];
 
   // ─── Normalise age-group from DB (hyphen) → UI option (en-dash) ───────────
 
-  /// Maps any DB-stored age-group string to the matching `_ageGroupOptions`
-  /// entry (which uses en-dashes). Returns empty string when no match found.
   static String _normaliseAgeGroup(String raw) {
-    // Already matches a UI option — done.
     if (_ageGroupOptions.contains(raw)) return raw;
-
-    // Replace plain hyphen with en-dash and try again.
     final withEndash = raw.trim().replaceAll('-', '–');
     if (_ageGroupOptions.contains(withEndash)) return withEndash;
-
-    // Handle the DB's '1-9' alias for '0–9'.
     if (raw.trim() == '1-9' || raw.trim() == '1–9') return '0–9';
-
-    // Handle 'prefer_not_to_say' and similar snake_case variants.
     if (raw.toLowerCase().replaceAll('_', ' ').contains('prefer')) {
       return 'Prefer not to say';
     }
-
-    return ''; // Unknown — treat as unset so validation catches it.
+    return '';
   }
 
   // ─── Init ────────────────────────────────────────────────────────────────────
@@ -193,22 +186,20 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     _guestsCtrl   = TextEditingController(text: r.guests.toString());
     _roomsCtrl    = TextEditingController(text: r.rooms.toString());
 
-    // Purpose — handle "Others" case from DB
     if (_purposes.contains(r.purpose)) {
-      _purpose = r.purpose;
+      _purpose          = r.purpose;
       _showPurposeOther = r.purpose == 'Others';
     } else {
-      _purpose = 'Others';
+      _purpose          = 'Others';
       _showPurposeOther = true;
       _purposeOtherCtrl.text = r.purpose;
     }
 
-    // Transport — handle "Others" case from DB
     if (_transports.contains(r.transport)) {
-      _transport = r.transport;
+      _transport          = r.transport;
       _showTransportOther = r.transport == 'Others';
     } else {
-      _transport = 'Others';
+      _transport          = 'Others';
       _showTransportOther = true;
       _transportOtherCtrl.text = r.transport;
     }
@@ -228,33 +219,31 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     List<GuestBreakdownEntry> breakdowns,
   ) {
     return breakdowns.map((b) {
-      // ── country ──────────────────────────────────────────────────────
+      // ── Country ──────────────────────────────────────────────────────
       String nat = b.country;
       if (!_countries.contains(nat)) nat = 'Other';
 
-      // ── Region ───────────────────────────────────────────────────────────
+      // ── Region — only meaningful for philippine_resident ─────────────
       String reg = b.philippinesRegion ?? 'N/A';
       if (!_phRegions.contains(reg)) reg = 'N/A';
 
-      // ── Sex ──────────────────────────────────────────────────────────────
+      // ── Sex ──────────────────────────────────────────────────────────
       String rawSex = b.sex;
-      String sex = rawSex.isNotEmpty
+      String sex    = rawSex.isNotEmpty
           ? '${rawSex[0].toUpperCase()}${rawSex.substring(1).toLowerCase()}'
           : '';
       if (!_sexOptions.contains(sex)) sex = '';
 
-      // ── Age group — normalise DB value to UI option ───────────────────────
-      // FIX: was checking b.ageGroup directly against _ageGroupOptions, which
-      // failed whenever the DB stored hyphens ('18-25') instead of en-dashes
-      // ('18–25').  Now we normalise first.
+      // ── Age group ────────────────────────────────────────────────────
       final age = _normaliseAgeGroup(b.ageGroup);
 
       return DemographicEntry(
-        country: nat,
-        region: reg,
-        sex: sex,
-        ageGroup: age,
-        count: b.count,
+        country:    nat,
+        region:     reg,
+        sex:        sex,
+        ageGroup:   age,
+        count:      b.count,
+        isOverseas: b.isOverseas,
       );
     }).toList();
   }
@@ -272,7 +261,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
   // ─── Derived values ───────────────────────────────────────────────────────
 
-  int get _demoTotal  => _demoRows.fold(0, (sum, e) => sum + e.count);
+  int get _demoTotal   => _demoRows.fold(0, (sum, e) => sum + e.count);
   int get _totalGuests => int.tryParse(_guestsCtrl.text.trim()) ?? 0;
 
   void _recalcNights() {
@@ -325,8 +314,9 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
   bool _validateAndSetErrors() {
     final errors    = <String, String?>{};
-    final rowErrors = List.generate(_demoRows.length, (_) => <String, String?>{});
-    bool hasError   = false;
+    final rowErrors =
+        List.generate(_demoRows.length, (_) => <String, String?>{});
+    bool hasError = false;
 
     // ── Check-in ────────────────────────────────────────────────────────────
     final checkInText = _checkInCtrl.text.trim();
@@ -382,7 +372,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     if (_purpose.isEmpty) {
       errors['purpose'] = 'Please select a purpose of visit.';
       hasError = true;
-    } else if (_purpose == 'Others' && _purposeOtherCtrl.text.trim().isEmpty) {
+    } else if (_purpose == 'Others' &&
+        _purposeOtherCtrl.text.trim().isEmpty) {
       errors['purposeOther'] = 'Please specify the purpose.';
       hasError = true;
     }
@@ -407,9 +398,11 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         hasError = true;
       }
 
+      // Region required only for Philippine residents (not OFW).
       if (row.country == 'Philippines' &&
+          !row.isOverseas &&
           (row.region.isEmpty || row.region == 'N/A')) {
-        rowErrors[i]['region'] = 'Required for Philippine entries';
+        rowErrors[i]['region'] = 'Required for Philippine residents';
         hasError = true;
       }
 
@@ -428,11 +421,13 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         hasError = true;
       }
 
+      // Duplicate detection — isOverseas is part of the key because a PH
+      // resident and an OFW of the same sex/age are distinct segments.
       if (row.country.isNotEmpty &&
           row.sex.isNotEmpty &&
           row.ageGroup.isNotEmpty) {
         final key =
-            '${row.country}|${row.region}|${row.sex}|${row.ageGroup}';
+            '${row.country}|${row.region}|${row.isOverseas}|${row.sex}|${row.ageGroup}';
         if (!seen.add(key)) {
           rowErrors[i]['country'] =
               'Duplicate row — merge counts instead';
@@ -474,13 +469,17 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         .map(
           (e) => GuestBreakdownEntry(
             country: e.country,
-            philippinesRegion:
-                (e.country == 'Philippines' && e.region != 'N/A')
-                    ? e.region
-                    : null,
-            sex: e.sex.toLowerCase(),
-            ageGroup: e.ageGroup,
-            count: e.count,
+            // Region is null for OFW guests — they have no local region.
+            philippinesRegion: (e.country == 'Philippines' &&
+                    !e.isOverseas &&
+                    e.region != 'N/A')
+                ? e.region
+                : null,
+            sex:               e.sex.toLowerCase(),
+            ageGroup:          e.ageGroup,
+            count:             e.count,
+            isOverseas:        e.isOverseas,
+            residenceCategory: e.residenceCategory,
           ),
         )
         .toList();
@@ -507,22 +506,22 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     }
 
     final demographics = GuestDemographics(
-      ageGroups: ageGroups,
+      ageGroups:      ageGroups,
       sexDistribution: sexDist,
-      countries: countries,
-      breakdowns: breakdowns,
+      countries:      countries,
+      breakdowns:     breakdowns,
     );
 
     final updated = GuestRecord(
-      id: widget.record.id,
-      checkIn: _checkInCtrl.text.trim(),
-      checkOut: _checkOutCtrl.text.trim(),
-      nights: _lengthOfStay,
-      guests: _totalGuests,
-      rooms: int.tryParse(_roomsCtrl.text.trim()) ?? widget.record.rooms,
-      purpose: purposeValue,
-      transport: transportValue,
-      status: widget.record.status,
+      id:           widget.record.id,
+      checkIn:      _checkInCtrl.text.trim(),
+      checkOut:     _checkOutCtrl.text.trim(),
+      nights:       _lengthOfStay,
+      guests:       _totalGuests,
+      rooms:        int.tryParse(_roomsCtrl.text.trim()) ?? widget.record.rooms,
+      purpose:      purposeValue,
+      transport:    transportValue,
+      status:       widget.record.status,
       demographics: demographics,
     );
 
@@ -540,20 +539,20 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.symmetric(
         horizontal: isNarrow ? 12 : 24,
-        vertical: 24,
+        vertical:   24,
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 700),
+        constraints: const BoxConstraints(maxWidth: 760),
         child: Container(
           decoration: BoxDecoration(
-            color: AppColors.cardBackground,
+            color:  AppColors.cardBackground,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.cardBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.5),
+                color:      Colors.black.withOpacity(0.5),
                 blurRadius: 40,
-                offset: const Offset(0, 16),
+                offset:     const Offset(0, 16),
               ),
             ],
           ),
@@ -567,13 +566,13 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // ── Global submit error ─────────────────────────────
+                      // ── Global submit error ─────────────────────────
                       if (_errors['submit'] != null) ...[
                         _GlobalErrorBanner(message: _errors['submit']!),
                         const SizedBox(height: 12),
                       ],
 
-                      // ── Stay Information ────────────────────────────────
+                      // ── Stay Information ────────────────────────────
                       _SectionCard(
                         title: 'Stay Information',
                         child: Column(
@@ -588,8 +587,9 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                     errorText: _errors['checkIn'],
                                     child: _DateField(
                                       controller: _checkInCtrl,
-                                      hint: 'yyyy-mm-dd',
-                                      hasError: _errors['checkIn'] != null,
+                                      hint:       'yyyy-mm-dd',
+                                      hasError:
+                                          _errors['checkIn'] != null,
                                       onPicked: () {
                                         _recalcNights();
                                         _clearFieldError('checkIn');
@@ -605,8 +605,9 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                     errorText: _errors['checkOut'],
                                     child: _DateField(
                                       controller: _checkOutCtrl,
-                                      hint: 'yyyy-mm-dd',
-                                      hasError: _errors['checkOut'] != null,
+                                      hint:       'yyyy-mm-dd',
+                                      hasError:
+                                          _errors['checkOut'] != null,
                                       onPicked: () {
                                         _recalcNights();
                                         _clearFieldError('checkOut');
@@ -618,18 +619,19 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                             ),
                             const SizedBox(height: 12),
 
-                            // Length of Stay
                             isNarrow
                                 ? _FieldCol(
                                     label: 'Length of Stay',
-                                    child: _ReadOnlyField(value: _lengthOfStay),
+                                    child: _ReadOnlyField(
+                                        value: _lengthOfStay),
                                   )
                                 : Row(
                                     children: [
                                       Expanded(
                                         child: _FieldCol(
                                           label: 'Length of Stay',
-                                          child: _ReadOnlyField(value: _lengthOfStay),
+                                          child: _ReadOnlyField(
+                                              value: _lengthOfStay),
                                         ),
                                       ),
                                       const Expanded(child: SizedBox()),
@@ -638,18 +640,18 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                   ),
                             const SizedBox(height: 14),
 
-                            // Total Guests / Rooms
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Expanded(
                                   child: _FieldCol(
-                                    label: 'Total Guests *',
+                                    label:     'Total Guests *',
                                     errorText: _errors['totalGuests'],
                                     child: _NumberField(
                                       controller: _guestsCtrl,
-                                      hint: 'e.g. 10',
-                                      hasError: _errors['totalGuests'] != null,
+                                      hint:       'e.g. 10',
+                                      hasError:
+                                          _errors['totalGuests'] != null,
                                       onChanged: (_) {
                                         setState(() {});
                                         _clearFieldError('totalGuests');
@@ -662,12 +664,13 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _FieldCol(
-                                    label: 'Rooms Occupied *',
+                                    label:     'Rooms Occupied *',
                                     errorText: _errors['roomsOccupied'],
                                     child: _NumberField(
                                       controller: _roomsCtrl,
-                                      hint: 'e.g. 3',
-                                      hasError: _errors['roomsOccupied'] != null,
+                                      hint:       'e.g. 3',
+                                      hasError:
+                                          _errors['roomsOccupied'] != null,
                                       onChanged: (_) =>
                                           _clearFieldError('roomsOccupied'),
                                     ),
@@ -677,21 +680,22 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                             ),
                             const SizedBox(height: 14),
 
-                            // Purpose / Transport
                             if (isNarrow) ...[
                               _FieldCol(
-                                label: 'Purpose of Visit *',
+                                label:     'Purpose of Visit *',
                                 errorText: _errors['purpose'],
                                 child: _DropdownField(
                                   value: _purpose.isEmpty ? null : _purpose,
                                   items: _purposes,
-                                  hint: 'Select purpose',
+                                  hint:  'Select purpose',
                                   hasError: _errors['purpose'] != null,
                                   onChanged: (v) {
                                     setState(() {
                                       _purpose = v ?? '';
                                       _showPurposeOther = v == 'Others';
-                                      if (!_showPurposeOther) _purposeOtherCtrl.clear();
+                                      if (!_showPurposeOther) {
+                                        _purposeOtherCtrl.clear();
+                                      }
                                     });
                                     _clearFieldError('purpose');
                                     _clearFieldError('purposeOther');
@@ -701,30 +705,36 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                               if (_showPurposeOther) ...[
                                 const SizedBox(height: 10),
                                 _FieldCol(
-                                  label: 'Please specify *',
+                                  label:     'Please specify *',
                                   errorText: _errors['purposeOther'],
                                   child: _PlainTextField(
                                     controller: _purposeOtherCtrl,
-                                    hint: 'Specify purpose',
-                                    hasError: _errors['purposeOther'] != null,
-                                    onChanged: (_) => _clearFieldError('purposeOther'),
+                                    hint:       'Specify purpose',
+                                    hasError:
+                                        _errors['purposeOther'] != null,
+                                    onChanged: (_) =>
+                                        _clearFieldError('purposeOther'),
                                   ),
                                 ),
                               ],
                               const SizedBox(height: 14),
                               _FieldCol(
-                                label: 'Mode of Transportation *',
+                                label:     'Mode of Transportation *',
                                 errorText: _errors['transport'],
                                 child: _DropdownField(
-                                  value: _transport.isEmpty ? null : _transport,
-                                  items: _transports,
-                                  hint: 'Select transportation',
+                                  value: _transport.isEmpty
+                                      ? null
+                                      : _transport,
+                                  items:    _transports,
+                                  hint:     'Select transportation',
                                   hasError: _errors['transport'] != null,
                                   onChanged: (v) {
                                     setState(() {
                                       _transport = v ?? '';
                                       _showTransportOther = v == 'Others';
-                                      if (!_showTransportOther) _transportOtherCtrl.clear();
+                                      if (!_showTransportOther) {
+                                        _transportOtherCtrl.clear();
+                                      }
                                     });
                                     _clearFieldError('transport');
                                     _clearFieldError('transportOther');
@@ -734,13 +744,15 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                               if (_showTransportOther) ...[
                                 const SizedBox(height: 10),
                                 _FieldCol(
-                                  label: 'Please specify *',
+                                  label:     'Please specify *',
                                   errorText: _errors['transportOther'],
                                   child: _PlainTextField(
                                     controller: _transportOtherCtrl,
-                                    hint: 'Specify transportation',
-                                    hasError: _errors['transportOther'] != null,
-                                    onChanged: (_) => _clearFieldError('transportOther'),
+                                    hint:       'Specify transportation',
+                                    hasError:
+                                        _errors['transportOther'] != null,
+                                    onChanged: (_) =>
+                                        _clearFieldError('transportOther'),
                                   ),
                                 ),
                               ],
@@ -750,21 +762,28 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         _FieldCol(
-                                          label: 'Purpose of Visit *',
+                                          label:     'Purpose of Visit *',
                                           errorText: _errors['purpose'],
                                           child: _DropdownField(
-                                            value: _purpose.isEmpty ? null : _purpose,
-                                            items: _purposes,
-                                            hint: 'Select purpose',
-                                            hasError: _errors['purpose'] != null,
+                                            value: _purpose.isEmpty
+                                                ? null
+                                                : _purpose,
+                                            items:    _purposes,
+                                            hint:     'Select purpose',
+                                            hasError:
+                                                _errors['purpose'] != null,
                                             onChanged: (v) {
                                               setState(() {
                                                 _purpose = v ?? '';
-                                                _showPurposeOther = v == 'Others';
-                                                if (!_showPurposeOther) _purposeOtherCtrl.clear();
+                                                _showPurposeOther =
+                                                    v == 'Others';
+                                                if (!_showPurposeOther) {
+                                                  _purposeOtherCtrl.clear();
+                                                }
                                               });
                                               _clearFieldError('purpose');
                                               _clearFieldError('purposeOther');
@@ -774,14 +793,18 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                         if (_showPurposeOther) ...[
                                           const SizedBox(height: 10),
                                           _FieldCol(
-                                            label: 'Please specify *',
-                                            errorText: _errors['purposeOther'],
+                                            label:     'Please specify *',
+                                            errorText:
+                                                _errors['purposeOther'],
                                             child: _PlainTextField(
                                               controller: _purposeOtherCtrl,
-                                              hint: 'Specify purpose',
-                                              hasError: _errors['purposeOther'] != null,
+                                              hint:       'Specify purpose',
+                                              hasError: _errors[
+                                                      'purposeOther'] !=
+                                                  null,
                                               onChanged: (_) =>
-                                                  _clearFieldError('purposeOther'),
+                                                  _clearFieldError(
+                                                      'purposeOther'),
                                             ),
                                           ),
                                         ],
@@ -791,39 +814,51 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         _FieldCol(
-                                          label: 'Mode of Transportation *',
+                                          label:     'Mode of Transportation *',
                                           errorText: _errors['transport'],
                                           child: _DropdownField(
-                                            value: _transport.isEmpty ? null : _transport,
-                                            items: _transports,
-                                            hint: 'Select transportation',
-                                            hasError: _errors['transport'] != null,
+                                            value: _transport.isEmpty
+                                                ? null
+                                                : _transport,
+                                            items:    _transports,
+                                            hint:     'Select transportation',
+                                            hasError:
+                                                _errors['transport'] != null,
                                             onChanged: (v) {
                                               setState(() {
                                                 _transport = v ?? '';
-                                                _showTransportOther = v == 'Others';
-                                                if (!_showTransportOther) _transportOtherCtrl.clear();
+                                                _showTransportOther =
+                                                    v == 'Others';
+                                                if (!_showTransportOther) {
+                                                  _transportOtherCtrl.clear();
+                                                }
                                               });
                                               _clearFieldError('transport');
-                                              _clearFieldError('transportOther');
+                                              _clearFieldError(
+                                                  'transportOther');
                                             },
                                           ),
                                         ),
                                         if (_showTransportOther) ...[
                                           const SizedBox(height: 10),
                                           _FieldCol(
-                                            label: 'Please specify *',
-                                            errorText: _errors['transportOther'],
+                                            label:     'Please specify *',
+                                            errorText:
+                                                _errors['transportOther'],
                                             child: _PlainTextField(
-                                              controller: _transportOtherCtrl,
+                                              controller:
+                                                  _transportOtherCtrl,
                                               hint: 'Specify transportation',
-                                              hasError:
-                                                  _errors['transportOther'] != null,
+                                              hasError: _errors[
+                                                      'transportOther'] !=
+                                                  null,
                                               onChanged: (_) =>
-                                                  _clearFieldError('transportOther'),
+                                                  _clearFieldError(
+                                                      'transportOther'),
                                             ),
                                           ),
                                         ],
@@ -838,7 +873,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                       ),
                       const SizedBox(height: 16),
 
-                      // ── Demographic Breakdown ───────────────────────────
+                      // ── Demographic Breakdown ───────────────────────
                       _SectionCard(
                         title: 'Guest Demographic Breakdown',
                         subtitle:
@@ -852,7 +887,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 color: _demoTotal == _totalGuests
                                     ? const Color(0xFF00C48C)
                                     : AppColors.textGray,
-                                fontSize: 12.5,
+                                fontSize:   12.5,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -865,7 +900,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                           children: [
                             if (_errors['demographicSum'] != null) ...[
                               const SizedBox(height: 4),
-                              _InlineError(message: _errors['demographicSum']!),
+                              _InlineError(
+                                  message: _errors['demographicSum']!),
                               const SizedBox(height: 10),
                             ],
 
@@ -873,15 +909,37 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                             if (!isNarrow) ...[
                               const Row(
                                 children: [
-                                  Expanded(flex: 3, child: _ColHead('Country')),
+                                  Expanded(
+                                      flex: 3,
+                                      child: _ColHead('Country')),
                                   SizedBox(width: 8),
-                                  Expanded(flex: 3, child: _ColHead('Region (If PH)')),
+                                  Expanded(
+                                      flex: 3,
+                                      child:
+                                          _ColHead('Region (If PH)')),
                                   SizedBox(width: 8),
-                                  Expanded(flex: 2, child: _ColHead('Sex')),
+                                  SizedBox(
+                                      width: 50,
+                                      child: _ColHead('OFW?')),
                                   SizedBox(width: 8),
-                                  Expanded(flex: 2, child: _ColHead('Age Group')),
+                                  // ── NEW: Residence Category column ──
+                                  Expanded(
+                                      flex: 2,
+                                      child:
+                                          _ColHead('Residence')),
                                   SizedBox(width: 8),
-                                  SizedBox(width: 60, child: _ColHead('Count')),
+                                  Expanded(
+                                      flex: 2,
+                                      child: _ColHead('Sex')),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                      flex: 2,
+                                      child:
+                                          _ColHead('Age Group')),
+                                  SizedBox(width: 8),
+                                  SizedBox(
+                                      width: 60,
+                                      child: _ColHead('Count')),
                                   SizedBox(width: 28),
                                 ],
                               ),
@@ -890,19 +948,20 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
                             ..._demoRows.asMap().entries.map(
                               (e) => _DemoEntryRow(
-                                key: ValueKey(e.key),
-                                index: e.key,
-                                entry: e.value,
-                                isNarrow: isNarrow,
-                                countries: _countries,
-                                phRegions: _phRegions,
-                                sexOptions: _sexOptions,
+                                key:            ValueKey(e.key),
+                                index:          e.key,
+                                entry:          e.value,
+                                isNarrow:       isNarrow,
+                                countries:      _countries,
+                                phRegions:      _phRegions,
+                                sexOptions:     _sexOptions,
                                 ageGroupOptions: _ageGroupOptions,
                                 rowErrors: e.key < _rowErrors.length
                                     ? _rowErrors[e.key]
                                     : {},
                                 onChanged: (updated) {
-                                  setState(() => _demoRows[e.key] = updated);
+                                  setState(
+                                      () => _demoRows[e.key] = updated);
                                   _clearRowFieldError(e.key, 'country');
                                   _clearRowFieldError(e.key, 'region');
                                   _clearRowFieldError(e.key, 'sex');
@@ -925,12 +984,12 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 SizedBox(width: 6),
                                 Expanded(
                                   child: Text(
-                                    'Each row is a unique combination of country, region, sex, and age group. '
+                                    'Each row is a unique combination of country, region, OFW status, sex, and age group. '
                                     'Add multiple rows to cover all guest segments.',
                                     style: TextStyle(
-                                      color: AppColors.textSubtle,
+                                      color:    AppColors.textSubtle,
                                       fontSize: 11,
-                                      height: 1.5,
+                                      height:   1.5,
                                     ),
                                   ),
                                 ),
@@ -990,15 +1049,16 @@ class _TitleBar extends StatelessWidget {
                 Text(
                   'Edit Guest Entry',
                   style: TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 18,
+                    color:      AppColors.textWhite,
+                    fontSize:   18,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 SizedBox(height: 2),
                 Text(
                   'Update tourist demographic data',
-                  style: TextStyle(color: AppColors.textGray, fontSize: 12.5),
+                  style: TextStyle(
+                      color: AppColors.textGray, fontSize: 12.5),
                 ),
               ],
             ),
@@ -1026,17 +1086,20 @@ class _GlobalErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.accentRed.withOpacity(0.08),
+        color:  AppColors.accentRed.withOpacity(0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.accentRed.withOpacity(0.4)),
+        border: Border.all(
+            color: AppColors.accentRed.withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded, color: AppColors.accentRed, size: 16),
+          Icon(Icons.error_outline_rounded,
+              color: AppColors.accentRed, size: 16),
           const SizedBox(width: 10),
           Expanded(
             child: Text(message,
-                style: const TextStyle(color: AppColors.accentRed, fontSize: 13)),
+                style: const TextStyle(
+                    color: AppColors.accentRed, fontSize: 13)),
           ),
         ],
       ),
@@ -1054,10 +1117,10 @@ class _SectionCard extends StatelessWidget {
     this.trailing,
   });
 
-  final String title;
+  final String  title;
   final String? subtitle;
   final Widget? trailing;
-  final Widget child;
+  final Widget  child;
 
   @override
   Widget build(BuildContext context) {
@@ -1065,7 +1128,7 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.backgroundDark,
+        color:  AppColors.backgroundDark,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
@@ -1080,15 +1143,15 @@ class _SectionCard extends StatelessWidget {
                   children: [
                     Text(title,
                         style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 14,
+                          color:      AppColors.textWhite,
+                          fontSize:   14,
                           fontWeight: FontWeight.w700,
                         )),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(subtitle!,
                           style: const TextStyle(
-                            color: AppColors.primaryCyan,
+                            color:    AppColors.primaryCyan,
                             fontSize: 11.5,
                           )),
                     ],
@@ -1115,8 +1178,8 @@ class _FieldCol extends StatelessWidget {
     this.errorText,
   });
 
-  final String label;
-  final Widget child;
+  final String  label;
+  final Widget  child;
   final String? errorText;
 
   @override
@@ -1126,8 +1189,8 @@ class _FieldCol extends StatelessWidget {
       children: [
         Text(label,
             style: const TextStyle(
-              color: AppColors.textGray,
-              fontSize: 12,
+              color:      AppColors.textGray,
+              fontSize:   12,
               fontWeight: FontWeight.w500,
             )),
         const SizedBox(height: 6),
@@ -1161,9 +1224,9 @@ class _InlineError extends StatelessWidget {
         Expanded(
           child: Text(message,
               style: const TextStyle(
-                color: AppColors.accentRed,
+                color:    AppColors.accentRed,
                 fontSize: 11,
-                height: 1.3,
+                height:   1.3,
               )),
         ),
       ],
@@ -1181,8 +1244,8 @@ class _ColHead extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(text,
         style: const TextStyle(
-          color: AppColors.textSubtle,
-          fontSize: 11.5,
+          color:      AppColors.textSubtle,
+          fontSize:   11.5,
           fontWeight: FontWeight.w500,
         ));
   }
@@ -1201,9 +1264,10 @@ class _AddRowButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color:  AppColors.cardBackground,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.4)),
+          border: Border.all(
+              color: const Color(0xFF3B82F6).withOpacity(0.4)),
         ),
         child: const Row(
           mainAxisSize: MainAxisSize.min,
@@ -1212,12 +1276,45 @@ class _AddRowButton extends StatelessWidget {
             SizedBox(width: 4),
             Text('+ Add Row',
                 style: TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 12,
+                  color:      AppColors.textWhite,
+                  fontSize:   12,
                   fontWeight: FontWeight.w600,
                 )),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Residence category badge (read-only, auto-derived) ───────────────────────
+
+class _ResidenceBadge extends StatelessWidget {
+  const _ResidenceBadge({required this.category});
+  final String category;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = _residenceCategoryLabel(category);
+    final color = _residenceCategoryColor(category);
+    return Container(
+      height:  _kFieldHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color:  color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+            color:      color,
+            fontSize:   11.5,
+            fontWeight: FontWeight.w600),
+        textAlign: TextAlign.center,
+        maxLines:  1,
+        overflow:  TextOverflow.ellipsis,
       ),
     );
   }
@@ -1240,16 +1337,20 @@ class _DemoEntryRow extends StatelessWidget {
     this.onRemove,
   });
 
-  final int index;
+  final int              index;
   final DemographicEntry entry;
-  final bool isNarrow;
-  final List<String> countries;
-  final List<String> phRegions;
-  final List<String> sexOptions;
-  final List<String> ageGroupOptions;
+  final bool             isNarrow;
+  final List<String>     countries;
+  final List<String>     phRegions;
+  final List<String>     sexOptions;
+  final List<String>     ageGroupOptions;
   final Map<String, String?> rowErrors;
   final ValueChanged<DemographicEntry> onChanged;
-  final VoidCallback? onRemove;
+  final VoidCallback?    onRemove;
+
+  // Region is only active for Philippine residents — not OFW.
+  bool get _regionEnabled =>
+      entry.country == 'Philippines' && !entry.isOverseas;
 
   @override
   Widget build(BuildContext context) {
@@ -1261,15 +1362,16 @@ class _DemoEntryRow extends StatelessWidget {
     final deleteBtn = GestureDetector(
       onTap: onRemove,
       child: Icon(Icons.delete_rounded,
-          size: 16,
+          size:  16,
           color: onRemove != null
               ? AppColors.accentRed
               : AppColors.textSubtle.withOpacity(0.3)),
     );
 
+    // ── Mobile card ──────────────────────────────────────────────────────────
     if (isNarrow) {
       return Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin:  const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: AppColors.backgroundDark,
@@ -1283,6 +1385,7 @@ class _DemoEntryRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Country + delete
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1290,12 +1393,16 @@ class _DemoEntryRow extends StatelessWidget {
                   child: _CompactDropWithError(
                     errorText: rowErrors['country'],
                     child: _CompactDrop(
-                      hint: 'Country',
+                      hint:  'Country',
                       value: entry.country.isEmpty ? null : entry.country,
                       items: countries,
                       onChanged: (v) => onChanged(entry.copyWith(
-                          country: v ?? '',
-                          region: v != 'Philippines' ? 'N/A' : entry.region)),
+                        country:    v ?? '',
+                        region:     v != 'Philippines' ? 'N/A' : entry.region,
+                        isOverseas: v != 'Philippines'
+                            ? false
+                            : entry.isOverseas,
+                      )),
                     ),
                   ),
                 ),
@@ -1309,19 +1416,68 @@ class _DemoEntryRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
+
+            // OFW checkbox — only when Philippines is selected
+            if (entry.country == 'Philippines') ...[
+              Row(
+                children: [
+                  SizedBox(
+                    width:  24,
+                    height: 24,
+                    child: Checkbox(
+                      value: entry.isOverseas,
+                      onChanged: (v) => onChanged(entry.copyWith(
+                        isOverseas: v ?? false,
+                        region:     (v ?? false) ? 'N/A' : entry.region,
+                      )),
+                      activeColor: const Color(0xFF3B82F6),
+                      visualDensity:        VisualDensity.compact,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Overseas Filipino (OFW)',
+                      style: TextStyle(
+                          color: AppColors.textGray, fontSize: 12.5)),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // ── Residence Category badge (auto-derived, read-only) ──────────
+            if (entry.country.isNotEmpty) ...[
+              Row(
+                children: [
+                  const Text(
+                    'Residence: ',
+                    style: TextStyle(
+                        color:    AppColors.textSubtle,
+                        fontSize: 12),
+                  ),
+                  _ResidenceBadge(category: entry.residenceCategory),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // Region — disabled for OFW
             _CompactDropWithError(
               errorText: rowErrors['region'],
               child: _CompactDrop(
-                hint: 'Region (Philippines only)',
-                value: entry.country == 'Philippines' && entry.region != 'N/A'
+                hint:  'Region (Philippines only)',
+                value: _regionEnabled && entry.region != 'N/A'
                     ? entry.region
                     : null,
-                items: phRegions,
-                enabled: entry.country == 'Philippines',
-                onChanged: (v) => onChanged(entry.copyWith(region: v ?? 'N/A')),
+                items:    phRegions,
+                enabled:  _regionEnabled,
+                onChanged: (v) =>
+                    onChanged(entry.copyWith(region: v ?? 'N/A')),
               ),
             ),
             const SizedBox(height: 8),
+
+            // Sex + Age Group + Count
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1329,10 +1485,11 @@ class _DemoEntryRow extends StatelessWidget {
                   child: _CompactDropWithError(
                     errorText: rowErrors['sex'],
                     child: _CompactDrop(
-                      hint: 'Sex',
+                      hint:  'Sex',
                       value: entry.sex.isEmpty ? null : entry.sex,
                       items: sexOptions,
-                      onChanged: (v) => onChanged(entry.copyWith(sex: v ?? '')),
+                      onChanged: (v) =>
+                          onChanged(entry.copyWith(sex: v ?? '')),
                     ),
                   ),
                 ),
@@ -1341,7 +1498,7 @@ class _DemoEntryRow extends StatelessWidget {
                   child: _CompactDropWithError(
                     errorText: rowErrors['ageGroup'],
                     child: _CompactDrop(
-                      hint: 'Age Group',
+                      hint:  'Age Group',
                       value: entry.ageGroup.isEmpty ? null : entry.ageGroup,
                       items: ageGroupOptions,
                       onChanged: (v) =>
@@ -1356,9 +1513,9 @@ class _DemoEntryRow extends StatelessWidget {
                     errorText: rowErrors['count'],
                     child: _CountField(
                       controller: countCtrl,
-                      hasError: rowErrors['count'] != null,
-                      onChanged: (v) =>
-                          onChanged(entry.copyWith(count: int.tryParse(v) ?? 0)),
+                      hasError:   rowErrors['count'] != null,
+                      onChanged: (v) => onChanged(
+                          entry.copyWith(count: int.tryParse(v) ?? 0)),
                     ),
                   ),
                 ),
@@ -1369,62 +1526,100 @@ class _DemoEntryRow extends StatelessWidget {
       );
     }
 
-    // Desktop layout
+    // ── Desktop row ──────────────────────────────────────────────────────────
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Country
           Expanded(
             flex: 3,
             child: _CompactDropWithError(
               errorText: rowErrors['country'],
               child: _CompactDrop(
-                hint: 'Country',
+                hint:  'Country',
                 value: entry.country.isEmpty ? null : entry.country,
                 items: countries,
                 onChanged: (v) => onChanged(entry.copyWith(
-                    country: v ?? '',
-                    region: v != 'Philippines' ? 'N/A' : entry.region)),
+                  country:    v ?? '',
+                  region:     v != 'Philippines' ? 'N/A' : entry.region,
+                  isOverseas: v != 'Philippines' ? false : entry.isOverseas,
+                )),
               ),
             ),
           ),
           const SizedBox(width: 8),
+
+          // Region — disabled for OFW guests
           Expanded(
             flex: 3,
             child: _CompactDropWithError(
               errorText: rowErrors['region'],
               child: _CompactDrop(
-                hint: 'N/A',
-                value: entry.country == 'Philippines' && entry.region != 'N/A'
+                hint:  'N/A',
+                value: _regionEnabled && entry.region != 'N/A'
                     ? entry.region
                     : null,
-                items: phRegions,
-                enabled: entry.country == 'Philippines',
-                onChanged: (v) => onChanged(entry.copyWith(region: v ?? 'N/A')),
+                items:    phRegions,
+                enabled:  _regionEnabled,
+                onChanged: (v) =>
+                    onChanged(entry.copyWith(region: v ?? 'N/A')),
               ),
             ),
           ),
           const SizedBox(width: 8),
+
+          // OFW checkbox — fixed 50px column, only active when Philippines
+          SizedBox(
+            width:  50,
+            height: _kFieldHeight,
+            child: entry.country == 'Philippines'
+                ? Checkbox(
+                    value: entry.isOverseas,
+                    onChanged: (v) => onChanged(entry.copyWith(
+                      isOverseas: v ?? false,
+                      region:     (v ?? false) ? 'N/A' : entry.region,
+                    )),
+                    activeColor: const Color(0xFF3B82F6),
+                    visualDensity:        VisualDensity.compact,
+                    materialTapTargetSize:
+                        MaterialTapTargetSize.shrinkWrap,
+                  )
+                : const SizedBox(),
+          ),
+          const SizedBox(width: 8),
+
+          // ── Residence Category (auto-derived, read-only badge) ────────────
+          Expanded(
+            flex: 2,
+            child: _ResidenceBadge(category: entry.residenceCategory),
+          ),
+          const SizedBox(width: 8),
+
+          // Sex
           Expanded(
             flex: 2,
             child: _CompactDropWithError(
               errorText: rowErrors['sex'],
               child: _CompactDrop(
-                hint: 'Sex',
+                hint:  'Sex',
                 value: entry.sex.isEmpty ? null : entry.sex,
                 items: sexOptions,
-                onChanged: (v) => onChanged(entry.copyWith(sex: v ?? '')),
+                onChanged: (v) =>
+                    onChanged(entry.copyWith(sex: v ?? '')),
               ),
             ),
           ),
           const SizedBox(width: 8),
+
+          // Age Group
           Expanded(
             flex: 2,
             child: _CompactDropWithError(
               errorText: rowErrors['ageGroup'],
               child: _CompactDrop(
-                hint: 'Age Group',
+                hint:  'Age Group',
                 value: entry.ageGroup.isEmpty ? null : entry.ageGroup,
                 items: ageGroupOptions,
                 onChanged: (v) =>
@@ -1433,19 +1628,23 @@ class _DemoEntryRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
+
+          // Count
           SizedBox(
             width: 60,
             child: _CompactDropWithError(
               errorText: rowErrors['count'],
               child: _CountField(
                 controller: countCtrl,
-                hasError: rowErrors['count'] != null,
-                onChanged: (v) =>
-                    onChanged(entry.copyWith(count: int.tryParse(v) ?? 0)),
+                hasError:   rowErrors['count'] != null,
+                onChanged: (v) => onChanged(
+                    entry.copyWith(count: int.tryParse(v) ?? 0)),
               ),
             ),
           ),
           const SizedBox(width: 8),
+
+          // Delete
           SizedBox(width: 20, child: deleteBtn),
         ],
       ),
@@ -1472,26 +1671,30 @@ class _Footer extends StatelessWidget {
           OutlinedButton(
             onPressed: onClear,
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.cardBorder),
+              side:           const BorderSide(color: AppColors.cardBorder),
               foregroundColor: AppColors.textGray,
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 18, vertical: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
             child: const Text('Clear Form',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: ElevatedButton.icon(
               onPressed: onSave,
-              icon: const Icon(Icons.save_outlined, size: 16),
+              icon:  const Icon(Icons.save_outlined, size: 16),
               label: const Text('Save Changes',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
                 elevation: 0,
@@ -1505,32 +1708,33 @@ class _Footer extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  SHARED INPUT DECORATION  (used by text + number fields)
+//  SHARED INPUT DECORATION
 // ─────────────────────────────────────────────────────────────────────────────
 
-InputDecoration _fieldDecoration({String? hint, bool hasError = false}) {
+InputDecoration _fieldDecoration(
+    {String? hint, bool hasError = false}) {
   final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
   final focusColor  = hasError ? AppColors.accentRed : _kInputFocused;
   return InputDecoration(
-    hintText: hint,
+    hintText:  hint,
     hintStyle: const TextStyle(color: _kInputHint, fontSize: 13),
-    filled: true,
-    fillColor: hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
-    isDense: true,
-    // Vertical padding is calculated so the field hits exactly _kFieldHeight:
-    // _kFieldHeight(40) - font(13) - 2*border(1) ≈ 12 top+bottom → 6 each side.
+    filled:    true,
+    fillColor: hasError
+        ? AppColors.accentRed.withOpacity(0.04)
+        : _kInputFill,
+    isDense:        true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: borderColor),
+      borderSide:   BorderSide(color: borderColor),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: borderColor),
+      borderSide:   BorderSide(color: borderColor),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: focusColor, width: 1.4),
+      borderSide:   BorderSide(color: focusColor, width: 1.4),
     ),
   );
 }
@@ -1555,32 +1759,33 @@ class _DateField extends StatelessWidget {
       height: _kFieldHeight,
       child: TextField(
         controller: controller,
-        readOnly: true,
+        readOnly:   true,
         style: const TextStyle(color: _kInputText, fontSize: 13),
-        decoration: _fieldDecoration(hint: hint, hasError: hasError).copyWith(
+        decoration:
+            _fieldDecoration(hint: hint, hasError: hasError).copyWith(
           suffixIcon: Icon(
             Icons.calendar_today_outlined,
             color: hasError ? AppColors.accentRed : _kInputHint,
-            size: 14,
+            size:  14,
           ),
-          suffixIconConstraints:
-              const BoxConstraints(minWidth: 36, minHeight: _kFieldHeight),
+          suffixIconConstraints: const BoxConstraints(
+              minWidth: 36, minHeight: _kFieldHeight),
         ),
         onTap: () async {
           final current = DateTime.tryParse(controller.text);
           final now     = DateTime.now();
           final picked  = await showDatePicker(
-            context: context,
+            context:     context,
             initialDate: current ?? now,
-            firstDate: DateTime(2020),
-            lastDate: now.add(const Duration(days: 730)),
+            firstDate:   DateTime(2020),
+            lastDate:    now.add(const Duration(days: 730)),
             builder: (ctx, child) => Theme(
               data: ThemeData(
                 useMaterial3: true,
                 colorScheme: const ColorScheme.light(
-                  primary: Color(0xFF3B82F6),
+                  primary:   Color(0xFF3B82F6),
                   onPrimary: Colors.white,
-                  surface: Colors.white,
+                  surface:   Colors.white,
                   onSurface: Color(0xFF111827),
                 ),
                 dialogTheme: DialogThemeData(
@@ -1613,16 +1818,17 @@ class _ReadOnlyField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: _kFieldHeight,
+      height:  _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: _kReadOnlyFill,
+        color:  _kReadOnlyFill,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: _kInputBorder),
       ),
       alignment: Alignment.centerLeft,
       child: Text(value,
-          style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+          style: const TextStyle(
+              color: Color(0xFF6B7280), fontSize: 13)),
     );
   }
 }
@@ -1638,7 +1844,7 @@ class _NumberField extends StatelessWidget {
   });
   final TextEditingController controller;
   final String hint;
-  final bool hasError;
+  final bool   hasError;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -1646,8 +1852,8 @@ class _NumberField extends StatelessWidget {
     return SizedBox(
       height: _kFieldHeight,
       child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
+        controller:      controller,
+        keyboardType:    TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         style: const TextStyle(color: _kInputText, fontSize: 13),
         decoration: _fieldDecoration(hint: hint, hasError: hasError),
@@ -1668,7 +1874,7 @@ class _PlainTextField extends StatelessWidget {
   });
   final TextEditingController controller;
   final String hint;
-  final bool hasError;
+  final bool   hasError;
   final ValueChanged<String>? onChanged;
 
   @override
@@ -1696,7 +1902,7 @@ class _DropdownField extends StatelessWidget {
     this.hasError = false,
   });
   final String? value;
-  final String hint;
+  final String  hint;
   final List<String> items;
   final ValueChanged<String?> onChanged;
   final bool hasError;
@@ -1705,30 +1911,33 @@ class _DropdownField extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
     return Container(
-      height: _kFieldHeight,
+      height:  _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
+        color: hasError
+            ? AppColors.accentRed.withOpacity(0.04)
+            : _kInputFill,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: borderColor),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          isDense: true,
-          value: value,
+          isDense:    true,
+          value:      value,
           isExpanded: true,
           hint: Text(hint,
               style: const TextStyle(color: _kInputHint, fontSize: 13)),
           dropdownColor: _kDropBg,
           icon: Icon(Icons.keyboard_arrow_down_rounded,
-              color: hasError ? AppColors.accentRed : _kInputHint, size: 18),
+              color: hasError ? AppColors.accentRed : _kInputHint,
+              size:  18),
           style: const TextStyle(color: _kInputText, fontSize: 13),
           items: items
               .map((e) => DropdownMenuItem<String>(
                     value: e,
                     child: Text(e,
-                        style:
-                            const TextStyle(color: _kInputText, fontSize: 13)),
+                        style: const TextStyle(
+                            color: _kInputText, fontSize: 13)),
                   ))
               .toList(),
           onChanged: onChanged,
@@ -1748,7 +1957,7 @@ class _CompactDrop extends StatelessWidget {
     required this.onChanged,
     this.enabled = true,
   });
-  final String hint;
+  final String  hint;
   final String? value;
   final List<String> items;
   final ValueChanged<String?> onChanged;
@@ -1758,36 +1967,38 @@ class _CompactDrop extends StatelessWidget {
   Widget build(BuildContext context) {
     final effectiveValue =
         (value != null && items.contains(value)) ? value : null;
-    final fillColor   = enabled ? _kInputFill : _kReadOnlyFill;
-    final textColor   = enabled ? _kInputText : const Color(0xFF9CA3AF);
-    final hintColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
-    final iconColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
-    final borderColor = enabled ? _kInputBorder : const Color(0xFFE5E7EB);
+    final fillColor   = enabled ? _kInputFill      : _kReadOnlyFill;
+    final textColor   = enabled ? _kInputText      : const Color(0xFF9CA3AF);
+    final hintColor   = enabled ? _kInputHint      : const Color(0xFFD1D5DB);
+    final iconColor   = enabled ? _kInputHint      : const Color(0xFFD1D5DB);
+    final borderColor = enabled ? _kInputBorder    : const Color(0xFFE5E7EB);
 
     return Container(
-      height: _kFieldHeight,
+      height:  _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: fillColor,
+        color:  fillColor,
         borderRadius: BorderRadius.circular(7),
         border: Border.all(color: borderColor),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: effectiveValue,
-          hint: Text(hint, style: TextStyle(color: hintColor, fontSize: 12.5)),
+          hint:  Text(hint,
+              style: TextStyle(color: hintColor, fontSize: 12.5)),
           style: TextStyle(color: textColor, fontSize: 12.5),
           dropdownColor: _kDropBg,
-          icon: Icon(Icons.keyboard_arrow_down_rounded,
+          icon:       Icon(Icons.keyboard_arrow_down_rounded,
               color: iconColor, size: 16),
           isExpanded: true,
-          isDense: true,
-          onChanged: enabled ? onChanged : null,
+          isDense:    true,
+          onChanged:  enabled ? onChanged : null,
           items: items
               .map((e) => DropdownMenuItem<String>(
                     value: e,
                     child: Text(e,
-                        style: TextStyle(color: textColor, fontSize: 12.5)),
+                        style:
+                            TextStyle(color: textColor, fontSize: 12.5)),
                   ))
               .toList(),
         ),
@@ -1800,7 +2011,7 @@ class _CompactDrop extends StatelessWidget {
 
 class _CompactDropWithError extends StatelessWidget {
   const _CompactDropWithError({required this.child, this.errorText});
-  final Widget child;
+  final Widget  child;
   final String? errorText;
 
   @override
@@ -1826,7 +2037,7 @@ class _CountField extends StatelessWidget {
     this.hasError = false,
   });
   final TextEditingController controller;
-  final ValueChanged<String> onChanged;
+  final ValueChanged<String>  onChanged;
   final bool hasError;
 
   @override
@@ -1835,35 +2046,37 @@ class _CountField extends StatelessWidget {
     return SizedBox(
       height: _kFieldHeight,
       child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
+        controller:      controller,
+        keyboardType:    TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
         textAlign: TextAlign.center,
-        style: const TextStyle(color: _kInputText, fontSize: 13),
+        style:     const TextStyle(color: _kInputText, fontSize: 13),
         decoration: InputDecoration(
-          hintText: '0',
+          hintText:  '0',
           hintStyle: const TextStyle(color: _kInputHint, fontSize: 12.5),
-          filled: true,
-          fillColor:
-              hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
-          isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
+          filled:    true,
+          fillColor: hasError
+              ? AppColors.accentRed.withOpacity(0.04)
+              : _kInputFill,
+          isDense:        true,
+          contentPadding: const EdgeInsets.symmetric(
+              horizontal: 6, vertical: 11),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(7),
-            borderSide: BorderSide(color: borderColor),
+            borderSide:   BorderSide(color: borderColor),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(7),
-            borderSide: BorderSide(color: borderColor),
+            borderSide:   BorderSide(color: borderColor),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(7),
-            borderSide: const BorderSide(color: _kInputFocused, width: 1.4),
+            borderSide:
+                const BorderSide(color: _kInputFocused, width: 1.4),
           ),
         ),
         onChanged: onChanged,
       ),
     );
   }
-}
+} 

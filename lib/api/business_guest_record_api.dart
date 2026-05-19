@@ -59,7 +59,8 @@ class BusinessGuestRecordApi {
               philippines_region,
               sex,
               age_group,
-              count
+              count,
+              residence_category
             )
           ''')
           .eq('business_id', businessId)
@@ -71,9 +72,9 @@ class BusinessGuestRecordApi {
         GuestDemographics? demographics;
 
         if (breakdowns.isNotEmpty) {
-          final ageGroups = <String, int>{};
-          final sex = <String, int>{};
-          final countries = <String, int>{};
+          final ageGroups  = <String, int>{};
+          final sex        = <String, int>{};
+          final countries  = <String, int>{};
 
           for (final b in breakdowns) {
             final count = (b['count'] as int?) ?? 0;
@@ -84,7 +85,7 @@ class BusinessGuestRecordApi {
             final s = b['sex'] as String? ?? 'Unknown';
             sex[s] = (sex[s] ?? 0) + count;
 
-            final nat = b['country'] as String? ?? 'Unknown';
+            final nat    = b['country'] as String? ?? 'Unknown';
             final region = b['philippines_region'] as String?;
             final countryKey =
                 (nat == 'Philippines' && region != null && region != 'N/A')
@@ -100,33 +101,37 @@ class BusinessGuestRecordApi {
             breakdowns: breakdowns
                 .map(
                   (b) => GuestBreakdownEntry(
-                    country: b['country'] as String? ?? '',
-                    philippinesRegion: b['philippines_region'] as String?,
-                    sex: b['sex'] as String? ?? '',
-                    ageGroup: b['age_group'] as String? ?? '',
-                    count: (b['count'] as int?) ?? 0,
+                    country:            b['country']            as String? ?? '',
+                    philippinesRegion:  b['philippines_region'] as String?,
+                    sex:                b['sex']                as String? ?? '',
+                    ageGroup:           b['age_group']          as String? ?? '',
+                    count:              (b['count']             as int?)   ?? 0,
+                    isOverseas:        (b['residence_category'] as String?) ==
+                        'overseas_filipino',
+                    residenceCategory:  b['residence_category'] as String? ??
+                        'unspecified_guest',
                   ),
                 )
                 .toList(),
           );
         }
 
-        final checkIn = row['check_in'] as String;
+        final checkIn  = row['check_in']  as String;
         final checkOut = row['check_out'] as String;
-        final nights = _calcNights(checkIn, checkOut);
+        final nights   = _calcNights(checkIn, checkOut);
 
         final statusStr = row['status'] as String? ?? 'active';
 
         return GuestRecord(
-          id: row['id'] as String,
-          checkIn: checkIn,
-          checkOut: checkOut,
-          nights: nights,
-          guests: (row['total_guests'] as int?) ?? 0,
-          rooms: (row['rooms_occupied'] as int?) ?? 0,
-          purpose: row['purpose_of_visit'] as String? ?? '',
+          id:        row['id']           as String,
+          checkIn:   checkIn,
+          checkOut:  checkOut,
+          nights:    nights,
+          guests:    (row['total_guests']     as int?) ?? 0,
+          rooms:     (row['rooms_occupied']   as int?) ?? 0,
+          purpose:   row['purpose_of_visit']  as String? ?? '',
           transport: row['transportation_mode'] as String? ?? '',
-          status: statusStr == 'archived'
+          status:    statusStr == 'archived'
               ? GuestRecordStatus.archived
               : GuestRecordStatus.active,
           demographics: demographics,
@@ -174,11 +179,11 @@ class BusinessGuestRecordApi {
       await _supabase
           .from('guest_records')
           .update({
-            'check_in': checkIn,
-            'check_out': checkOut,
-            'total_guests': totalGuests,
-            'rooms_occupied': roomsOccupied,
-            'purpose_of_visit': purposeOfVisit,
+            'check_in':            checkIn,
+            'check_out':           checkOut,
+            'total_guests':        totalGuests,
+            'rooms_occupied':      roomsOccupied,
+            'purpose_of_visit':    purposeOfVisit,
             'transportation_mode': transportationMode,
           })
           .eq('id', recordId);
@@ -196,14 +201,22 @@ class BusinessGuestRecordApi {
 
       // 3. Insert the fresh set of breakdowns only after delete is confirmed.
       if (breakdowns.isNotEmpty) {
-        final rows = breakdowns.map((b) => {
-          'guest_record_id': recordId,
-          'country': b.country,
-          'philippines_region':
-              b.country == 'Philippines' ? b.philippinesRegion : null,
-          'sex': _mapSex(b.sex),
-          'age_group': _mapAgeGroup(b.ageGroup),
-          'count': b.count,
+        final rows = breakdowns.map((b) {
+          final isPh       = b.country == 'Philippines';
+          final isOverseas = b.residenceCategory == 'overseas_filipino';
+
+          return {
+            'guest_record_id':    recordId,
+            'country':            b.country,
+            // Region is only meaningful for Philippine residents (not OFW).
+            'philippines_region': (isPh && !isOverseas)
+                ? b.philippinesRegion
+                : null,
+            'sex':                _mapSex(b.sex),
+            'age_group':          _mapAgeGroup(b.ageGroup),
+            'count':              b.count,
+            'residence_category': b.residenceCategory,
+          };
         }).toList();
 
         await _supabase.from('guest_breakdowns').insert(rows);
@@ -222,7 +235,7 @@ class BusinessGuestRecordApi {
 
   String _calcNights(String checkIn, String checkOut) {
     try {
-      final inDate = DateTime.parse(checkIn);
+      final inDate  = DateTime.parse(checkIn);
       final outDate = DateTime.parse(checkOut);
       final n = outDate.difference(inDate).inDays;
       return '$n night${n == 1 ? '' : 's'}';

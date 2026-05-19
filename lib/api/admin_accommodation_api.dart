@@ -18,31 +18,34 @@ class AccommodationResult {
 class AdminAccommodationApi {
   final _supabase = Supabase.instance.client;
 
-  // ── Fetch all businesses with joined profile (for contact/phone) ──────────
+  // ── Fetch all businesses with joined profile ──────────────────────────────
   Future<List<Accommodation>> fetchAll() async {
     try {
       final data = await _supabase
           .from('businesses')
           .select('''
-          id,
-          profile_id,
-          business_name,
-          business_type,
-          owner_name,
-          permit_number,
-          registration_number,
-          address,
-          total_rooms,
-          permit_file_url,
-          valid_id_url,
-          status,
-          remarks,
-          created_at,
-          profiles(full_name, email, phone)
-        ''')
+            id,
+            profile_id,
+            business_name,
+            business_type,
+            owner_name,
+            permit_number,
+            registration_number,
+            street,
+            barangay,
+            city_municipality,
+            province,
+            region,
+            total_rooms,
+            permit_file_url,
+            valid_id_url,
+            status,
+            remarks,
+            created_at,
+            profiles(full_name, email, phone)
+          ''')
           .isFilter('deleted_at', null)
           .order('created_at', ascending: false);
-
 
       return (data as List)
           .map((e) => Accommodation.fromMap(e as Map<String, dynamic>))
@@ -54,12 +57,14 @@ class AdminAccommodationApi {
   }
 
   // ── Approve ───────────────────────────────────────────────────────────────
-  Future<AccommodationResult> approve(String businessId) async {
-    debugPrint('✅ Approving business: $businessId');
+  Future<AccommodationResult> approve(
+    String businessId, {
+    String? remarks,
+  }) async {
     try {
       await _supabase
           .from('businesses')
-          .update({'status': 'approved', 'remarks': null})
+          .update({'status': 'approved', 'remarks': remarks})
           .eq('id', businessId);
       return AccommodationResult.ok();
     } catch (e) {
@@ -86,7 +91,10 @@ class AdminAccommodationApi {
   }
 
   // ── Flag as warning ───────────────────────────────────────────────────────
-  Future<AccommodationResult> flag(String businessId, {String? remarks}) async {
+  Future<AccommodationResult> flag(
+    String businessId, {
+    String? remarks,
+  }) async {
     try {
       await _supabase
           .from('businesses')
