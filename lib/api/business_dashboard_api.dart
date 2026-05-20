@@ -87,7 +87,7 @@ class BusinessDetails {
 
 class BusinessDashboardApi {
   BusinessDashboardApi({SupabaseClient? client})
-      : _supabase = client ?? Supabase.instance.client;
+    : _supabase = client ?? Supabase.instance.client;
 
   final SupabaseClient _supabase;
 
@@ -114,11 +114,15 @@ class BusinessDashboardApi {
         .eq('id', businessId)
         .maybeSingle();
 
-    final data = response as Map<String, dynamic>?;
-    final street = (data?['street'] as String?) ?? '';
+    if (response == null) {
+      return const BusinessDetails(address: '', totalRooms: 0);
+    }
+
+    final data = response;
+    final street = (data['street'] as String?) ?? '';
     return BusinessDetails(
       address: street,
-      totalRooms: (data?['total_rooms'] as int?) ?? 0,
+      totalRooms: (data['total_rooms'] as int?) ?? 0,
     );
   }
 
@@ -182,20 +186,31 @@ class BusinessDashboardApi {
 
     // ── Stats ────────────────────────────────────────────────────────────────────
 
-    final guestsThisMonth =
-        periodRecords.fold<int>(0, (s, r) => s + (r['total_guests'] as int));
-    final guestsThisYear =
-        yearRecords.fold<int>(0, (s, r) => s + (r['total_guests'] as int));
+    final guestsThisMonth = periodRecords.fold<int>(
+      0,
+      (s, r) => s + (r['total_guests'] as int),
+    );
+    final guestsThisYear = yearRecords.fold<int>(
+      0,
+      (s, r) => s + (r['total_guests'] as int),
+    );
 
     double avgStay = 0;
     if (periodRecords.isNotEmpty) {
       double totalNights = 0;
+      int validStayCount = 0;
       for (final r in periodRecords) {
-        final checkIn = DateTime.parse(r['check_in'] as String);
-        final checkOut = DateTime.parse(r['check_out'] as String);
+        final checkInText = _stringValue(r, 'check_in');
+        final checkOutText = _stringValue(r, 'check_out');
+        if (checkInText == null || checkOutText == null) continue;
+        final checkIn = DateTime.parse(checkInText);
+        final checkOut = DateTime.parse(checkOutText);
         totalNights += checkOut.difference(checkIn).inDays;
+        validStayCount++;
       }
-      avgStay = totalNights / periodRecords.length;
+      if (validStayCount > 0) {
+        avgStay = totalNights / validStayCount;
+      }
     }
 
     final stats = DashboardStats(
@@ -207,14 +222,16 @@ class BusinessDashboardApi {
 
     // ── Breakdowns ───────────────────────────────────────────────────────────────
 
-    final recordIds =
-        periodRecords.map((r) => r['id'] as String).toList();
+    final recordIds = periodRecords
+        .map((r) => _stringValue(r, 'id'))
+        .whereType<String>()
+        .toList();
     final breakdowns = await _fetchBreakdowns(recordIds);
 
     // Gender
     int male = 0, female = 0, genderOther = 0;
     for (final b in breakdowns) {
-      final sex = (b['sex'] as String).toLowerCase();
+      final sex = _stringValue(b, 'sex')?.toLowerCase() ?? '';
       final cnt = b['count'] as int;
       if (sex == 'male') {
         male += cnt;
@@ -228,36 +245,40 @@ class BusinessDashboardApi {
     // Top 5 countries
     final countryMap = <String, int>{};
     for (final b in breakdowns) {
-      final country = b['country'] as String;
+      final country = _stringValue(b, 'country') ?? 'Unknown';
       countryMap[country] = (countryMap[country] ?? 0) + (b['count'] as int);
     }
-    final topCountries = (countryMap.entries
-            .map((e) => CountryCount(country: e.key, count: e.value))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topCountries =
+        (countryMap.entries
+                .map((e) => CountryCount(country: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
 
     // Top 5 local regions (Philippine visitors only)
     final regionMap = <String, int>{};
     for (final b in breakdowns) {
-      final region = b['philippines_region'] as String?;
+      final region = _stringValue(b, 'philippines_region');
       if (region != null && region.isNotEmpty) {
-        regionMap[region] =
-            (regionMap[region] ?? 0) + (b['count'] as int);
+        regionMap[region] = (regionMap[region] ?? 0) + (b['count'] as int);
       }
     }
-    final topRegions = (regionMap.entries
-            .map((e) => RegionCount(region: e.key, count: e.value))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topRegions =
+        (regionMap.entries
+                .map((e) => RegionCount(region: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
 
     return DashboardData(
       stats: stats,
-      sexDistribution:
-          SexDistribution(male: male, female: female, other: genderOther),
+      sexDistribution: SexDistribution(
+        male: male,
+        female: female,
+        other: genderOther,
+      ),
       topCountries: topCountries,
       topRegions: topRegions,
     );
@@ -283,7 +304,9 @@ class BusinessDashboardApi {
 
       final monthMap = <int, int>{};
       for (final r in records) {
-        final m = DateTime.parse(r['check_in'] as String).month;
+        final checkInText = _stringValue(r, 'check_in');
+        if (checkInText == null) continue;
+        final m = DateTime.parse(checkInText).month;
         monthMap[m] = (monthMap[m] ?? 0) + (r['total_guests'] as int);
       }
 
@@ -311,10 +334,16 @@ class BusinessDashboardApi {
       startDate: start,
       endDate: end,
     );
-    final recordIds = records.map((r) => r['id'] as String).toList();
+    final recordIds = records
+        .map((r) => _stringValue(r, 'id'))
+        .whereType<String>()
+        .toList();
     final breakdowns = await _fetchBreakdowns(recordIds);
 
-    final recordMap = {for (final r in records) r['id'] as String: r};
+    final recordMap = <String, Map<String, dynamic>>{
+      for (final r in records)
+        if (_stringValue(r, 'id') case final id?) id: r,
+    };
 
     final buf = StringBuffer()
       ..writeln('Business,$businessName')
@@ -326,18 +355,20 @@ class BusinessDashboardApi {
       );
 
     for (final b in breakdowns) {
-      final rec = recordMap[b['guest_record_id'] as String];
+      final recordId = _stringValue(b, 'guest_record_id');
+      if (recordId == null) continue;
+      final rec = recordMap[recordId];
       if (rec == null) continue;
       final row = [
-        rec['check_in'],
-        rec['check_out'],
-        rec['total_guests'],
-        rec['rooms_occupied'],
-        _csvCell(b['country'] as String),
-        _csvCell(b['philippines_region'] as String? ?? ''),
-        b['sex'],
-        b['age_group'],
-        b['count'],
+        _stringValue(rec, 'check_in') ?? '',
+        _stringValue(rec, 'check_out') ?? '',
+        _intValue(rec, 'total_guests') ?? 0,
+        _intValue(rec, 'rooms_occupied') ?? 0,
+        _csvCell(_stringValue(b, 'country') ?? 'Unknown'),
+        _csvCell(_stringValue(b, 'philippines_region') ?? ''),
+        _stringValue(b, 'sex') ?? '',
+        _stringValue(b, 'age_group') ?? '',
+        _intValue(b, 'count') ?? 0,
       ];
       buf.writeln(row.join(','));
     }
@@ -347,22 +378,32 @@ class BusinessDashboardApi {
 
   // ── Helpers ───────────────────────────────────────────────────────────────────
 
-  String _csvCell(String value) =>
-      value.contains(',') ? '"$value"' : value;
+  String? _stringValue(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    return value == null ? null : value.toString();
+  }
+
+  int? _intValue(Map<String, dynamic> data, String key) {
+    final value = data[key];
+    if (value is int) return value;
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _csvCell(String value) => value.contains(',') ? '"$value"' : value;
 
   String _monthName(int month) => const [
-        '',
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ][month];
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][month];
 }

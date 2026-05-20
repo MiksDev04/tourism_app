@@ -196,20 +196,19 @@ class AdminDashboardApi {
 
   Future<int> _countBusinessProfiles() async {
     final response = await _supabase
-        .from('profiles')
+        .from('businesses')
         .select('id')
-        .eq('role', 'business')
+        .eq('status', 'approved')
         .isFilter('deleted_at', null);
     return (response as List).length;
   }
 
   Future<int> _countPendingRegistrations() async {
     final response = await _supabase
-        .from('profiles')
+        .from('businesses')
         .select('id')
-        .eq('role', 'business')
-        .isFilter('deleted_at', null)
-        .isFilter('email', null);
+        .eq('status', 'pending')
+        .isFilter('deleted_at', null);
     return (response as List).length;
   }
 

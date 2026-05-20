@@ -13,20 +13,22 @@ class GuestEntryResult {
 
 class GuestBreakdownData {
   const GuestBreakdownData({
-    required this.country,
+    this.country,                 // nullable — NULL when overseas
     this.philippinesRegion,
+    this.nationality,             // nullable — only set when country = 'Philippines'
     required this.sex,
     required this.ageGroup,
     required this.count,
-    required this.residenceCategory,
+    required this.isOverseas,     // replaces residenceCategory
   });
 
-  final String country;
+  final String? country;
   final String? philippinesRegion;
+  final String? nationality;
   final String sex;
   final String ageGroup;
   final int count;
-  final String residenceCategory;
+  final bool isOverseas;
 }
 
 class GuestEntryData {
@@ -98,12 +100,13 @@ class BusinessGuestEntryApi {
       // 2. Insert all breakdowns
       final breakdowns = data.breakdowns.map((b) => {
         'guest_record_id': guestRecordId,
-        'country': b.country,
-        'philippines_region': b.philippinesRegion,
-        'sex': _mapSex(b.sex),
-        'age_group': _mapAgeGroup(b.ageGroup),
-        'count': b.count,
-        'residence_category': b.residenceCategory,
+        'is_overseas':        b.isOverseas,
+        'country':            b.country,           // NULL when overseas
+        'nationality':        b.nationality,        // NULL when overseas or non-PH
+        'philippines_region': b.philippinesRegion,  // NULL unless domestic PH
+        'sex':                _mapSex(b.sex),
+        'age_group':          _mapAgeGroup(b.ageGroup),
+        'count':              b.count,
       }).toList();
 
       await _supabase.from('guest_breakdowns').insert(breakdowns);
@@ -127,15 +130,15 @@ class BusinessGuestEntryApi {
   // ── Map age group string to enum value ────────────────────────────────────
   String _mapAgeGroup(String ageGroup) {
     switch (ageGroup) {
-      case '0–9':              return '1-9';
-      case '10–17':            return '10-17';
-      case '18–25':            return '18-25';
-      case '26–35':            return '26-35';
-      case '36–45':            return '36-45';
-      case '46–55':            return '46-55';
-      case '56+':              return '56+';
+      case '0–9':               return '1-9';
+      case '10–17':             return '10-17';
+      case '18–25':             return '18-25';
+      case '26–35':             return '26-35';
+      case '36–45':             return '36-45';
+      case '46–55':             return '46-55';
+      case '56+':               return '56+';
       case 'Prefer not to say': return 'prefer_not_to_say';
-      default:                 return 'prefer_not_to_say';
+      default:                  return 'prefer_not_to_say';
     }
   }
 }

@@ -1,7 +1,10 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_report_api.dart'; // <-- updated import
@@ -269,10 +272,55 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   // ── Download ──────────────────────────────────────────────────────────────
 
-  void _downloadReport(GeneratedReport report) {
+  Future<void> _downloadReport(GeneratedReport report) async {
     if (!report.hasFile) return;
-    // TODO: url_launcher → launchUrl(Uri.parse(report.fileUrl!))
-    _showSuccess('Opening: ${report.fileUrl}');
+    
+    try {
+      _showSuccess('Downloading file...');
+      
+      // Extract file path from URL or use as-is if it's already a path
+      String filePath = report.fileUrl!;
+      if (filePath.contains('/')) {
+        // If it's a full URL, extract the path after the bucket name
+        filePath = filePath.split('/reports/').last;
+      }
+      
+      // Download from Supabase storage
+      final fileData = await _supabase.storage
+          .from('reports')
+          .download(filePath);
+      
+      // Get local directory (works on all platforms)
+      final Directory? downloadsDir = await getApplicationDocumentsDirectory();
+      if (downloadsDir == null) {
+        if (mounted) {
+          _showError('Could not access storage folder.');
+        }
+        return;
+      }
+      
+      // Create filename from report ID
+      final fileName = 'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
+      final localFile = File('${downloadsDir.path}/$fileName');
+      
+      // Write file to local storage
+      await localFile.writeAsBytes(fileData);
+      
+      // Open the file
+      final result = await OpenFile.open(localFile.path);
+      
+      if (!mounted) return;
+      
+      if (result.type == ResultType.done) {
+        _showSuccess('File opened: $fileName');
+      } else {
+        _showSuccess('File downloaded to: ${localFile.path}');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showError('Error downloading file: $e');
+      }
+    }
   }
 
   // ── Filters ───────────────────────────────────────────────────────────────
@@ -828,20 +876,27 @@ class _DownloadButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(7),
           border: Border.all(color: AppColors.primaryCyan.withOpacity(0.3)),
         ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.download_rounded, color: AppColors.primaryCyan, size: 14),
-            SizedBox(width: 4),
-            Text(
-              '.xlsx',
-              style: TextStyle(
+        child: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.download_rounded,
                 color: AppColors.primaryCyan,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
+                size: 14,
               ),
-            ),
-          ],
+              SizedBox(width: 4),
+              Text(
+                '.xlsx',
+                style: TextStyle(
+                  color: AppColors.primaryCyan,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1827,7 +1882,11 @@ class _PageHeader extends StatelessWidget {
         children: [
           titleBlock,
           const SizedBox(height: 12),
-          Row(children: [filterBtn, const SizedBox(width: 10), generateBtn]),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [filterBtn, generateBtn],
+          ),
         ],
       );
     }

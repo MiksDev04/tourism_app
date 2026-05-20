@@ -21,6 +21,7 @@ const _kFieldHeight = 40.0;
 class DemographicEntry {
   DemographicEntry({
     this.country = '',
+    this.nationality = '', // ← ADD
     this.region = 'N/A',
     this.sex = '',
     this.ageGroup = '',
@@ -29,6 +30,7 @@ class DemographicEntry {
   });
 
   String country;
+  String nationality;
   String region;
   String sex;
   String ageGroup;
@@ -46,6 +48,7 @@ class DemographicEntry {
 
   DemographicEntry copyWith({
     String? country,
+    String? nationality,
     String? region,
     String? sex,
     String? ageGroup,
@@ -53,6 +56,7 @@ class DemographicEntry {
     bool? isOverseas,
   }) => DemographicEntry(
     country: country ?? this.country,
+    nationality: nationality ?? this.nationality,
     region: region ?? this.region,
     sex: sex ?? this.sex,
     ageGroup: ageGroup ?? this.ageGroup,
@@ -138,16 +142,69 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
   static const _countries = [
     'Philippines',
-    'USA',
-    'Japan',
-    'South Korea',
+    'Argentina',
     'Australia',
-    'UK',
+    'Austria',
+    'Bahrain',
+    'Bangladesh',
+    'Belgium',
+    'Brazil',
+    'Brunei',
+    'Cambodia',
     'Canada',
-    'Germany',
-    'France',
     'China',
-    'Other',
+    'Colombia',
+    'CIS',
+    'Denmark',
+    'Egypt',
+    'Finland',
+    'France',
+    'Germany',
+    'Greece',
+    'Guam',
+    'Hong Kong',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Japan',
+    'Jordan',
+    'Korea',
+    'Kuwait',
+    'Laos',
+    'Luxembourg',
+    'Malaysia',
+    'Mexico',
+    'Myanmar',
+    'Nauru',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nigeria',
+    'Norway',
+    'Pakistan',
+    'Papua NG',
+    'Peru',
+    'Poland',
+    'Portugal',
+    'Russia',
+    'Saudi Arabia',
+    'Singapore',
+    'South Africa',
+    'Spain',
+    'Sri Lanka',
+    'Sweden',
+    'Switzerland',
+    'Taiwan',
+    'Thailand',
+    'Serbia & Montenegro',
+    'UAE',
+    'United Kingdom',
+    'USA',
+    'Venezuela',
+    'Vietnam',
   ];
 
   static const _phRegions = [
@@ -169,6 +226,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     'Region XIII',
     'BARMM',
   ];
+
+  static const _nationalityOptions = ['Filipino', 'Foreign'];
 
   // ─── Normalise age-group from DB (hyphen) → UI option (en-dash) ───────────
 
@@ -228,8 +287,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
   ) {
     return breakdowns.map((b) {
       // ── Country ──────────────────────────────────────────────────────
-      String nat = b.country;
-      if (!_countries.contains(nat)) nat = 'Other';
+      String nat = b.country ?? 'N/A';
+      if (!_countries.contains(nat)) nat = 'N/A';
 
       // ── Region — only meaningful for philippine_resident ─────────────
       String reg = b.philippinesRegion ?? 'N/A';
@@ -247,6 +306,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
       return DemographicEntry(
         country: nat,
+        nationality: b.nationality ?? '', // ← ADD
         region: reg,
         sex: sex,
         ageGroup: age,
@@ -404,6 +464,12 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         rowErrors[i]['country'] = 'Required';
         hasError = true;
       }
+      if (row.country == 'Philippines' &&
+          !row.isOverseas &&
+          row.nationality.isEmpty) {
+        rowErrors[i]['nationality'] = 'Required';
+        hasError = true;
+      }
 
       // Region required only for Philippine residents (not OFW).
       if (row.country == 'Philippines' &&
@@ -473,10 +539,13 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         .where((e) => e.country.isNotEmpty && e.count > 0)
         .map(
           (e) => GuestBreakdownEntry(
-            country: e.country,
+            country: e.isOverseas ? null : e.country,
+            nationality: (e.isOverseas || e.country != 'Philippines')
+                ? null
+                : e.nationality, // ← ADD
             philippinesRegion:
-                (e.country == 'Philippines' &&
-                    !e.isOverseas &&
+                (!e.isOverseas &&
+                    e.country == 'Philippines' &&
                     e.region != 'N/A')
                 ? e.region
                 : null,
@@ -484,7 +553,6 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
             ageGroup: e.ageGroup,
             count: e.count,
             isOverseas: e.isOverseas,
-            residenceCategory: e.residenceCategory,
           ),
         )
         .toList();
@@ -500,12 +568,13 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       if (b.sex.isNotEmpty) {
         sexDist[b.sex] = (sexDist[b.sex] ?? 0) + b.count;
       }
-      final key =
-          (b.country == 'Philippines' &&
-              b.philippinesRegion != null &&
-              b.philippinesRegion != 'N/A')
+      final key = b.isOverseas
+          ? 'Overseas'
+          : (b.country == 'Philippines' &&
+                b.philippinesRegion != null &&
+                b.philippinesRegion != 'N/A')
           ? 'PH – ${b.philippinesRegion}'
-          : b.country;
+          : (b.country ?? '');
       if (key.isNotEmpty) {
         countries[key] = (countries[key] ?? 0) + b.count;
       }
@@ -949,6 +1018,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 entry: e.value,
                                 isNarrow: isNarrow,
                                 countries: _countries,
+                                nationalityOptions: _nationalityOptions,
                                 phRegions: _phRegions,
                                 sexOptions: _sexOptions,
                                 ageGroupOptions: _ageGroupOptions,
@@ -958,6 +1028,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                 onChanged: (updated) {
                                   setState(() => _demoRows[e.key] = updated);
                                   _clearRowFieldError(e.key, 'country');
+                                  _clearRowFieldError(e.key, 'nationality');
                                   _clearRowFieldError(e.key, 'region');
                                   _clearRowFieldError(e.key, 'sex');
                                   _clearRowFieldError(e.key, 'ageGroup');
@@ -1309,6 +1380,7 @@ class _DemoEntryRow extends StatelessWidget {
     required this.entry,
     required this.isNarrow,
     required this.countries,
+    required this.nationalityOptions,
     required this.phRegions,
     required this.sexOptions,
     required this.ageGroupOptions,
@@ -1321,6 +1393,7 @@ class _DemoEntryRow extends StatelessWidget {
   final DemographicEntry entry;
   final bool isNarrow;
   final List<String> countries;
+  final List<String> nationalityOptions;
   final List<String> phRegions;
   final List<String> sexOptions;
   final List<String> ageGroupOptions;
@@ -1368,6 +1441,39 @@ class _DemoEntryRow extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: entry.isOverseas,
+                    onChanged: (v) => onChanged(
+                      entry.copyWith(
+                        isOverseas: v ?? false,
+                        nationality: '', // always reset when toggling
+                        region: 'N/A', // always reset when toggling
+                      ),
+                    ),
+                    activeColor: const Color(0xFF3B82F6),
+                    side: const BorderSide(
+                      color: Color(0xFF6B7280),
+                      width: 1.4,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'Overseas Fil.',
+                  style: TextStyle(color: AppColors.textGray, fontSize: 12.5),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 8),
+
             // ── Country + delete ──────────────────────────────────────
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1376,13 +1482,15 @@ class _DemoEntryRow extends StatelessWidget {
                   child: _CompactDropWithError(
                     errorText: rowErrors['country'],
                     child: _CompactDrop(
-                      hint: 'Country',
+                      hint: entry.isOverseas ? 'N/A (Overseas)' : 'Country',
                       value: entry.country.isEmpty ? null : entry.country,
                       items: countries,
+                      enabled: !entry.isOverseas,
                       onChanged: (v) => onChanged(
                         entry.copyWith(
                           country: v ?? '',
                           region: v != 'Philippines' ? 'N/A' : entry.region,
+                          nationality: '', // ← ADD
                           isOverseas: v != 'Philippines'
                               ? false
                               : entry.isOverseas,
@@ -1402,56 +1510,32 @@ class _DemoEntryRow extends StatelessWidget {
             ),
 
             // ── OFW + Region — Philippines only ───────────────────────
-            if (entry.country == 'Philippines') ...[
+            // OFW checkbox
+
+            // Nationality + Region — hidden when OFW
+            if (entry.country == 'Philippines' && !entry.isOverseas) ...[
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Checkbox(
-                      value: entry.isOverseas,
-                      onChanged: (v) => onChanged(
-                        entry.copyWith(
-                          isOverseas: v ?? false,
-                          region: (v ?? false) ? 'N/A' : entry.region,
-                        ),
-                      ),
-                      activeColor: const Color(0xFF3B82F6),
-                      side: const BorderSide(
-                        color: Color(0xFF6B7280),
-                        width: 1.4,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Overseas Fil.',
-                    style: TextStyle(color: AppColors.textGray, fontSize: 12.5),
-                  ),
-                ],
+              _CompactDropWithError(
+                errorText: rowErrors['nationality'],
+                child: _CompactDrop(
+                  hint: 'Nationality',
+                  value: entry.nationality.isEmpty ? null : entry.nationality,
+                  items: nationalityOptions,
+                  onChanged: (v) =>
+                      onChanged(entry.copyWith(nationality: v ?? '')),
+                ),
               ),
               const SizedBox(height: 8),
-              entry.isOverseas
-                  ? _CompactDropWithError(
-                      errorText: rowErrors['region'],
-                      child: const _ReadOnlyField(value: 'N/A'),
-                    )
-                  : _CompactDropWithError(
-                      errorText: rowErrors['region'],
-                      child: _CompactDrop(
-                        hint: 'Region',
-                        value: _regionEnabled && entry.region != 'N/A'
-                            ? entry.region
-                            : null,
-                        items: phRegions,
-                        enabled: _regionEnabled,
-                        onChanged: (v) =>
-                            onChanged(entry.copyWith(region: v ?? 'N/A')),
-                      ),
-                    ),
+              _CompactDropWithError(
+                errorText: rowErrors['region'],
+                child: _CompactDrop(
+                  hint: 'Region',
+                  value: entry.region != 'N/A' ? entry.region : null,
+                  items: phRegions,
+                  onChanged: (v) =>
+                      onChanged(entry.copyWith(region: v ?? 'N/A')),
+                ),
+              ),
             ],
 
             const SizedBox(height: 8),
@@ -1511,15 +1595,39 @@ class _DemoEntryRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          SizedBox(
+            width: 50,
+            height: _kFieldHeight,
+            child: Tooltip(
+              message: 'Overseas Filipino',
+              child: Checkbox(
+                value: entry.isOverseas,
+                onChanged: (v) => onChanged(
+                  entry.copyWith(
+                    isOverseas: v ?? false,
+                    nationality: '', // reset when toggling
+                    region: 'N/A', // reset when toggling
+                  ),
+                ),
+                activeColor: const Color(0xFF3B82F6),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
           // Country — always visible
           Expanded(
             flex: 3,
             child: _CompactDropWithError(
               errorText: rowErrors['country'],
               child: _CompactDrop(
-                hint: 'Country',
+                hint: entry.isOverseas ? 'N/A (Overseas)' : 'Country',
                 value: entry.country.isEmpty ? null : entry.country,
                 items: countries,
+                enabled: !entry.isOverseas,
                 onChanged: (v) => onChanged(
                   entry.copyWith(
                     country: v ?? '',
@@ -1532,46 +1640,35 @@ class _DemoEntryRow extends StatelessWidget {
           ),
 
           // Region + OFW checkbox — only visible when Philippines is selected
-          if (entry.country == 'Philippines') ...[
+          // OFW checkbox
+
+          // Nationality + Region — hidden when OFW
+          if (entry.country == 'Philippines' && !entry.isOverseas) ...[
+            const SizedBox(width: 8),
+            Expanded(
+              flex: 2,
+              child: _CompactDropWithError(
+                errorText: rowErrors['nationality'],
+                child: _CompactDrop(
+                  hint: 'Nationality',
+                  value: entry.nationality.isEmpty ? null : entry.nationality,
+                  items: nationalityOptions,
+                  onChanged: (v) =>
+                      onChanged(entry.copyWith(nationality: v ?? '')),
+                ),
+              ),
+            ),
             const SizedBox(width: 8),
             Expanded(
               flex: 3,
-              child: entry.isOverseas
-                  ? _CompactDropWithError(
-                      errorText: rowErrors['region'],
-                      child: const _ReadOnlyField(value: 'N/A'),
-                    )
-                  : _CompactDropWithError(
-                      errorText: rowErrors['region'],
-                      child: _CompactDrop(
-                        hint: 'Region',
-                        value: _regionEnabled && entry.region != 'N/A'
-                            ? entry.region
-                            : null,
-                        items: phRegions,
-                        enabled: _regionEnabled,
-                        onChanged: (v) =>
-                            onChanged(entry.copyWith(region: v ?? 'N/A')),
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 50,
-              height: _kFieldHeight,
-              child: Tooltip(
-                message: 'Overseas Filipino',
-                child: Checkbox(
-                  value: entry.isOverseas,
-                  onChanged: (v) => onChanged(
-                    entry.copyWith(
-                      isOverseas: v ?? false,
-                      region: (v ?? false) ? 'N/A' : entry.region,
-                    ),
-                  ),
-                  activeColor: const Color(0xFF3B82F6),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              child: _CompactDropWithError(
+                errorText: rowErrors['region'],
+                child: _CompactDrop(
+                  hint: 'Region',
+                  value: entry.region != 'N/A' ? entry.region : null,
+                  items: phRegions,
+                  onChanged: (v) =>
+                      onChanged(entry.copyWith(region: v ?? 'N/A')),
                 ),
               ),
             ),
@@ -2004,6 +2101,7 @@ class _CompactDrop extends StatelessWidget {
 
 class _CompactDropWithError extends StatelessWidget {
   const _CompactDropWithError({required this.child, this.errorText});
+
   final Widget child;
   final String? errorText;
 

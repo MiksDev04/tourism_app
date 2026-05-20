@@ -260,8 +260,6 @@ class ReportService {
       String businessId, int month, int year) async {
     final firstDay = DateTime(year, month, 1);
     final lastDay = DateTime(year, month + 1, 0); // last day of month
-    final daysInMonth = lastDay.day;
-    final roomsAvailable = 0; // will be summed from records below
 
     // Pull guest_records for this business + month
     final records = await _sb
@@ -279,7 +277,7 @@ class ReportService {
     if (recordIds.isNotEmpty) {
       breakdowns = await _sb
           .from('guest_breakdowns')
-          .select('guest_record_id, country, sex, residence_category, count')
+          .select('guest_record_id, country, sex, nationality, count, is_overseas')
           .inFilter('guest_record_id', recordIds);
     }
 
@@ -287,7 +285,6 @@ class ReportService {
     final Map<String, int> recordDay = {};
     final Map<String, int> recordRooms = {};
     int totalGuestNights = 0;
-    int totalRoomsOccupied = 0;
 
     for (final r in records) {
       final checkIn = DateTime.parse(r['check_in']);
@@ -296,7 +293,6 @@ class ReportService {
       recordDay[r['id']] = day;
       recordRooms[r['id']] = r['rooms_occupied'] ?? 0;
       totalGuestNights += (checkOut.difference(checkIn).inDays).abs();
-      totalRoomsOccupied += (r['rooms_occupied'] as int? ?? 0);
     }
 
     // Build aggregation maps
@@ -310,42 +306,44 @@ class ReportService {
       roomsOccupiedByDay[day] = (roomsOccupiedByDay[day] ?? 0) + (r['rooms_occupied'] as int? ?? 0);
     }
 
-    for (final b in breakdowns) {
-      final recId = b['guest_record_id'] as String;
+    for (final raw in breakdowns) {
+      final b = Map<String, dynamic>.from(raw as Map);
+      final recId = b['guest_record_id']?.toString() ?? '';
       final day = recordDay[recId] ?? 1;
-      final country = (b['country'] as String).toUpperCase().trim();
-      final sex = (b['sex'] as String).toLowerCase();
-      final residenceCat = b['residence_category'] as String;
-      final count = b['count'] as int;
+      final country = _normalizeUpper(b['country']);
+      final nationality = _normalizeUpper(b['nationality']);
+      final sex = _normalizeLower(b['sex']);
+      final isOverseas = _asBool(b['is_overseas']);
+      final count = _asInt(b['count']);
+      final residenceBucket = _classifyResidenceBucket(
+        country: country,
+        nationality: nationality,
+        isOverseas: isOverseas,
+      );
 
-      // Country day map (non-Philippine residents)
-      if (residenceCat != 'philippine_resident' &&
-          residenceCat != 'overseas_filipino') {
+      if (residenceBucket == 'foreign_resident' && country.isNotEmpty) {
         countryByDay.putIfAbsent(country, () => {});
         countryByDay[country]![day] =
             (countryByDay[country]![day] ?? 0) + count;
-        // also accumulate into day=0 (total)
         countryByDay[country]![0] =
             (countryByDay[country]![0] ?? 0) + count;
       }
 
-      // Residents by day
       residentsByDay.putIfAbsent(day, () => {});
-      residentsByDay[day]![residenceCat] =
-          (residentsByDay[day]![residenceCat] ?? 0) + count;
+      residentsByDay[day]![residenceBucket] =
+        (residentsByDay[day]![residenceBucket] ?? 0) + count;
       residentsByDay[0] ??= {};
-      residentsByDay[0]![residenceCat] =
-          (residentsByDay[0]![residenceCat] ?? 0) + count;
+      residentsByDay[0]![residenceBucket] =
+        (residentsByDay[0]![residenceBucket] ?? 0) + count;
 
-      // Sex by day
       sexByDay.putIfAbsent(day, () => {});
       sexByDay[day]!.putIfAbsent(sex, () => {});
-      sexByDay[day]![sex]![residenceCat] =
-          (sexByDay[day]![sex]![residenceCat] ?? 0) + count;
+      sexByDay[day]![sex]![residenceBucket] =
+        (sexByDay[day]![sex]![residenceBucket] ?? 0) + count;
       sexByDay[0] ??= {};
       sexByDay[0]!.putIfAbsent(sex, () => {});
-      sexByDay[0]![sex]![residenceCat] =
-          (sexByDay[0]![sex]![residenceCat] ?? 0) + count;
+      sexByDay[0]![sex]![residenceBucket] =
+        (sexByDay[0]![sex]![residenceBucket] ?? 0) + count;
     }
 
     return _MonthData(
@@ -418,6 +416,11 @@ class ReportService {
     int cnt(String country, int day) =>
         md.countryByDay[country.toUpperCase()]?[day] ?? 0;
 
+    int countryTotal(int day) => md.countryByDay.values.fold<int>(
+        0,
+        (sum, days) => sum + (days[day] ?? 0),
+      );
+
     // Helper: get resident-category count for a day
     int res(int day, String cat) =>
         md.residentsByDay[day]?[cat] ?? 0;
@@ -447,7 +450,6 @@ class ReportService {
         (d) => [res(d, 'philippine_resident_foreign')]);
 
     // Sub-total row Philippine Residents
-    final prRow = row;
     final cells = <String>['TOTAL PHILIPPINE RESIDENTS'];
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
@@ -492,7 +494,6 @@ class ReportService {
       final isLast = kCountryRows.indexOf(cg) == kCountryRows.length - 1 ||
           kCountryRows[kCountryRows.indexOf(cg) + 1].subRegion != cg.subRegion;
       if (isLast) {
-        final subKey = '${cg.region}|${cg.subRegion}';
         final subCols = <String>['                 SUB-TOTAL'];
         final countriesInSub = kCountryRows
             .where((x) => x.region == cg.region && x.subRegion == cg.subRegion)
@@ -523,7 +524,7 @@ class ReportService {
     int nprTotal = 0;
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
-        final v = kCountryRows.fold<int>(0, (a, cg) => a + cnt(cg.country, d)) +
+        final v = countryTotal(d) +
             res(d, 'unspecified_guest');
         nprCols.add(v == 0 ? '0' : v.toString());
         nprTotal += v;
@@ -543,7 +544,7 @@ class ReportService {
       if (d <= daysInMonth) {
         final v = res(d, 'philippine_resident_filipino') +
             res(d, 'philippine_resident_foreign') +
-            kCountryRows.fold<int>(0, (a, cg) => a + cnt(cg.country, d)) +
+            countryTotal(d) +
             res(d, 'unspecified_guest') +
             res(d, 'overseas_filipino');
         gtCols.add(v == 0 ? '0' : v.toString());
@@ -553,30 +554,32 @@ class ReportService {
     }
     final gtTotal = (res(0, 'philippine_resident_filipino') +
         res(0, 'philippine_resident_foreign') +
-        kCountryRows.fold<int>(0, (a, cg) => a + cnt(cg.country, 0)) +
+        countryTotal(0) +
         res(0, 'unspecified_guest') +
         res(0, 'overseas_filipino'));
     gtCols.add(gtTotal.toString());
     _row(sheet, row++, gtCols, bold: true);
 
     // Summary breakdown rows
-    void summaryRow(String label, String cat) {
+    void summaryRow(String label, int Function(int day) dayFn) {
       final cols = <String>[label];
       for (int d = 1; d <= 31; d++) {
         if (d <= daysInMonth) {
-          final v = res(d, cat);
+          final v = dayFn(d);
           cols.add(v == 0 ? '0' : v.toString());
         } else {
           cols.add('0');
         }
       }
-      cols.add(res(0, cat).toString());
+      cols.add(dayFn(0).toString());
       _row(sheet, row++, cols);
     }
 
-    summaryRow('   Total Philippine Residents', 'philippine_resident_filipino');
-    summaryRow('   Total Non-Philippine Residents', 'unspecified_guest');
-    summaryRow('   Total Overseas Filipinos', 'overseas_filipino');
+    summaryRow('   Total Philippine Residents',
+      (d) => res(d, 'philippine_resident_filipino') + res(d, 'philippine_resident_foreign'));
+    summaryRow('   Total Non-Philippine Residents',
+      (d) => countryTotal(d) + res(d, 'unspecified_guest'));
+    summaryRow('   Total Overseas Filipinos', (d) => res(d, 'overseas_filipino'));
 
     row += 2;
 
@@ -658,7 +661,7 @@ class ReportService {
     _cell(sheet, row++, 0, '1. Male');
     sexRow('a. Philippine Residents', 'male', 'philippine_resident_filipino');
     sexRow('b. Non-Philippine/Foreign Residents (including unspecified)',
-        'male', 'unspecified_guest');
+      'male', 'foreign_resident');
     sexRow('c. Overseas Filipinos', 'male', 'overseas_filipino');
     sexRow('d. Others/Unspecified Guest', 'male', 'unspecified_guest');
 
@@ -666,6 +669,8 @@ class ReportService {
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final v = sex(d, 'male', 'philippine_resident_filipino') +
+            sex(d, 'male', 'philippine_resident_foreign') +
+            sex(d, 'male', 'foreign_resident') +
             sex(d, 'male', 'unspecified_guest') +
             sex(d, 'male', 'overseas_filipino');
         maleTotalCols.add(v == 0 ? '' : v.toString());
@@ -674,6 +679,8 @@ class ReportService {
       }
     }
     maleTotalCols.add((sex(0, 'male', 'philippine_resident_filipino') +
+            sex(0, 'male', 'philippine_resident_foreign') +
+            sex(0, 'male', 'foreign_resident') +
             sex(0, 'male', 'unspecified_guest') +
             sex(0, 'male', 'overseas_filipino'))
         .toString());
@@ -682,7 +689,7 @@ class ReportService {
     _cell(sheet, row++, 0, '2. Female');
     sexRow('a. Philippine Residents', 'female', 'philippine_resident_filipino');
     sexRow('b. Non-Philippine/Foreign Residents (including unspecified)',
-        'female', 'unspecified_guest');
+        'female', 'foreign_resident');
     sexRow('c. Overseas Filipinos', 'female', 'overseas_filipino');
     sexRow('d. Others/Unspecified Guest', 'female', 'unspecified_guest');
 
@@ -690,6 +697,8 @@ class ReportService {
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final v = sex(d, 'female', 'philippine_resident_filipino') +
+            sex(d, 'female', 'philippine_resident_foreign') +
+            sex(d, 'female', 'foreign_resident') +
             sex(d, 'female', 'unspecified_guest') +
             sex(d, 'female', 'overseas_filipino');
         femaleTotalCols.add(v == 0 ? '' : v.toString());
@@ -698,6 +707,8 @@ class ReportService {
       }
     }
     femaleTotalCols.add((sex(0, 'female', 'philippine_resident_filipino') +
+            sex(0, 'female', 'philippine_resident_foreign') +
+            sex(0, 'female', 'foreign_resident') +
             sex(0, 'female', 'unspecified_guest') +
             sex(0, 'female', 'overseas_filipino'))
         .toString());
@@ -739,6 +750,10 @@ class ReportService {
     // Merge all months
     int totCnt(String country) => monthDataList.fold<int>(
         0, (a, md) => a + (md.countryByDay[country.toUpperCase()]?[0] ?? 0));
+    int totCountry() => monthDataList.fold<int>(
+      0,
+      (sum, md) => sum + md.countryByDay.values.fold<int>(0, (a, days) => a + (days[0] ?? 0)),
+      );
     int totRes(String cat) => monthDataList.fold<int>(
         0, (a, md) => a + (md.residentsByDay[0]?[cat] ?? 0));
 
@@ -782,7 +797,7 @@ class ReportService {
       'OTHERS AND UNSPECIFIED NON-PHILIPPINE RESIDENCES',
       totRes('unspecified_guest').toString()
     ]);
-    final nprTotal = kCountryRows.fold<int>(0, (a, cg) => a + totCnt(cg.country)) +
+    final nprTotal = totCountry() +
         totRes('unspecified_guest');
     _row(sheet, row++, ['TOTAL NON-PHILIPPINE RESIDENTS', nprTotal.toString()], bold: true);
     _row(sheet, row++, ['OVERSEAS FILIPINOS*', totRes('overseas_filipino').toString()]);
@@ -826,17 +841,17 @@ class ReportService {
 
     _cell(sheet, row++, 0, '1. Male');
     _row(sheet, row++, ['a. Philippine Residents', totSex('male', 'philippine_resident_filipino').toString()]);
-    _row(sheet, row++, ['b. Non-Philippine/Foreign Residents (including unspecified)', totSex('male', 'unspecified_guest').toString()]);
+    _row(sheet, row++, ['b. Non-Philippine/Foreign Residents (including unspecified)', totSex('male', 'foreign_resident').toString()]);
     _row(sheet, row++, ['c. Overseas Filipinos', totSex('male', 'overseas_filipino').toString()]);
     _row(sheet, row++, ['d. Others/Unspecified Guest', totSex('male', 'unspecified_guest').toString()]);
-    _row(sheet, row++, ['x. Total', (totSex('male', 'philippine_resident_filipino') + totSex('male', 'unspecified_guest') + totSex('male', 'overseas_filipino')).toString()], bold: true);
+    _row(sheet, row++, ['x. Total', (totSex('male', 'philippine_resident_filipino') + totSex('male', 'philippine_resident_foreign') + totSex('male', 'foreign_resident') + totSex('male', 'unspecified_guest') + totSex('male', 'overseas_filipino')).toString()], bold: true);
 
     _cell(sheet, row++, 0, '2. Female');
     _row(sheet, row++, ['a. Philippine Residents', totSex('female', 'philippine_resident_filipino').toString()]);
-    _row(sheet, row++, ['b. Non-Philippine/Foreign Residents (including unspecified)', totSex('female', 'unspecified_guest').toString()]);
+    _row(sheet, row++, ['b. Non-Philippine/Foreign Residents (including unspecified)', totSex('female', 'foreign_resident').toString()]);
     _row(sheet, row++, ['c. Overseas Filipinos', totSex('female', 'overseas_filipino').toString()]);
     _row(sheet, row++, ['d. Others/Unspecified Guest', totSex('female', 'unspecified_guest').toString()]);
-    _row(sheet, row++, ['x. Total', (totSex('female', 'philippine_resident_filipino') + totSex('female', 'unspecified_guest') + totSex('female', 'overseas_filipino')).toString()], bold: true);
+    _row(sheet, row++, ['x. Total', (totSex('female', 'philippine_resident_filipino') + totSex('female', 'philippine_resident_foreign') + totSex('female', 'foreign_resident') + totSex('female', 'unspecified_guest') + totSex('female', 'overseas_filipino')).toString()], bold: true);
 
     row += 2;
     _cell(sheet, row++, 0, '* Philippine passport holders permanently residing abroad; excludes overseas Filipino workers and Former Filipinos');
@@ -1133,5 +1148,47 @@ class ReportService {
       case 'apartel': return 'Apartel/ Rented Homes/ Apartment';
       default: return raw;
     }
+  }
+
+  String _normalizeUpper(Object? value) => value?.toString().trim().toUpperCase() ?? '';
+
+  String _normalizeLower(Object? value) => value?.toString().trim().toLowerCase() ?? '';
+
+  int _asInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  bool _asBool(Object? value) {
+    if (value is bool) return value;
+    final normalized = value?.toString().trim().toLowerCase();
+    return normalized == 'true' || normalized == 't' || normalized == '1' || normalized == 'yes';
+  }
+
+  String _classifyResidenceBucket({
+    required String country,
+    required String nationality,
+    required bool isOverseas,
+  }) {
+    if (isOverseas) {
+      return 'overseas_filipino';
+    }
+
+    if (country.isEmpty) {
+      return 'unspecified_guest';
+    }
+
+    if (country == 'PHILIPPINES') {
+      if (nationality == 'FILIPINO') {
+        return 'philippine_resident_filipino';
+      }
+      if (nationality == 'FOREIGN') {
+        return 'philippine_resident_foreign';
+      }
+      return 'unspecified_guest';
+    }
+
+    return 'foreign_resident';
   }
 }

@@ -55,12 +55,13 @@ class BusinessGuestRecordApi {
             transportation_mode,
             status,
             guest_breakdowns (
+              is_overseas,
               country,
+              nationality,
               philippines_region,
               sex,
               age_group,
-              count,
-              residence_category
+              count
             )
           ''')
           .eq('business_id', businessId)
@@ -72,25 +73,36 @@ class BusinessGuestRecordApi {
         GuestDemographics? demographics;
 
         if (breakdowns.isNotEmpty) {
-          final ageGroups  = <String, int>{};
-          final sex        = <String, int>{};
-          final countries  = <String, int>{};
+          final ageGroups = <String, int>{};
+          final sex       = <String, int>{};
+          final countries = <String, int>{};
 
           for (final b in breakdowns) {
-            final count = (b['count'] as int?) ?? 0;
+            final count      = (b['count'] as int?) ?? 0;
+            final isOverseas = (b['is_overseas'] as bool?) ?? false;
 
+            // ── Age groups ──────────────────────────────────────────────────
             final ageGroup = b['age_group'] as String? ?? 'Unknown';
             ageGroups[ageGroup] = (ageGroups[ageGroup] ?? 0) + count;
 
+            // ── Sex ─────────────────────────────────────────────────────────
             final s = b['sex'] as String? ?? 'Unknown';
             sex[s] = (sex[s] ?? 0) + count;
 
-            final nat    = b['country'] as String? ?? 'Unknown';
-            final region = b['philippines_region'] as String?;
-            final countryKey =
-                (nat == 'Philippines' && region != null && region != 'N/A')
-                    ? 'PH – $region'
-                    : nat;
+            // ── Countries map ───────────────────────────────────────────────
+            // Overseas guests have null country — label them separately.
+            final String countryKey;
+            if (isOverseas) {
+              countryKey = 'Overseas';
+            } else {
+              final country = b['country'] as String? ?? 'Unknown';
+              final region  = b['philippines_region'] as String?;
+              countryKey = (country == 'Philippines' &&
+                      region != null &&
+                      region != 'N/A')
+                  ? 'PH – $region'
+                  : country;
+            }
             countries[countryKey] = (countries[countryKey] ?? 0) + count;
           }
 
@@ -100,17 +112,31 @@ class BusinessGuestRecordApi {
             countries: countries,
             breakdowns: breakdowns
                 .map(
-                  (b) => GuestBreakdownEntry(
-                    country:            b['country']            as String? ?? '',
-                    philippinesRegion:  b['philippines_region'] as String?,
-                    sex:                b['sex']                as String? ?? '',
-                    ageGroup:           b['age_group']          as String? ?? '',
-                    count:              (b['count']             as int?)   ?? 0,
-                    isOverseas:        (b['residence_category'] as String?) ==
-                        'overseas_filipino',
-                    residenceCategory:  b['residence_category'] as String? ??
-                        'unspecified_guest',
-                  ),
+                  (b) {
+                    final isOverseas =
+                        (b['is_overseas'] as bool?) ?? false;
+
+                    return GuestBreakdownEntry(
+                      // Overseas: country / nationality / region all null
+                      country: isOverseas
+                          ? null
+                          : b['country'] as String?,
+                      nationality: (isOverseas ||
+                              (b['country'] as String?) != 'Philippines')
+                          ? null
+                          : b['nationality'] as String?,
+                      philippinesRegion: (!isOverseas &&
+                              (b['country'] as String?) == 'Philippines' &&
+                              (b['philippines_region'] as String?) != null &&
+                              (b['philippines_region'] as String?) != 'N/A')
+                          ? b['philippines_region'] as String?
+                          : null,
+                      sex:       b['sex']       as String? ?? '',
+                      ageGroup:  b['age_group'] as String? ?? '',
+                      count:     (b['count']    as int?)   ?? 0,
+                      isOverseas: isOverseas,
+                    );
+                  },
                 )
                 .toList(),
           );
@@ -123,13 +149,13 @@ class BusinessGuestRecordApi {
         final statusStr = row['status'] as String? ?? 'active';
 
         return GuestRecord(
-          id:        row['id']           as String,
+          id:        row['id']              as String,
           checkIn:   checkIn,
           checkOut:  checkOut,
           nights:    nights,
-          guests:    (row['total_guests']     as int?) ?? 0,
-          rooms:     (row['rooms_occupied']   as int?) ?? 0,
-          purpose:   row['purpose_of_visit']  as String? ?? '',
+          guests:    (row['total_guests']      as int?) ?? 0,
+          rooms:     (row['rooms_occupied']    as int?) ?? 0,
+          purpose:   row['purpose_of_visit']   as String? ?? '',
           transport: row['transportation_mode'] as String? ?? '',
           status:    statusStr == 'archived'
               ? GuestRecordStatus.archived
@@ -191,8 +217,7 @@ class BusinessGuestRecordApi {
       // 2. Delete ALL existing breakdowns for this record.
       //    Using .select() forces PostgREST to actually execute the DELETE
       //    and surface any RLS / permission denial as a thrown exception
-      //    instead of silently doing nothing — which is what was causing
-      //    old rows to accumulate on every edit.
+      //    instead of silently doing nothing.
       await _supabase
           .from('guest_breakdowns')
           .delete()
@@ -202,20 +227,26 @@ class BusinessGuestRecordApi {
       // 3. Insert the fresh set of breakdowns only after delete is confirmed.
       if (breakdowns.isNotEmpty) {
         final rows = breakdowns.map((b) {
-          final isPh       = b.country == 'Philippines';
-          final isOverseas = b.residenceCategory == 'overseas_filipino';
+          final isOverseas = b.isOverseas;
+          final isPhilippines = !isOverseas && b.country == 'Philippines';
 
           return {
-            'guest_record_id':    recordId,
-            'country':            b.country,
-            // Region is only meaningful for Philippine residents (not OFW).
-            'philippines_region': (isPh && !isOverseas)
-                ? b.philippinesRegion
-                : null,
-            'sex':                _mapSex(b.sex),
-            'age_group':          _mapAgeGroup(b.ageGroup),
-            'count':              b.count,
-            'residence_category': b.residenceCategory,
+            'guest_record_id': recordId,
+            'is_overseas':     isOverseas,
+
+            // Overseas → country is NULL
+            'country': isOverseas ? null : b.country,
+
+            // Nationality only for domestic Philippines guests
+            // Valid values: 'Filipino' | 'Foreign' | NULL
+            'nationality': isPhilippines ? b.nationality : null,
+
+            // Region only meaningful for Philippines domestic (not overseas)
+            'philippines_region': isPhilippines ? b.philippinesRegion : null,
+
+            'sex':       _mapSex(b.sex),
+            'age_group': _mapAgeGroup(b.ageGroup),
+            'count':     b.count,
           };
         }).toList();
 
@@ -224,7 +255,6 @@ class BusinessGuestRecordApi {
 
       return const ApiResult.success(null);
     } on PostgrestException catch (e) {
-      // Surface the real Postgres / RLS message so it appears in the UI.
       return ApiResult.failure('DB error: ${e.message}');
     } catch (e) {
       return ApiResult.failure('Failed to update record: $e');

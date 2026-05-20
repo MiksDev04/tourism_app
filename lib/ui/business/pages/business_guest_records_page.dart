@@ -6,58 +6,53 @@ import '../../../api/business_guest_record_api.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-String _residenceCategoryLabel(String cat) {
-  switch (cat) {
-    case 'philippine_resident':
-      return 'PH Resident';
-    case 'overseas_filipino':
-      return 'Overseas Fil.';
-    case 'foreign_resident':
-      return 'Foreign';
-    case 'unspecified_guest':
-      return 'Unspecified';
-    default:
-      return 'Unspecified';
+// ADD these three:
+String _displayCountry(GuestBreakdownEntry b) {
+  if (b.isOverseas) {
+    return '—';
   }
+  return b.country ?? 'Unspecified';
 }
 
-Color _residenceCategoryColor(String cat) {
-  switch (cat) {
-    case 'philippine_resident':
-      return const Color(0xFF10B981); // green
-    case 'overseas_filipino':
-      return const Color(0xFF3B82F6); // blue
-    case 'foreign_resident':
-      return const Color(0xFFF59E0B); // amber
-    case 'unspecified_guest':
-      return AppColors.textGray;
-    default:
-      return AppColors.textGray;
+String _derivedCategoryLabel(GuestBreakdownEntry b) {
+  if (b.isOverseas) return 'Overseas Fil.';
+  if (b.country == 'Philippines') {
+    return 'PH Resident';
   }
+  if (b.country != null) return 'Foreign';
+  return 'Unspecified';
 }
 
+Color _derivedCategoryColor(GuestBreakdownEntry b) {
+  if (b.isOverseas) return const Color(0xFF3B82F6);
+  if (b.country == 'Philippines') {
+    return const Color(0xFF10B981);
+  }
+  if (b.country != null) return const Color(0xFFF59E0B);
+  return AppColors.textGray;
+}
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 enum GuestRecordStatus { active, archived }
 
 class GuestBreakdownEntry {
   const GuestBreakdownEntry({
-    required this.country,
+    this.country,
+    this.nationality, // ← add this
     this.philippinesRegion,
     required this.sex,
     required this.ageGroup,
     required this.count,
-    this.isOverseas = false,
-    this.residenceCategory = 'unspecified_guest',
+    required this.isOverseas,
   });
 
-  final String country;
+  final String? country;
+  final String? nationality; // ← add this ('Filipino' | 'Foreign' | null)
   final String? philippinesRegion;
   final String sex;
   final String ageGroup;
   final int count;
   final bool isOverseas;
-  final String residenceCategory;
 }
 
 class GuestDemographics {
@@ -1933,7 +1928,8 @@ class _BreakdownTable extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: breakdowns.map((b) {
-              final catColor = _residenceCategoryColor(b.residenceCategory);
+              final catLabel = _derivedCategoryLabel(b);
+              final catColor = _derivedCategoryColor(b);
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
@@ -1949,7 +1945,7 @@ class _BreakdownTable extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            b.country,
+                            _displayCountry(b),
                             style: const TextStyle(
                               color: AppColors.textWhite,
                               fontSize: 13.5,
@@ -1971,7 +1967,7 @@ class _BreakdownTable extends StatelessWidget {
                             ),
                           ),
                           child: Text(
-                            _residenceCategoryLabel(b.residenceCategory),
+                            catLabel,
                             style: TextStyle(
                               color: catColor,
                               fontSize: 11,
@@ -2037,11 +2033,11 @@ class _BreakdownTable extends StatelessWidget {
                 ...breakdowns.map(
                   (b) => TableRow(
                     children: [
-                      _TCell(b.country),
+                      _TCell(_displayCountry(b)),
                       _TCell(b.philippinesRegion ?? '—'),
                       _TCellBadge(
-                        label: _residenceCategoryLabel(b.residenceCategory),
-                        color: _residenceCategoryColor(b.residenceCategory),
+                        label: _derivedCategoryLabel(b),
+                        color: _derivedCategoryColor(b),
                       ),
                       _TCell(b.sex),
                       _TCell(b.ageGroup),
