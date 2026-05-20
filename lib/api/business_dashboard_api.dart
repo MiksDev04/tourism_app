@@ -39,7 +39,6 @@ class SexDistribution {
   int get total => male + female + other;
   double get maleRatio => total == 0 ? 0 : male / total;
   double get femaleRatio => total == 0 ? 0 : female / total;
-  double get otherRatio => total == 0 ? 0 : other / total;
 }
 
 class CountryCount {
