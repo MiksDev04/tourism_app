@@ -1216,3 +1216,1037 @@ class _Footer extends StatelessWidget {
     );
   }
 }
+
+
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum MessageType {
+  compliance,
+  announcement,
+  general;
+
+  /// Matches the Postgres enum values in the `messages` table.
+  String get dbValue => name; // 'compliance' | 'announcement' | 'general'
+
+  String get label => switch (this) {
+        MessageType.compliance => 'Compliance',
+        MessageType.announcement => 'Announcement',
+        MessageType.general => 'General',
+      };
+
+  String get icon => switch (this) {
+        MessageType.compliance => '⚠️',
+        MessageType.announcement => '📣',
+        MessageType.general => '💬',
+      };
+}
+
+enum MessageStatus {
+  sent,
+  read,
+  archived;
+
+  String get dbValue => name;
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+class BusinessSummary {
+  const BusinessSummary({
+    required this.id,
+    required this.name,
+    this.status,
+  });
+
+  /// UUID from `businesses.id`
+  final String id;
+
+  /// `businesses.business_name`
+  final String name;
+
+  /// `businesses.status` — useful for showing inactive/pending badges in the dropdown
+  final String? status;
+
+  factory BusinessSummary.fromJson(Map<String, dynamic> json) =>
+      BusinessSummary(
+        id: json['id'] as String,
+        name: json['business_name'] as String,
+        status: json['status'] as String?,
+      );
+}
+
+class Message {
+  const Message({
+    required this.id,
+    required this.senderId,
+    required this.businessId,
+    required this.messageType,
+    required this.subject,
+    required this.content,
+    required this.status,
+    required this.isRead,
+    required this.createdAt,
+    this.readAt,
+    this.senderName,
+  });
+
+  final String id;
+  final String senderId;
+  final String businessId;
+  final MessageType messageType;
+  final String subject;
+  final String content;
+  final MessageStatus status;
+  final bool isRead;
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  /// Joined from `profiles.full_name` via the `sender` relation.
+  final String? senderName;
+
+  factory Message.fromJson(Map<String, dynamic> json) => Message(
+        id: json['id'] as String,
+        senderId: json['sender_id'] as String,
+        businessId: json['business_id'] as String,
+        messageType: MessageType.values.firstWhere(
+          (e) => e.dbValue == json['message_type'],
+          orElse: () => MessageType.general,
+        ),
+        subject: json['subject'] as String,
+        content: json['content'] as String,
+        status: MessageStatus.values.firstWhere(
+          (e) => e.dbValue == json['status'],
+          orElse: () => MessageStatus.sent,
+        ),
+        isRead: json['is_read'] as bool,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        readAt: json['read_at'] != null
+            ? DateTime.parse(json['read_at'] as String)
+            : null,
+        senderName:
+            (json['sender'] as Map<String, dynamic>?)?['full_name'] as String?,
+      );
+}
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+
+class MessagesApi {
+  MessagesApi({SupabaseClient? client})
+      : _client = client ?? Supabase.instance.client;
+
+  final SupabaseClient _client;
+
+  // ── Businesses ─────────────────────────────────────────────────────────────
+
+  /// Fetch all non-deleted businesses for the compose dropdown.
+  /// Ordered alphabetically by business name.
+  Future<List<BusinessSummary>> fetchBusinesses() async {
+    final data = await _client
+        .from('businesses')
+        .select('id, business_name, status')
+        .filter('deleted_at', 'is', null)
+        .order('business_name', ascending: true);
+
+    return (data as List<dynamic>)
+        .map((b) => BusinessSummary.fromJson(b as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Send ───────────────────────────────────────────────────────────────────
+
+  /// Send a message to a single business.
+  /// `senderId` is the admin's `profiles.id`.
+  Future<void> sendToOne({
+    required String senderId,
+    required String businessId,
+    required MessageType messageType,
+    required String subject,
+    required String content,
+  }) async {
+    await _client.from('messages').insert({
+      'sender_id': senderId,
+      'business_id': businessId,
+      'message_type': messageType.dbValue,
+      'subject': subject.trim(),
+      'content': content.trim(),
+      // status defaults to 'sent', is_read defaults to false in DB
+    });
+  }
+
+  /// Send the same message to every non-deleted business (bulk insert).
+  /// Returns the count of businesses messaged.
+  Future<int> sendToAll({
+    required String senderId,
+    required MessageType messageType,
+    required String subject,
+    required String content,
+  }) async {
+    // Fetch all active business IDs
+    final businesses = await _client
+        .from('businesses')
+        .select('id')
+        .filter('deleted_at', 'is', null)
+        .filter('status', 'eq', 'active');
+
+    if ((businesses as List).isEmpty) return 0;
+
+    final rows = businesses
+        .map((b) => {
+              'sender_id': senderId,
+              'business_id': b['id'] as String,
+              'message_type': messageType.dbValue,
+              'subject': subject.trim(),
+              'content': content.trim(),
+            })
+        .toList();
+
+    await _client.from('messages').insert(rows);
+    return rows.length;
+  }
+
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+
+  /// Fetch all messages for a specific business (receiver/business-owner view).
+  Future<List<Message>> fetchForBusiness(String businessId) async {
+    final data = await _client
+        .from('messages')
+        .select('*, sender:profiles!sender_id(full_name)')
+        .eq('business_id', businessId)
+        .order('created_at', ascending: false);
+
+    return (data as List<dynamic>)
+        .map((m) => Message.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Fetch all messages sent by an admin (sender view).
+  Future<List<Message>> fetchSentByAdmin(String adminId) async {
+    final data = await _client
+        .from('messages')
+        .select(
+          '*, sender:profiles!sender_id(full_name), business:businesses(business_name)',
+        )
+        .eq('sender_id', adminId)
+        .order('created_at', ascending: false);
+
+    return (data as List<dynamic>)
+        .map((m) => Message.fromJson(m as Map<String, dynamic>))
+        .toList();
+  }
+
+  // ── Update ─────────────────────────────────────────────────────────────────
+
+  /// Mark a single message as read.
+  Future<void> markAsRead(String messageId) async {
+    await _client.from('messages').update({
+      'is_read': true,
+      'status': MessageStatus.read.dbValue,
+      'read_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', messageId);
+  }
+
+  /// Archive a message.
+  Future<void> archive(String messageId) async {
+    await _client.from('messages').update({
+      'status': MessageStatus.archived.dbValue,
+    }).eq('id', messageId);
+  }
+
+  /// Get unread message count for a business (for badge indicators).
+  Future<int> unreadCount(String businessId) async {
+    final response = await _client
+        .from('messages')
+        .select('id')
+        .eq('business_id', businessId)
+        .eq('is_read', false);
+
+    return (response as List).length;
+  }
+}
+
+
+
+CHnage the code below. make sure it matches the api and the compose message modal is connected to this tooo. GIve me the updated Admin Message Page:
+
+
+// ignore_for_file: deprecated_member_use
+
+import 'package:flutter/material.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../shared/layouts/admin_layout.dart';
+import '../widgets/compose_message_modal.dart';
+import '../widgets/message_view_dialog.dart';
+import '../models/message_models.dart';
+
+// ─── Sample Data ──────────────────────────────────────────────────────────────
+
+List<Message> _messages = [
+  const Message(
+    type: MessageType.compliance,
+    subject: 'Monthly Report Compliance Notice - March 2024',
+    recipient: 'Grand Hotel San Pablo',
+    date: '2024-04-01',
+  ),
+  const Message(
+    type: MessageType.announcement,
+    subject: 'Tourism Month Celebration - May 2024',
+    recipient: 'Sampaloc Lake Resort',
+    date: '2024-04-15',
+  ),
+  const Message(
+    type: MessageType.compliance,
+    subject: 'Second Notice: Missing Monthly Reports',
+    recipient: 'Paradise Resort & Spa',
+    date: '2024-04-10',
+  ),
+  const Message(
+    type: MessageType.general,
+    subject: 'System Update: New Report Features',
+    recipient: 'Grand Hotel San Pablo',
+    date: '2024-04-20',
+  ),
+  const Message(
+    type: MessageType.general,
+    subject: 'Data Collection Reminder',
+    recipient: 'Sampaloc Lake Resort',
+    date: '2024-03-25',
+  ),
+];
+
+const _typeOptions = ['All Types', 'Compliance', 'Announcement', 'General'];
+const _monthOptions = [
+  'All Months',
+  'April 2024',
+  'March 2024',
+  'February 2024',
+];
+const _businessOptions = [
+  'All Businesses',
+  'Grand Hotel San Pablo',
+  'Sampaloc Lake Resort',
+  'Paradise Resort & Spa',
+];
+
+// ─── Admin Messages Page ──────────────────────────────────────────────────────
+
+class AdminMessagesPage extends StatefulWidget {
+  const AdminMessagesPage({super.key});
+
+  @override
+  State<AdminMessagesPage> createState() => _AdminMessagesPageState();
+}
+
+class _AdminMessagesPageState extends State<AdminMessagesPage> {
+  String _searchQuery = '';
+  String _selectedType = 'All Types';
+  String _selectedMonth = 'All Months';
+  String _selectedBusiness = 'All Businesses';
+
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  List<Message> get _filtered {
+    return _messages.where((m) {
+      final q = _searchQuery.toLowerCase();
+      final matchesSearch =
+          q.isEmpty ||
+          m.subject.toLowerCase().contains(q) ||
+          m.recipient.toLowerCase().contains(q);
+
+      final matchesType =
+          _selectedType == 'All Types' ||
+          m.type.name.toLowerCase() == _selectedType.toLowerCase();
+
+      final matchesBusiness =
+          _selectedBusiness == 'All Businesses' ||
+          m.recipient == _selectedBusiness;
+
+      return matchesSearch && matchesType && matchesBusiness;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminLayout(
+      title: 'Messages',
+      selectedIndex: 3,
+      onNavSelected: (_) {},
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 900;
+          return SingleChildScrollView(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _PageHeader(),
+                const SizedBox(height: 16),
+                _FilterRow(
+                  searchCtrl: _searchCtrl,
+                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  selectedType: _selectedType,
+                  onTypeChanged: (v) => setState(() => _selectedType = v!),
+                  selectedMonth: _selectedMonth,
+                  onMonthChanged: (v) => setState(() => _selectedMonth = v!),
+                  selectedBusiness: _selectedBusiness,
+                  onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
+                ),
+                const SizedBox(height: 14),
+                _MessagesTable(rows: _filtered),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Page Header ──────────────────────────────────────────────────────────────
+
+class _PageHeader extends StatelessWidget {
+  const _PageHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 600;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Messages & Announcements',
+                    style: TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: isSmall ? 18 : 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Send notices to accommodation establishments',
+                    style: TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: isSmall ? 11 : 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            _ComposeButton(
+              onMessageSent: () {
+                (context
+                    .findAncestorStateOfType<_AdminMessagesPageState>()
+                    // ignore: invalid_use_of_protected_member
+                    ?.setState(() {}));
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Message sent successfully'),
+                    backgroundColor: AppColors.accentGreen,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ComposeButton extends StatelessWidget {
+  const _ComposeButton({required this.onMessageSent});
+
+  final VoidCallback onMessageSent;
+
+
+  String _getCurrentDate() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        final draft = await showComposeMessageDialog(context);
+        if (draft != null && draft.isValid) {
+          final newMessage = Message(
+            type: draft.messageType!,
+            subject: draft.subject,
+            recipient: draft.sendToMode == SendToMode.all
+                ? 'All Businesses'
+                : draft.selectedBusiness!,
+            date: _getCurrentDate(),
+          );
+          _messages = [newMessage, ..._messages];
+          onMessageSent();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.gradientStart, AppColors.gradientEnd],
+          ),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryBlue.withOpacity(0.3),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.send_rounded, color: Colors.white, size: 15),
+            SizedBox(width: 7),
+            Text(
+              'Compose Message',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Filter Row ───────────────────────────────────────────────────────────────
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.searchCtrl,
+    required this.onSearchChanged,
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.selectedMonth,
+    required this.onMonthChanged,
+    required this.selectedBusiness,
+    required this.onBusinessChanged,
+  });
+
+  final TextEditingController searchCtrl;
+  final ValueChanged<String> onSearchChanged;
+  final String selectedType;
+  final ValueChanged<String?> onTypeChanged;
+  final String selectedMonth;
+  final ValueChanged<String?> onMonthChanged;
+  final String selectedBusiness;
+  final ValueChanged<String?> onBusinessChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 800;
+        return isSmall
+            ? Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: _SearchField(
+                          controller: searchCtrl,
+                          onChanged: onSearchChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 3,
+                        child: _DropdownFilter(
+                          value: selectedType,
+                          items: _typeOptions,
+                          onChanged: onTypeChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _DropdownFilter(
+                          value: selectedMonth,
+                          items: _monthOptions,
+                          onChanged: onMonthChanged,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DropdownFilter(
+                          value: selectedBusiness,
+                          items: _businessOptions,
+                          onChanged: onBusinessChanged,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  SizedBox(
+                    height: 38,
+                    width: 220,
+                    child: _SearchField(
+                      controller: searchCtrl,
+                      onChanged: onSearchChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedType,
+                      items: _typeOptions,
+                      onChanged: onTypeChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedMonth,
+                      items: _monthOptions,
+                      onChanged: onMonthChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusiness,
+                      items: _businessOptions,
+                      onChanged: onBusinessChanged,
+                    ),
+                  ),
+                ],
+              );
+      },
+    );
+  }
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.onChanged});
+
+  final TextEditingController controller;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: TextField(
+        controller: controller,
+        onChanged: onChanged,
+        style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+        decoration: const InputDecoration(
+          hintText: 'Search...',
+          hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: AppColors.textSubtle,
+            size: 18,
+          ),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+}
+
+class _DropdownFilter extends StatelessWidget {
+  const _DropdownFilter({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          isExpanded: true,
+          dropdownColor: AppColors.cardBackground,
+          iconEnabledColor: AppColors.textGray,
+          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+          items: items
+              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Messages Table ───────────────────────────────────────────────────────────
+
+class _MessagesTable extends StatelessWidget {
+  const _MessagesTable({required this.rows});
+
+  final List<Message> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: rows.isEmpty
+          ? Column(
+              children: [
+                const _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: Text(
+                      'No messages found.',
+                      style: TextStyle(color: AppColors.textGray),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                const _TableHeader(),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: rows.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.cardBorder, height: 1),
+                  itemBuilder: (_, i) => _MessageRow(message: rows[i]),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// ─── Table Header ─────────────────────────────────────────────────────────────
+
+class _TableHeader extends StatelessWidget {
+  const _TableHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // final isSmall = constraints.maxWidth < 700;
+        final isMedium = constraints.maxWidth < 900;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Row(
+            children: isMedium
+                ? [
+                    const Expanded(
+                      flex: 5,
+                      child: _HeaderCell('Type / Subject'),
+                    ),
+                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
+                    const Expanded(flex: 2, child: _HeaderCell('Date')),
+                  ]
+                : [
+                    const Expanded(flex: 3, child: _HeaderCell('Type')),
+                    const Expanded(flex: 6, child: _HeaderCell('Subject')),
+                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
+                    const Expanded(flex: 2, child: _HeaderCell('Date')),
+                    const Expanded(flex: 1, child: _HeaderCell('Action')),
+                  ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _HeaderCell extends StatelessWidget {
+  const _HeaderCell(this.label);
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: AppColors.textGray,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+// ─── Message Row ──────────────────────────────────────────────────────────────
+
+class _MessageRow extends StatelessWidget {
+  const _MessageRow({required this.message});
+
+  final Message message;
+
+  void _openMessage(BuildContext context, Message message) {
+    // Map MessageType enum → letter header string
+    final typeLabel = switch (message.type) {
+      MessageType.compliance => 'COMPLIANCE NOTICE',
+      MessageType.announcement => 'ANNOUNCEMENT',
+      MessageType.general => 'GENERAL NOTICE',
+    };
+
+    // Sample body per type — replace with real stored content when available
+    final body = switch (message.type) {
+      MessageType.compliance =>
+        'This is to inform you that your monthly report for '
+            '${message.date} is due. Please submit your report '
+            'before the 5th of the following month to avoid penalties.',
+      MessageType.announcement =>
+        'We are pleased to announce an upcoming event related to tourism '
+            'in San Pablo City. Please take note of the details and participate '
+            'accordingly.',
+      MessageType.general =>
+        'This is a general notice from the San Pablo City Office of Tourism. '
+            'Please review the information carefully and reach out if you have '
+            'any questions or concerns.',
+    };
+
+    showMessageViewDialog(
+      context,
+      MessageViewData(
+        subject: message.subject,
+        recipient: message.recipient,
+        date: message.date,
+        messageType: typeLabel,
+        messageContent: body,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMedium = constraints.maxWidth < 900;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: isMedium
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _TypeBadge(type: message.type),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            message.subject,
+                            style: const TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => _openMessage(context, message),
+                          child: const Icon(
+                            Icons.visibility_outlined,
+                            color: AppColors.textGray,
+                            size: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          message.recipient,
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          message.date,
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                )
+              : Row(
+                  spacing: 5,
+                  children: [
+                    Expanded(flex: 3, child: _TypeBadge(type: message.type)),
+                    Expanded(
+                      flex: 6,
+                      child: Text(
+                        message.subject,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 3,
+                      child: Text(
+                        message.recipient,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        message.date,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 1,
+                      child: GestureDetector(
+                        onTap: () => _openMessage(context, message),
+                        child: const Icon(
+                          Icons.visibility_outlined,
+                          color: AppColors.textGray,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Type Badge ───────────────────────────────────────────────────────────────
+
+class _TypeBadge extends StatelessWidget {
+  const _TypeBadge({required this.type});
+
+  final MessageType type;
+
+  static _BadgeStyle _styleFor(MessageType t) {
+    switch (t) {
+      case MessageType.compliance:
+        return const _BadgeStyle(
+          label: 'Compliance',
+          icon: '⚠️',
+          color: Color(0xFFFF4D6A),
+        );
+      case MessageType.announcement:
+        return const _BadgeStyle(
+          label: 'Announcement',
+          icon: '📣',
+          color: Color(0xFF9B8AFB),
+        );
+      case MessageType.general:
+        return const _BadgeStyle(
+          label: 'General',
+          icon: '💬',
+          color: Color(0xFF1A6FFF),
+        );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = _styleFor(type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: style.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: style.color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(style.icon, style: const TextStyle(fontSize: 11)),
+          const SizedBox(width: 5),
+          Text(
+            style.label,
+            style: TextStyle(
+              color: style.color,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeStyle {
+  const _BadgeStyle({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String icon;
+  final Color color;
+}
+

@@ -62,6 +62,7 @@ class SessionService {
   static final SessionService instance = SessionService._();
 
   // ── Save ──────────────────────────────────────────────────────────────────
+
   Future<void> save(SessionData data) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kUserId, data.userId);

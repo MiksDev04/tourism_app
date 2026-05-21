@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../api/messages_api.dart';
 
 // ─── Message View Data ────────────────────────────────────────────────────────
 
@@ -21,16 +22,13 @@ class MessageViewData {
 
 // ─── Show Helper ──────────────────────────────────────────────────────────────
 
-Future<void> showMessageViewDialog(
-  BuildContext context,
-  MessageViewData data,
-) {
+Future<void> showMessageViewDialog(BuildContext context, MessagesApi api, MessageViewData data) {
   return showDialog(
     context: context,
     // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.65),
     barrierDismissible: true,
-    builder: (_) => MessageViewDialog(data: data),
+    builder: (_) => MessageViewDialog(api: api, data: data),
   );
 }
 
@@ -39,11 +37,22 @@ Future<void> showMessageViewDialog(
 String _buildLetter(MessageViewData d) {
   final now = DateTime.now();
   const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   final dateStr = '${months[now.month - 1]} ${now.day}, ${now.year}';
-  final ref = 'MSG-${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}';
+  final ref =
+      'MSG-${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}';
 
   return '''REPUBLIC OF THE PHILIPPINES
 CITY OF SAN PABLO
@@ -78,10 +87,10 @@ Reference No.: $ref''';
 // ─── Main Dialog Widget ───────────────────────────────────────────────────────
 
 class MessageViewDialog extends StatefulWidget {
-  const MessageViewDialog({super.key, required this.data});
+  const MessageViewDialog({super.key, required this.api, required this.data});
 
+  final MessagesApi api;
   final MessageViewData data;
-
   @override
   State<MessageViewDialog> createState() => _MessageViewDialogState();
 }

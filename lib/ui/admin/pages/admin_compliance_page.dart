@@ -498,18 +498,12 @@ class _FilterRow extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedBusinessStatus,
-                      items: _businessStatusOptions,
-                      onChanged: onBusinessStatusChanged,
+                      value: selectedActivityStatus,
+                      items: _activityStatusOptions,
+                      onChanged: onActivityStatusChanged,
                     ),
                   ),
                 ],
-              ),
-              const SizedBox(height: 10),
-              _DropdownFilter(
-                value: selectedType,
-                items: typeOptions,
-                onChanged: onTypeChanged,
               ),
             ],
           );
@@ -530,14 +524,6 @@ class _FilterRow extends StatelessWidget {
                   value: selectedActivityStatus,
                   items: _activityStatusOptions,
                   onChanged: onActivityStatusChanged,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DropdownFilter(
-                  value: selectedBusinessStatus,
-                  items: _businessStatusOptions,
-                  onChanged: onBusinessStatusChanged,
                 ),
               ),
               const SizedBox(width: 10),
@@ -694,8 +680,7 @@ class _TableHeader extends StatelessWidget {
               children: [
                 Expanded(flex: 3, child: _HeaderCell('Business')),
                 Expanded(flex: 2, child: _HeaderCell('Type')),
-                Expanded(flex: 2, child: _HeaderCell('Biz Status')),
-                Expanded(flex: 3, child: _HeaderCell('Activity')),
+                Expanded(flex: 3, child: _HeaderCell('Activity Status')),
                 Expanded(flex: 2, child: _HeaderCell('Records')),
                 Expanded(flex: 2, child: _HeaderCell('Guests')),
                 Expanded(flex: 3, child: _HeaderCell('Last Activity')),
@@ -799,11 +784,7 @@ class _ComplianceRow extends StatelessWidget {
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: [
-                    _ActivityBadge(status: record.activityStatus),
-                    if (record.hasWarning)
-                      _BusinessStatusBadge(status: record.businessStatus),
-                  ],
+                  children: [_ActivityBadge(status: record.activityStatus)],
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -829,7 +810,7 @@ class _ComplianceRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                       formatLastActivity(record.lastActivity),
+                      formatLastActivity(record.lastActivity),
                       style: const TextStyle(
                         color: AppColors.textGray,
                         fontSize: 11,
@@ -865,13 +846,6 @@ class _ComplianceRow extends StatelessWidget {
                       color: AppColors.textGray,
                       fontSize: 12.5,
                     ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _BusinessStatusBadge(status: record.businessStatus),
                   ),
                 ),
                 Expanded(

@@ -1,48 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../api/messages_api.dart';
 import '../widgets/message_view_dialog.dart';
 import '../../shared/layouts/business_layout.dart';
-
-// ─── Models ───────────────────────────────────────────────────────────────────
-
-enum MessageType { general, compliance, announcement }
-
-class BizMessage {
-  BizMessage({
-    required this.subject,
-    required this.body,
-    required this.type,
-    required this.date,
-    this.isRead = false,
-  });
-
-  final String subject;
-  final String body;
-  final MessageType type;
-  final String date;
-  bool isRead;
-}
-
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-
-final _messages = [
-  BizMessage(
-    subject: 'System Update: New Report Features',
-    body:
-        'We have updated the tourism demographics system with new features including improved analytics, better report filtering, and enhanced data export options. Please explore the new features and provid...',
-    type: MessageType.general,
-    date: '2024-04-20',
-    isRead: false,
-  ),
-  BizMessage(
-    subject: 'Monthly Report Compliance Notice - March 2024',
-    body:
-        'This is to inform you that your monthly report for March 2024 is due. Please submit your report before the 5th of the following month to avoid penalties.',
-    type: MessageType.compliance,
-    date: '2024-04-01',
-    isRead: true,
-  ),
-];
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
@@ -58,24 +19,107 @@ class BusinessMessagesPage extends StatefulWidget {
 }
 
 class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
+  final _api = MessagesApi();
+
   _Filter _activeFilter = _Filter.all;
+  List<Message> _messages = [];
 
-  int get _unreadCount => _messages.where((m) => !m.isRead).length;
+  /// Tracks IDs that have been optimistically marked read in this session,
+  /// since Message.isRead is immutable (we can't mutate the model directly).
+  final Set<String> _locallyRead = {};
 
-  List<BizMessage> get _filtered => _messages.where((m) {
-    return switch (_activeFilter) {
-      _Filter.all => true,
-      _Filter.compliance => m.type == MessageType.compliance,
-      _Filter.announcement => m.type == MessageType.announcement,
-      _Filter.general => m.type == MessageType.general,
-    };
-  }).toList();
+  bool _isLoading = true;
+  String? _error;
+  String? _businessId;
 
-  // REPLACE _markAsRead with this:
-  void _openMessage(BizMessage msg) {
-    if (!msg.isRead) setState(() => msg.isRead = true);
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  // ── Data Loading ─────────────────────────────────────────────────────────────
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Resolve the businessId that belongs to the currently authenticated user.
+      _businessId ??= await _resolveBusinessId();
+
+      if (_businessId == null) {
+        setState(() {
+          _error = 'No business account found for this user.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final messages = await _api.fetchForBusiness(_businessId!);
+      if (mounted) {
+        setState(() {
+          _messages = messages;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load messages. Please try again.';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Looks up the `businesses.id` for the currently signed-in user.
+  Future<String?> _resolveBusinessId() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return null;
+
+    final data = await Supabase.instance.client
+        .from('businesses')
+        .select('id')
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+    return data?['id'] as String?;
+  }
+
+  // ── Computed ─────────────────────────────────────────────────────────────────
+
+  bool _isRead(Message msg) => msg.isRead || _locallyRead.contains(msg.id);
+
+  int get _unreadCount =>
+      _messages.where((m) => !_isRead(m)).length;
+
+  List<Message> get _filtered => _messages.where((m) {
+        return switch (_activeFilter) {
+          _Filter.all => true,
+          _Filter.compliance => m.messageType == MessageType.compliance,
+          _Filter.announcement => m.messageType == MessageType.announcement,
+          _Filter.general => m.messageType == MessageType.general,
+        };
+      }).toList();
+
+  // ── Actions ───────────────────────────────────────────────────────────────────
+
+  Future<void> _openMessage(Message msg) async {
+    // Optimistic update — mark read immediately in the UI.
+    if (!_isRead(msg)) {
+      setState(() => _locallyRead.add(msg.id));
+      // Fire-and-forget; errors are non-fatal for the UI.
+      _api.markAsRead(msg.id).catchError((_) {});
+    }
+
+    if (!mounted) return;
     showMessageViewDialog(context, msg);
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -86,39 +130,50 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 600;
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(isNarrow ? 16 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PageHeader(unreadCount: _unreadCount),
-                const SizedBox(height: 16),
-                _FilterTabBar(
-                  activeFilter: _activeFilter,
-                  onChanged: (f) => setState(() => _activeFilter = f),
-                ),
-                const SizedBox(height: 16),
-                _filtered.isEmpty
-                    ? _EmptyState()
-                    : Column(
-                        children: _filtered
-                            .map(
-                              (msg) => Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _MessageCard(
-                                  message: msg,
-                                  isNarrow: isNarrow,
-                                  onTap: () => _openMessage(msg),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-              ],
+          return RefreshIndicator(
+            color: AppColors.primaryCyan,
+            backgroundColor: AppColors.cardBackground,
+            onRefresh: _loadData,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.all(isNarrow ? 16 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PageHeader(unreadCount: _unreadCount),
+                  const SizedBox(height: 16),
+                  _FilterTabBar(
+                    activeFilter: _activeFilter,
+                    onChanged: (f) => setState(() => _activeFilter = f),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildBody(isNarrow),
+                ],
+              ),
             ),
           );
         },
       ),
+    );
+  }
+
+  Widget _buildBody(bool isNarrow) {
+    if (_isLoading) return const _LoadingState();
+    if (_error != null) return _ErrorState(message: _error!, onRetry: _loadData);
+    if (_filtered.isEmpty) return const _EmptyState();
+
+    return Column(
+      children: _filtered.map((msg) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _MessageCard(
+            message: msg,
+            isRead: _isRead(msg),
+            isNarrow: isNarrow,
+            onTap: () => _openMessage(msg),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -266,17 +321,21 @@ class _FilterChip extends StatelessWidget {
 class _MessageCard extends StatelessWidget {
   const _MessageCard({
     required this.message,
+    required this.isRead,
     required this.isNarrow,
     required this.onTap,
   });
 
-  final BizMessage message;
+  final Message message;
+
+  /// Derived outside the card (combines isRead + locallyRead).
+  final bool isRead;
   final bool isNarrow;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isUnread = !message.isRead;
+    final isUnread = !isRead;
 
     return GestureDetector(
       onTap: onTap,
@@ -304,7 +363,7 @@ class _MessageCard extends StatelessWidget {
 
 class _WideLayout extends StatelessWidget {
   const _WideLayout({required this.message, required this.isUnread});
-  final BizMessage message;
+  final Message message;
   final bool isUnread;
 
   @override
@@ -329,12 +388,16 @@ class _WideLayout extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    message.subject,
-                    style: TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 14,
-                      fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      message.subject,
+                      style: TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 14,
+                        fontWeight:
+                            isUnread ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (isUnread) ...[
@@ -352,7 +415,7 @@ class _WideLayout extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
-                message.body,
+                message.content,
                 style: const TextStyle(
                   color: AppColors.textGray,
                   fontSize: 12.5,
@@ -370,10 +433,10 @@ class _WideLayout extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            _TypeBadge(type: message.type),
+            _TypeBadge(type: message.messageType),
             const SizedBox(height: 6),
             Text(
-              message.date,
+              _formatDate(message.createdAt),
               style: const TextStyle(
                 color: AppColors.textSubtle,
                 fontSize: 11.5,
@@ -390,7 +453,7 @@ class _WideLayout extends StatelessWidget {
 
 class _NarrowLayout extends StatelessWidget {
   const _NarrowLayout({required this.message, required this.isUnread});
-  final BizMessage message;
+  final Message message;
   final bool isUnread;
 
   @override
@@ -407,10 +470,10 @@ class _NarrowLayout extends StatelessWidget {
               size: 18,
             ),
             const SizedBox(width: 8),
-            _TypeBadge(type: message.type),
+            _TypeBadge(type: message.messageType),
             const Spacer(),
             Text(
-              message.date,
+              _formatDate(message.createdAt),
               style: const TextStyle(
                 color: AppColors.textSubtle,
                 fontSize: 11.5,
@@ -449,7 +512,7 @@ class _NarrowLayout extends StatelessWidget {
 
         // Body
         Text(
-          message.body,
+          message.content,
           style: const TextStyle(
             color: AppColors.textGray,
             fontSize: 12.5,
@@ -517,9 +580,82 @@ class _BadgeStyle {
   final Color color;
 }
 
+// ─── Loading State ────────────────────────────────────────────────────────────
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 64),
+      child: Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primaryCyan,
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Error State ──────────────────────────────────────────────────────────────
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.accentRed.withOpacity(0.6),
+            size: 44,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            style: const TextStyle(color: AppColors.textSubtle, fontSize: 14),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: onRetry,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                ),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Retry',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -541,4 +677,14 @@ class _EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+// ─── Date Formatter ───────────────────────────────────────────────────────────
+
+/// Returns `yyyy-MM-dd` without any external date package.
+String _formatDate(DateTime dt) {
+  final y = dt.year.toString();
+  final m = dt.month.toString().padLeft(2, '0');
+  final d = dt.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
 }

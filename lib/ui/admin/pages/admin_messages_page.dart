@@ -1,77 +1,56 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../widgets/compose_message_modal.dart';
 import '../widgets/message_view_dialog.dart';
-import '../models/message_models.dart';
-
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-
-List<Message> _messages = [
-  const Message(
-    type: MessageType.compliance,
-    subject: 'Monthly Report Compliance Notice - March 2024',
-    recipient: 'Grand Hotel San Pablo',
-    date: '2024-04-01',
-  ),
-  const Message(
-    type: MessageType.announcement,
-    subject: 'Tourism Month Celebration - May 2024',
-    recipient: 'Sampaloc Lake Resort',
-    date: '2024-04-15',
-  ),
-  const Message(
-    type: MessageType.compliance,
-    subject: 'Second Notice: Missing Monthly Reports',
-    recipient: 'Paradise Resort & Spa',
-    date: '2024-04-10',
-  ),
-  const Message(
-    type: MessageType.general,
-    subject: 'System Update: New Report Features',
-    recipient: 'Grand Hotel San Pablo',
-    date: '2024-04-20',
-  ),
-  const Message(
-    type: MessageType.general,
-    subject: 'Data Collection Reminder',
-    recipient: 'Sampaloc Lake Resort',
-    date: '2024-03-25',
-  ),
-];
-
-const _typeOptions = ['All Types', 'Compliance', 'Announcement', 'General'];
-const _monthOptions = [
-  'All Months',
-  'April 2024',
-  'March 2024',
-  'February 2024',
-];
-const _businessOptions = [
-  'All Businesses',
-  'Grand Hotel San Pablo',
-  'Sampaloc Lake Resort',
-  'Paradise Resort & Spa',
-];
+import '../../../api/messages_api.dart';
 
 // ─── Admin Messages Page ──────────────────────────────────────────────────────
 
 class AdminMessagesPage extends StatefulWidget {
-  const AdminMessagesPage({super.key});
-
+  const AdminMessagesPage({super.key,});
+  
   @override
   State<AdminMessagesPage> createState() => _AdminMessagesPageState();
 }
 
 class _AdminMessagesPageState extends State<AdminMessagesPage> {
+
+  static final _api = MessagesApi();
+  static final senderId = SessionService.instance.current?.userId ?? '';
+  // ── Filters ────────────────────────────────────────────────────────────────
   String _searchQuery = '';
   String _selectedType = 'All Types';
-  String _selectedMonth = 'All Months';
-  String _selectedBusiness = 'All Businesses';
-
+  String _selectedStatus = 'All Statuses';
   final _searchCtrl = TextEditingController();
+
+  // ── Data ───────────────────────────────────────────────────────────────────
+  List<Message> _messages = [];
+  bool _loading = true;
+  String? _error;
+
+  static const _typeOptions = [
+    'All Types',
+    'Compliance',
+    'Announcement',
+    'General',
+  ];
+
+  static const _statusOptions = [
+    'All Statuses',
+    'Sent',
+    'Read',
+    'Archived',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
 
   @override
   void dispose() {
@@ -79,25 +58,63 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
     super.dispose();
   }
 
+  // ── Data Loader ────────────────────────────────────────────────────────────
+
+  Future<void> _loadMessages() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final msgs = await _api.fetchSentByAdmin(senderId);
+      if (mounted) setState(() => _messages = msgs);
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Failed to load messages.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // ── Filtering ──────────────────────────────────────────────────────────────
+
   List<Message> get _filtered {
     return _messages.where((m) {
       final q = _searchQuery.toLowerCase();
-      final matchesSearch =
-          q.isEmpty ||
+      final matchesSearch = q.isEmpty ||
           m.subject.toLowerCase().contains(q) ||
-          m.recipient.toLowerCase().contains(q);
+          (m.senderName?.toLowerCase().contains(q) ?? false);
 
-      final matchesType =
-          _selectedType == 'All Types' ||
-          m.type.name.toLowerCase() == _selectedType.toLowerCase();
+      final matchesType = _selectedType == 'All Types' ||
+          m.messageType.label == _selectedType;
 
-      final matchesBusiness =
-          _selectedBusiness == 'All Businesses' ||
-          m.recipient == _selectedBusiness;
+      final matchesStatus = _selectedStatus == 'All Statuses' ||
+          m.status.dbValue == _selectedStatus.toLowerCase();
 
-      return matchesSearch && matchesType && matchesBusiness;
+      return matchesSearch && matchesType && matchesStatus;
     }).toList();
   }
+
+  // ── Compose ────────────────────────────────────────────────────────────────
+
+  Future<void> _openCompose() async {
+    final sent = await showComposeMessageDialog(
+      context,
+      api: _api,
+      senderId: senderId,
+    );
+    if (sent == true && mounted) {
+      await _loadMessages();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message sent successfully'),
+          backgroundColor: AppColors.accentGreen,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -113,20 +130,40 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _PageHeader(),
+                // ── Header ─────────────────────────────────────────────────
+                _PageHeader(onCompose: _openCompose),
                 const SizedBox(height: 16),
+
+                // ── Filters ────────────────────────────────────────────────
                 _FilterRow(
                   searchCtrl: _searchCtrl,
-                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  onSearchChanged: (v) =>
+                      setState(() => _searchQuery = v),
                   selectedType: _selectedType,
-                  onTypeChanged: (v) => setState(() => _selectedType = v!),
-                  selectedMonth: _selectedMonth,
-                  onMonthChanged: (v) => setState(() => _selectedMonth = v!),
-                  selectedBusiness: _selectedBusiness,
-                  onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
+                  onTypeChanged: (v) =>
+                      setState(() => _selectedType = v!),
+                  selectedStatus: _selectedStatus,
+                  onStatusChanged: (v) =>
+                      setState(() => _selectedStatus = v!),
+                  typeOptions: _typeOptions,
+                  statusOptions: _statusOptions,
                 ),
                 const SizedBox(height: 14),
-                _MessagesTable(rows: _filtered),
+
+                // ── Table ──────────────────────────────────────────────────
+                if (_loading)
+                  _LoadingTable()
+                else if (_error != null)
+                  _ErrorTable(
+                    message: _error!,
+                    onRetry: _loadMessages,
+                  )
+                else
+                  _MessagesTable(
+                    rows: _filtered,
+                    api: _api,
+                    onRefresh: _loadMessages,
+                  ),
               ],
             ),
           );
@@ -139,7 +176,9 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader();
+  const _PageHeader({required this.onCompose});
+
+  final VoidCallback onCompose;
 
   @override
   Widget build(BuildContext context) {
@@ -173,87 +212,43 @@ class _PageHeader extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 16),
-            _ComposeButton(
-              onMessageSent: () {
-                (context
-                    .findAncestorStateOfType<_AdminMessagesPageState>()
-                    // ignore: invalid_use_of_protected_member
-                    ?.setState(() {}));
-
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Message sent successfully'),
-                    backgroundColor: AppColors.accentGreen,
-                    duration: Duration(seconds: 2),
+            GestureDetector(
+              onTap: onCompose,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
                   ),
-                );
-              },
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryBlue.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.send_rounded, color: Colors.white, size: 15),
+                    SizedBox(width: 7),
+                    Text(
+                      'Compose Message',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         );
       },
-    );
-  }
-}
-
-class _ComposeButton extends StatelessWidget {
-  const _ComposeButton({required this.onMessageSent});
-
-  final VoidCallback onMessageSent;
-
-  String _getCurrentDate() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        final draft = await showComposeMessageDialog(context);
-        if (draft != null && draft.isValid) {
-          final newMessage = Message(
-            type: draft.messageType!,
-            subject: draft.subject,
-            recipient: draft.sendToMode == SendToMode.all
-                ? 'All Businesses'
-                : draft.selectedBusiness!,
-            date: _getCurrentDate(),
-          );
-          _messages = [newMessage, ..._messages];
-          onMessageSent();
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          ),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryBlue.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.send_rounded, color: Colors.white, size: 15),
-            SizedBox(width: 7),
-            Text(
-              'Compose Message',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -266,20 +261,20 @@ class _FilterRow extends StatelessWidget {
     required this.onSearchChanged,
     required this.selectedType,
     required this.onTypeChanged,
-    required this.selectedMonth,
-    required this.onMonthChanged,
-    required this.selectedBusiness,
-    required this.onBusinessChanged,
+    required this.selectedStatus,
+    required this.onStatusChanged,
+    required this.typeOptions,
+    required this.statusOptions,
   });
 
   final TextEditingController searchCtrl;
   final ValueChanged<String> onSearchChanged;
   final String selectedType;
   final ValueChanged<String?> onTypeChanged;
-  final String selectedMonth;
-  final ValueChanged<String?> onMonthChanged;
-  final String selectedBusiness;
-  final ValueChanged<String?> onBusinessChanged;
+  final String selectedStatus;
+  final ValueChanged<String?> onStatusChanged;
+  final List<String> typeOptions;
+  final List<String> statusOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -289,42 +284,26 @@ class _FilterRow extends StatelessWidget {
         return isSmall
             ? Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: _SearchField(
-                          controller: searchCtrl,
-                          onChanged: onSearchChanged,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        flex: 3,
-                        child: _DropdownFilter(
-                          value: selectedType,
-                          items: _typeOptions,
-                          onChanged: onTypeChanged,
-                        ),
-                      ),
-                    ],
+                  _SearchField(
+                    controller: searchCtrl,
+                    onChanged: onSearchChanged,
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: _DropdownFilter(
-                          value: selectedMonth,
-                          items: _monthOptions,
-                          onChanged: onMonthChanged,
+                          value: selectedType,
+                          items: typeOptions,
+                          onChanged: onTypeChanged,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _DropdownFilter(
-                          value: selectedBusiness,
-                          items: _businessOptions,
-                          onChanged: onBusinessChanged,
+                          value: selectedStatus,
+                          items: statusOptions,
+                          onChanged: onStatusChanged,
                         ),
                       ),
                     ],
@@ -345,24 +324,16 @@ class _FilterRow extends StatelessWidget {
                   Expanded(
                     child: _DropdownFilter(
                       value: selectedType,
-                      items: _typeOptions,
+                      items: typeOptions,
                       onChanged: onTypeChanged,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedMonth,
-                      items: _monthOptions,
-                      onChanged: onMonthChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedBusiness,
-                      items: _businessOptions,
-                      onChanged: onBusinessChanged,
+                      value: selectedStatus,
+                      items: statusOptions,
+                      onChanged: onStatusChanged,
                     ),
                   ),
                 ],
@@ -391,7 +362,7 @@ class _SearchField extends StatelessWidget {
         onChanged: onChanged,
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
         decoration: const InputDecoration(
-          hintText: 'Search...',
+          hintText: 'Search subject or sender...',
           hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
           prefixIcon: Icon(
             Icons.search_rounded,
@@ -399,7 +370,8 @@ class _SearchField extends StatelessWidget {
             size: 18,
           ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           isDense: true,
         ),
       ),
@@ -434,7 +406,8 @@ class _DropdownFilter extends StatelessWidget {
           isExpanded: true,
           dropdownColor: AppColors.cardBackground,
           iconEnabledColor: AppColors.textGray,
-          style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+          style:
+              const TextStyle(color: AppColors.textGray, fontSize: 13),
           items: items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
@@ -445,12 +418,35 @@ class _DropdownFilter extends StatelessWidget {
   }
 }
 
-// ─── Messages Table ───────────────────────────────────────────────────────────
+// ─── Loading / Error States ───────────────────────────────────────────────────
 
-class _MessagesTable extends StatelessWidget {
-  const _MessagesTable({required this.rows});
+class _LoadingTable extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(48),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppColors.textGray,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-  final List<Message> rows;
+class _ErrorTable extends StatelessWidget {
+  const _ErrorTable({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -460,36 +456,98 @@ class _MessagesTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: rows.isEmpty
-          ? Column(
-              children: [
-                const _TableHeader(),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                const Center(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(48),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  color: Colors.redAccent, size: 28),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13.5),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: onRetry,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: const Text(
+                    'Retry',
+                    style: TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Messages Table ───────────────────────────────────────────────────────────
+
+class _MessagesTable extends StatelessWidget {
+  const _MessagesTable({
+    required this.rows,
+    required this.api,
+    required this.onRefresh,
+  });
+
+  final List<Message> rows;
+  final MessagesApi api;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        children: [
+          const _TableHeader(),
+          const Divider(color: AppColors.cardBorder, height: 1),
+          rows.isEmpty
+              ? const Center(
                   child: Padding(
-                    padding: EdgeInsets.all(32.0),
+                    padding: EdgeInsets.all(32),
                     child: Text(
                       'No messages found.',
                       style: TextStyle(color: AppColors.textGray),
                     ),
                   ),
-                ),
-              ],
-            )
-          : Column(
-              children: [
-                const _TableHeader(),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                ListView.separated(
+                )
+              : ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: rows.length,
-                  separatorBuilder: (_, _) =>
+                  separatorBuilder: (_, __) =>
                       const Divider(color: AppColors.cardBorder, height: 1),
-                  itemBuilder: (_, i) => _MessageRow(message: rows[i]),
+                  itemBuilder: (_, i) => _MessageRow(
+                    message: rows[i],
+                    api: api,
+                    onRefresh: onRefresh,
+                  ),
                 ),
-              ],
-            ),
+        ],
+      ),
     );
   }
 }
@@ -503,27 +561,24 @@ class _TableHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // final isSmall = constraints.maxWidth < 700;
         final isMedium = constraints.maxWidth < 900;
-
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
             children: isMedium
-                ? [
-                    const Expanded(
-                      flex: 5,
-                      child: _HeaderCell('Type / Subject'),
-                    ),
-                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
-                    const Expanded(flex: 2, child: _HeaderCell('Date')),
+                ? const [
+                    Expanded(
+                        flex: 5, child: _HeaderCell('Type / Subject')),
+                    Expanded(flex: 2, child: _HeaderCell('Status')),
+                    Expanded(flex: 2, child: _HeaderCell('Date')),
                   ]
-                : [
-                    const Expanded(flex: 3, child: _HeaderCell('Type')),
-                    const Expanded(flex: 6, child: _HeaderCell('Subject')),
-                    const Expanded(flex: 3, child: _HeaderCell('Recipient')),
-                    const Expanded(flex: 2, child: _HeaderCell('Date')),
-                    const Expanded(flex: 1, child: _HeaderCell('Action')),
+                : const [
+                    Expanded(flex: 3, child: _HeaderCell('Type')),
+                    Expanded(flex: 5, child: _HeaderCell('Subject')),
+                    Expanded(flex: 3, child: _HeaderCell('Sent At')),
+                    Expanded(flex: 2, child: _HeaderCell('Status')),
+                    Expanded(flex: 1, child: _HeaderCell('Action')),
                   ],
           ),
         );
@@ -552,54 +607,58 @@ class _HeaderCell extends StatelessWidget {
 // ─── Message Row ──────────────────────────────────────────────────────────────
 
 class _MessageRow extends StatelessWidget {
-  const _MessageRow({required this.message});
+  const _MessageRow({
+    required this.message,
+    required this.api,
+    required this.onRefresh,
+  });
 
   final Message message;
+  final MessagesApi api;
+  final VoidCallback onRefresh;
+  
+  String _formatDate(DateTime dt) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+  }
 
-  void _openMessage(BuildContext context, Message message) {
-    // Map MessageType enum → letter header string
-    final typeLabel = switch (message.type) {
+  Future<void> _openMessage(BuildContext context) async {
+    final typeLabel = switch (message.messageType) {
       MessageType.compliance => 'COMPLIANCE NOTICE',
       MessageType.announcement => 'ANNOUNCEMENT',
       MessageType.general => 'GENERAL NOTICE',
     };
 
-    // Sample body per type — replace with real stored content when available
-    final body = switch (message.type) {
-      MessageType.compliance =>
-        'This is to inform you that your monthly report for '
-            '${message.date} is due. Please submit your report '
-            'before the 5th of the following month to avoid penalties.',
-      MessageType.announcement =>
-        'We are pleased to announce an upcoming event related to tourism '
-            'in San Pablo City. Please take note of the details and participate '
-            'accordingly.',
-      MessageType.general =>
-        'This is a general notice from the San Pablo City Office of Tourism. '
-            'Please review the information carefully and reach out if you have '
-            'any questions or concerns.',
-    };
+    final recipientName =
+        await api.fetchReceiverName(message.businessId) ?? message.businessId;
 
     showMessageViewDialog(
       context,
+      api,
       MessageViewData(
         subject: message.subject,
-        recipient: message.recipient,
-        date: message.date,
+        recipient: recipientName,
+        date: _formatDate(message.createdAt),
         messageType: typeLabel,
-        messageContent: body,
+        messageContent: message.content,
       ),
     );
   }
 
   @override
+
   Widget build(BuildContext context) {
+    final dateStr = _formatDate(message.createdAt);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMedium = constraints.maxWidth < 900;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: isMedium
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -607,7 +666,7 @@ class _MessageRow extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _TypeBadge(type: message.type),
+                        _TypeBadge(type: message.messageType),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -620,7 +679,7 @@ class _MessageRow extends StatelessWidget {
                           ),
                         ),
                         GestureDetector(
-                          onTap: () => _openMessage(context, message),
+                          onTap: () => _openMessage(context),
                           child: const Icon(
                             Icons.visibility_outlined,
                             color: AppColors.textGray,
@@ -632,16 +691,10 @@ class _MessageRow extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
-                          message.recipient,
-                          style: const TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 13,
-                          ),
-                        ),
+                        _StatusBadge(status: message.status),
                         const Spacer(),
                         Text(
-                          message.date,
+                          dateStr,
                           style: const TextStyle(
                             color: AppColors.textGray,
                             fontSize: 13,
@@ -652,11 +705,12 @@ class _MessageRow extends StatelessWidget {
                   ],
                 )
               : Row(
-                  spacing: 5,
                   children: [
-                    Expanded(flex: 3, child: _TypeBadge(type: message.type)),
                     Expanded(
-                      flex: 6,
+                        flex: 3,
+                        child: _TypeBadge(type: message.messageType)),
+                    Expanded(
+                      flex: 5,
                       child: Text(
                         message.subject,
                         style: const TextStyle(
@@ -664,12 +718,13 @@ class _MessageRow extends StatelessWidget {
                           fontSize: 13.5,
                           fontWeight: FontWeight.w500,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Expanded(
                       flex: 3,
                       child: Text(
-                        message.recipient,
+                        dateStr,
                         style: const TextStyle(
                           color: AppColors.textGray,
                           fontSize: 13,
@@ -677,19 +732,12 @@ class _MessageRow extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      flex: 2,
-                      child: Text(
-                        message.date,
-                        style: const TextStyle(
-                          color: AppColors.textGray,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
+                        flex: 2,
+                        child: _StatusBadge(status: message.status)),
                     Expanded(
                       flex: 1,
                       child: GestureDetector(
-                        onTap: () => _openMessage(context, message),
+                        onTap: () => _openMessage(context),
                         child: const Icon(
                           Icons.visibility_outlined,
                           color: AppColors.textGray,
@@ -712,48 +760,41 @@ class _TypeBadge extends StatelessWidget {
 
   final MessageType type;
 
-  static _BadgeStyle _styleFor(MessageType t) {
-    switch (t) {
-      case MessageType.compliance:
-        return const _BadgeStyle(
-          label: 'Compliance',
-          icon: '⚠️',
-          color: Color(0xFFFF4D6A),
-        );
-      case MessageType.announcement:
-        return const _BadgeStyle(
-          label: 'Announcement',
-          icon: '📣',
-          color: Color(0xFF9B8AFB),
-        );
-      case MessageType.general:
-        return const _BadgeStyle(
-          label: 'General',
-          icon: '💬',
-          color: Color(0xFF1A6FFF),
-        );
-    }
-  }
+  static ({String icon, Color color}) _styleFor(MessageType t) =>
+      switch (t) {
+        MessageType.compliance => (
+            icon: '⚠️',
+            color: const Color(0xFFFF4D6A),
+          ),
+        MessageType.announcement => (
+            icon: '📣',
+            color: const Color(0xFF9B8AFB),
+          ),
+        MessageType.general => (
+            icon: '💬',
+            color: const Color(0xFF1A6FFF),
+          ),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final style = _styleFor(type);
+    final s = _styleFor(type);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: style.color.withOpacity(0.12),
+        color: s.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: style.color.withOpacity(0.3)),
+        border: Border.all(color: s.color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(style.icon, style: const TextStyle(fontSize: 11)),
+          Text(s.icon, style: const TextStyle(fontSize: 11)),
           const SizedBox(width: 5),
           Text(
-            style.label,
+            type.label,
             style: TextStyle(
-              color: style.color,
+              color: s.color,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
             ),
@@ -764,14 +805,58 @@ class _TypeBadge extends StatelessWidget {
   }
 }
 
-class _BadgeStyle {
-  const _BadgeStyle({
-    required this.label,
-    required this.icon,
-    required this.color,
-  });
+// ─── Status Badge ─────────────────────────────────────────────────────────────
 
-  final String label;
-  final String icon;
-  final Color color;
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+
+  final MessageStatus status;
+
+  static ({String label, Color color, IconData icon}) _styleFor(
+          MessageStatus s) =>
+      switch (s) {
+        MessageStatus.sent => (
+            label: 'Sent',
+            color: const Color(0xFF1A6FFF),
+            icon: Icons.send_rounded,
+          ),
+        MessageStatus.read => (
+            label: 'Read',
+            color: const Color(0xFF22C55E),
+            icon: Icons.done_all_rounded,
+          ),
+        MessageStatus.archived => (
+            label: 'Archived',
+            color: AppColors.textGray,
+            icon: Icons.archive_outlined,
+          ),
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _styleFor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: s.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: s.color.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(s.icon, size: 11, color: s.color),
+          const SizedBox(width: 4),
+          Text(
+            s.label,
+            style: TextStyle(
+              color: s.color,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
