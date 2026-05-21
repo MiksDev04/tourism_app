@@ -16,6 +16,7 @@ String _displayCountry(GuestBreakdownEntry b) {
 
 String _derivedCategoryLabel(GuestBreakdownEntry b) {
   if (b.isOverseas) return 'Overseas Fil.';
+  if (b.country == 'Others') return 'Unspecified';
   if (b.country == 'Philippines') {
     return 'PH Resident';
   }
@@ -25,6 +26,7 @@ String _derivedCategoryLabel(GuestBreakdownEntry b) {
 
 Color _derivedCategoryColor(GuestBreakdownEntry b) {
   if (b.isOverseas) return const Color(0xFF3B82F6);
+  if (b.country == 'Others') return const Color(0xFF6B7280);
   if (b.country == 'Philippines') {
     return const Color(0xFF10B981);
   }

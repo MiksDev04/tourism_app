@@ -205,6 +205,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     'USA',
     'Venezuela',
     'Vietnam',
+    'Others',
   ];
 
   static const _phRegions = [
@@ -1457,7 +1458,7 @@ class _DemoEntryRow extends StatelessWidget {
                     ),
                     activeColor: const Color(0xFF3B82F6),
                     side: const BorderSide(
-                      color: Color(0xFF6B7280),
+                      color: AppColors.textGray,
                       width: 1.4,
                     ),
                     visualDensity: VisualDensity.compact,
@@ -1610,6 +1611,7 @@ class _DemoEntryRow extends StatelessWidget {
                   ),
                 ),
                 activeColor: const Color(0xFF3B82F6),
+                side: const BorderSide(color: AppColors.textGray, width: 1.4),
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),

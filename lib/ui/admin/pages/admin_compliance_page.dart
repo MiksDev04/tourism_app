@@ -3,93 +3,19 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
-import '../widgets/compliance_message_dialog.dart';
+import '../../../api/admin_compliance_api.dart';
 
-// ─── Models ───────────────────────────────────────────────────────────────────
+// ─── Filter Options ───────────────────────────────────────────────────────────
 
-enum ComplianceStatus { compliant, nonCompliant }
-
-class ComplianceRecord {
-  const ComplianceRecord({
-    required this.business,
-    required this.period,
-    required this.status,
-    this.warnings,
-    this.lastNotice,
-    required this.notes,
-  });
-
-  final String business;
-  final String period;
-  final ComplianceStatus status;
-  final int? warnings; // null = show dash
-  final String? lastNotice; // null = show dash
-  final String notes;
-}
-
-// ─── Sample Data ──────────────────────────────────────────────────────────────
-
-const _records = [
-  ComplianceRecord(
-    business: 'Grand Hotel San Pablo',
-    period: 'April 2024',
-    status: ComplianceStatus.compliant,
-    warnings: null,
-    lastNotice: null,
-    notes: 'Report submitted on time.',
-  ),
-  ComplianceRecord(
-    business: 'Sampaloc Lake Resort',
-    period: 'April 2024',
-    status: ComplianceStatus.compliant,
-    warnings: null,
-    lastNotice: null,
-    notes: 'Report submitted on time.',
-  ),
-  ComplianceRecord(
-    business: 'Paradise Resort & Spa',
-    period: 'April 2024',
-    status: ComplianceStatus.nonCompliant,
-    warnings: 3,
-    lastNotice: '2024-04-10',
-    notes: 'Three consecutive months of non-compliance. Second notice s...',
-  ),
-  ComplianceRecord(
-    business: 'Lakeview Boutique Hotel',
-    period: 'April 2024',
-    status: ComplianceStatus.nonCompliant,
-    warnings: 1,
-    lastNotice: '2024-05-01',
-    notes: 'First notice sent. Business is newly registered.',
-  ),
+const _activityStatusOptions = [
+  'All Statuses',
+  'Active',
+  'Low Activity',
+  'Inactive',
+  'No Activity',
 ];
 
-// Fixed: Month options without years
-const _monthOptions = [
-  'All Months',
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-const _yearOptions = ['All Years', '2024', '2023'];
-const _businessOptions = [
-  'All Businesses',
-  'Grand Hotel San Pablo',
-  'Sampaloc Lake Resort',
-  'Paradise Resort & Spa',
-  'Lakeview Boutique Hotel',
-];
-const _statusOptions = ['All Statuses', 'Compliant', 'Non-Compliant'];
+const _businessStatusOptions = ['All Business Statuses', 'Approved', 'Warning'];
 
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
 
@@ -101,13 +27,27 @@ class AdminCompliancePage extends StatefulWidget {
 }
 
 class _AdminCompliancePageState extends State<AdminCompliancePage> {
+  // ── State ──────────────────────────────────────────────────────────────────
+  List<BusinessActivityRecord> _allRecords = [];
+  bool _isLoading = true;
+  String? _error;
+
   String _searchQuery = '';
-  String _selectedMonth = 'All Months';
-  String _selectedYear = 'All Years';
-  String _selectedBusiness = 'All Businesses';
-  String _selectedStatus = 'All Statuses';
+  String _selectedActivityStatus = 'All Statuses';
+  String _selectedBusinessStatus = 'All Business Statuses';
+  String _selectedType = 'All Types';
+
+  int _currentPage = 0;
+  static const int _pageSize = 10;
 
   final _searchCtrl = TextEditingController();
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -115,61 +55,107 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
     super.dispose();
   }
 
-  int get _compliantCount =>
-      _records.where((r) => r.status == ComplianceStatus.compliant).length;
-
-  int get _nonCompliantCount =>
-      _records.where((r) => r.status == ComplianceStatus.nonCompliant).length;
-
-  int get _warningCount => _records.where((r) => r.warnings != null).length;
-
-  // Helper function to extract month from period string (e.g., "April 2024" -> "April")
-  String _extractMonth(String period) {
-    return period.split(' ')[0];
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final records = await AdminComplianceApi.fetchActivitySummary();
+      if (mounted) {
+        setState(() {
+          _allRecords = records;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _isLoading = false;
+        });
+      }
+    }
   }
 
-  // Helper function to extract year from period string (e.g., "April 2024" -> "2024")
-  String _extractYear(String period) {
-    return period.split(' ')[1];
+  // ── Derived type options (dynamic from data) ───────────────────────────────
+  List<String> get _typeOptions {
+    final types = _allRecords.map((r) => r.businessType).toSet().toList()
+      ..sort();
+    return ['All Types', ...types];
   }
 
-  List<ComplianceRecord> get _filtered {
-    return _records.where((r) {
-      // Search filter
+  // ── Summary counts ─────────────────────────────────────────────────────────
+  int get _activeCount => _allRecords
+      .where((r) => r.activityStatus == ActivityStatus.active)
+      .length;
+
+  int get _atRiskCount => _allRecords
+      .where((r) => r.activityStatus == ActivityStatus.lowActivity)
+      .length;
+
+  int get _inactiveCount => _allRecords
+      .where(
+        (r) =>
+            r.activityStatus == ActivityStatus.inactive ||
+            r.activityStatus == ActivityStatus.noActivity,
+      )
+      .length;
+
+  // ── Filtered list ──────────────────────────────────────────────────────────
+  List<BusinessActivityRecord> get _filtered {
+    return _allRecords.where((r) {
       final q = _searchQuery.toLowerCase();
-      final matchesSearch = q.isEmpty || r.business.toLowerCase().contains(q);
+      if (q.isNotEmpty && !r.businessName.toLowerCase().contains(q)) {
+        return false;
+      }
 
-      // Business filter
-      final matchesBusiness =
-          _selectedBusiness == 'All Businesses' ||
-          r.business == _selectedBusiness;
+      if (_selectedType != 'All Types' && r.businessType != _selectedType) {
+        return false;
+      }
 
-      // Status filter
-      final matchesStatus =
-          _selectedStatus == 'All Statuses' ||
-          (_selectedStatus == 'Compliant' &&
-              r.status == ComplianceStatus.compliant) ||
-          (_selectedStatus == 'Non-Compliant' &&
-              r.status == ComplianceStatus.nonCompliant);
+      if (_selectedBusinessStatus != 'All Business Statuses') {
+        final want = _selectedBusinessStatus == 'Warning'
+            ? BusinessStatusLevel.warning
+            : BusinessStatusLevel.approved;
+        if (r.businessStatus != want) return false;
+      }
 
-      // Month filter (extract month from period, compare with selected month)
-      final recordMonth = _extractMonth(r.period);
-      final matchesMonth =
-          _selectedMonth == 'All Months' || recordMonth == _selectedMonth;
+      if (_selectedActivityStatus != 'All Statuses') {
+        final target = _activityStatusFromLabel(_selectedActivityStatus);
+        if (r.activityStatus != target) return false;
+      }
 
-      // Year filter (extract year from period, compare with selected year)
-      final recordYear = _extractYear(r.period);
-      final matchesYear =
-          _selectedYear == 'All Years' || recordYear == _selectedYear;
-
-      return matchesSearch &&
-          matchesBusiness &&
-          matchesStatus &&
-          matchesMonth &&
-          matchesYear;
+      return true;
     }).toList();
   }
 
+  // ── Pagination ─────────────────────────────────────────────────────────────
+  int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
+
+  List<BusinessActivityRecord> get _pagedRows {
+    final start = _currentPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filtered.length);
+    return _filtered.sublist(start, end);
+  }
+
+  void _resetPage() => _currentPage = 0;
+
+  ActivityStatus _activityStatusFromLabel(String label) {
+    switch (label) {
+      case 'Active':
+        return ActivityStatus.active;
+      case 'Low Activity':
+        return ActivityStatus.lowActivity;
+      case 'Inactive':
+        return ActivityStatus.inactive;
+      case 'No Activity':
+      default:
+        return ActivityStatus.noActivity;
+    }
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
@@ -184,28 +170,53 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _PageHeader(),
+                _PageHeader(onRefresh: _load),
                 const SizedBox(height: 20),
-                _SummaryCards(
-                  compliant: _compliantCount,
-                  nonCompliant: _nonCompliantCount,
-                  warning: _warningCount,
-                ),
-                const SizedBox(height: 16),
-                _FilterRow(
-                  searchCtrl: _searchCtrl,
-                  onSearchChanged: (v) => setState(() => _searchQuery = v),
-                  selectedMonth: _selectedMonth,
-                  onMonthChanged: (v) => setState(() => _selectedMonth = v!),
-                  selectedYear: _selectedYear,
-                  onYearChanged: (v) => setState(() => _selectedYear = v!),
-                  selectedBusiness: _selectedBusiness,
-                  onBusinessChanged: (v) => setState(() => _selectedBusiness = v!),
-                  selectedStatus: _selectedStatus,
-                  onStatusChanged: (v) => setState(() => _selectedStatus = v!),
-                ),
-                const SizedBox(height: 14),
-                _ComplianceTable(rows: _filtered),
+                if (_isLoading)
+                  _LoadingState()
+                else if (_error != null)
+                  _ErrorState(message: _error!, onRetry: _load)
+                else ...[
+                  _SummaryCards(
+                    active: _activeCount,
+                    atRisk: _atRiskCount,
+                    inactive: _inactiveCount,
+                  ),
+                  const SizedBox(height: 16),
+                  _FilterRow(
+                    searchCtrl: _searchCtrl,
+                    onSearchChanged: (v) => setState(() {
+                      _searchQuery = v;
+                      _resetPage();
+                    }),
+                    selectedActivityStatus: _selectedActivityStatus,
+                    onActivityStatusChanged: (v) => setState(() {
+                      _selectedActivityStatus = v!;
+                      _resetPage();
+                    }),
+                    selectedBusinessStatus: _selectedBusinessStatus,
+                    onBusinessStatusChanged: (v) => setState(() {
+                      _selectedBusinessStatus = v!;
+                      _resetPage();
+                    }),
+                    selectedType: _selectedType,
+                    typeOptions: _typeOptions,
+                    onTypeChanged: (v) => setState(() {
+                      _selectedType = v!;
+                      _resetPage();
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  _ComplianceTable(rows: _pagedRows),
+                  const SizedBox(height: 12),
+                  _Paginator(
+                    currentPage: _currentPage,
+                    totalPages: _totalPages,
+                    totalItems: _filtered.length,
+                    pageSize: _pageSize,
+                    onPageChanged: (p) => setState(() => _currentPage = p),
+                  ),
+                ],
               ],
             ),
           );
@@ -218,27 +229,116 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader();
+  const _PageHeader({required this.onRefresh});
+
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Compliance Tracker',
-          style: TextStyle(
-            color: AppColors.textWhite,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Compliance Tracker',
+                style: TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Monitor guest recording activity of registered establishments',
+                style: TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
+            ],
           ),
         ),
-        SizedBox(height: 4),
-        Text(
-          'Monitor monthly report submission compliance of establishments',
-          style: TextStyle(color: AppColors.textGray, fontSize: 13),
+        const SizedBox(width: 12),
+        IconButton(
+          onPressed: onRefresh,
+          icon: const Icon(Icons.refresh_rounded, size: 20),
+          color: AppColors.textGray,
+          tooltip: 'Refresh',
+          style: IconButton.styleFrom(
+            backgroundColor: AppColors.cardBackground,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: AppColors.cardBorder),
+            ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+// ─── Loading / Error States ───────────────────────────────────────────────────
+
+class _LoadingState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      height: 200,
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: AppColors.accentGreen,
+        ),
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.accentRed.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.accentRed.withOpacity(0.25)),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.accentRed,
+            size: 28,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Failed to load compliance data',
+            style: const TextStyle(
+              color: AppColors.textWhite,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 14),
+          TextButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.accentGreen),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -247,55 +347,49 @@ class _PageHeader extends StatelessWidget {
 
 class _SummaryCards extends StatelessWidget {
   const _SummaryCards({
-    required this.compliant,
-    required this.nonCompliant,
-    required this.warning,
+    required this.active,
+    required this.atRisk,
+    required this.inactive,
   });
 
-  final int compliant;
-  final int nonCompliant;
-  final int warning;
+  final int active;
+  final int atRisk;
+  final int inactive;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Mobile: Stack vertically
-
-        return Row(
-          children: [
-            Expanded(
-              child: _SummaryCard(
-                icon: Icons.check_circle_outline_rounded,
-                iconColor: AppColors.accentGreen,
-                borderColor: AppColors.accentGreen,
-                value: '$compliant',
-                label: 'Compliant',
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _SummaryCard(
-                icon: Icons.cancel_outlined,
-                iconColor: AppColors.accentRed,
-                borderColor: AppColors.accentRed,
-                value: '$nonCompliant',
-                label: 'Non-Compliant',
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _SummaryCard(
-                icon: Icons.warning_amber_rounded,
-                iconColor: AppColors.accentOrange,
-                borderColor: AppColors.accentOrange,
-                value: '$warning',
-                label: 'Warning',
-              ),
-            ),
-          ],
-        );
-      },
+    return Row(
+      children: [
+        Expanded(
+          child: _SummaryCard(
+            icon: Icons.check_circle_outline_rounded,
+            iconColor: AppColors.accentGreen,
+            borderColor: AppColors.accentGreen,
+            value: '$active',
+            label: 'Active',
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _SummaryCard(
+            icon: Icons.warning_amber_rounded,
+            iconColor: AppColors.accentOrange,
+            borderColor: AppColors.accentOrange,
+            value: '$atRisk',
+            label: 'Low Activity',
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _SummaryCard(
+            icon: Icons.cancel_outlined,
+            iconColor: AppColors.accentRed,
+            borderColor: AppColors.accentRed,
+            value: '$inactive',
+            label: 'Inactive',
+          ),
+        ),
+      ],
     );
   }
 }
@@ -319,29 +413,38 @@ class _SummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: iconColor.withOpacity(0.06),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor.withOpacity(0.25)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Icon(icon, color: iconColor, size: 22),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 30,
-              fontWeight: FontWeight.w700,
+          Icon(icon, color: iconColor, size: 16),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 13),
           ),
         ],
       ),
@@ -355,136 +458,62 @@ class _FilterRow extends StatelessWidget {
   const _FilterRow({
     required this.searchCtrl,
     required this.onSearchChanged,
-    required this.selectedMonth,
-    required this.onMonthChanged,
-    required this.selectedYear,
-    required this.onYearChanged,
-    required this.selectedBusiness,
-    required this.onBusinessChanged,
-    required this.selectedStatus,
-    required this.onStatusChanged,
+    required this.selectedActivityStatus,
+    required this.onActivityStatusChanged,
+    required this.selectedBusinessStatus,
+    required this.onBusinessStatusChanged,
+    required this.selectedType,
+    required this.typeOptions,
+    required this.onTypeChanged,
   });
 
   final TextEditingController searchCtrl;
   final ValueChanged<String> onSearchChanged;
-  final String selectedMonth;
-  final ValueChanged<String?> onMonthChanged;
-  final String selectedYear;
-  final ValueChanged<String?> onYearChanged;
-  final String selectedBusiness;
-  final ValueChanged<String?> onBusinessChanged;
-  final String selectedStatus;
-  final ValueChanged<String?> onStatusChanged;
+  final String selectedActivityStatus;
+  final ValueChanged<String?> onActivityStatusChanged;
+  final String selectedBusinessStatus;
+  final ValueChanged<String?> onBusinessStatusChanged;
+  final String selectedType;
+  final List<String> typeOptions;
+  final ValueChanged<String?> onTypeChanged;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 600) {
-          // Mobile: Wrap filters vertically
           return Column(
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _SearchField(
-                      controller: searchCtrl,
-                      onChanged: onSearchChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedMonth,
-                      items: _monthOptions,
-                      onChanged: onMonthChanged,
-                    ),
-                  ),
-                ],
-              ),
+              _SearchField(controller: searchCtrl, onChanged: onSearchChanged),
               const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedYear,
-                      items: _yearOptions,
-                      onChanged: onYearChanged,
+                      value: selectedActivityStatus,
+                      items: _activityStatusOptions,
+                      onChanged: onActivityStatusChanged,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedBusiness,
-                      items: _businessOptions,
-                      onChanged: onBusinessChanged,
+                      value: selectedBusinessStatus,
+                      items: _businessStatusOptions,
+                      onChanged: onBusinessStatusChanged,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               _DropdownFilter(
-                value: selectedStatus,
-                items: _statusOptions,
-                onChanged: onStatusChanged,
-              ),
-            ],
-          );
-        } else if (constraints.maxWidth < 1000) {
-          // Tablet: Two rows
-          return Column(
-            children: [
-              Row(
-                children: [
-                  SizedBox(
-                    width: 200,
-                    child: _SearchField(
-                      controller: searchCtrl,
-                      onChanged: onSearchChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedMonth,
-                      items: _monthOptions,
-                      onChanged: onMonthChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedYear,
-                      items: _yearOptions,
-                      onChanged: onYearChanged,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedBusiness,
-                      items: _businessOptions,
-                      onChanged: onBusinessChanged,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _DropdownFilter(
-                      value: selectedStatus,
-                      items: _statusOptions,
-                      onChanged: onStatusChanged,
-                    ),
-                  ),
-                ],
+                value: selectedType,
+                items: typeOptions,
+                onChanged: onTypeChanged,
               ),
             ],
           );
         } else {
-          // Desktop: Full row
           return Row(
             children: [
               SizedBox(
@@ -498,33 +527,25 @@ class _FilterRow extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _DropdownFilter(
-                  value: selectedMonth,
-                  items: _monthOptions,
-                  onChanged: onMonthChanged,
+                  value: selectedActivityStatus,
+                  items: _activityStatusOptions,
+                  onChanged: onActivityStatusChanged,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _DropdownFilter(
-                  value: selectedYear,
-                  items: _yearOptions,
-                  onChanged: onYearChanged,
+                  value: selectedBusinessStatus,
+                  items: _businessStatusOptions,
+                  onChanged: onBusinessStatusChanged,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _DropdownFilter(
-                  value: selectedBusiness,
-                  items: _businessOptions,
-                  onChanged: onBusinessChanged,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DropdownFilter(
-                  value: selectedStatus,
-                  items: _statusOptions,
-                  onChanged: onStatusChanged,
+                  value: selectedType,
+                  items: typeOptions,
+                  onChanged: onTypeChanged,
                 ),
               ),
             ],
@@ -554,7 +575,7 @@ class _SearchField extends StatelessWidget {
         onChanged: onChanged,
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
         decoration: const InputDecoration(
-          hintText: 'Search...',
+          hintText: 'Search business...',
           hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
           prefixIcon: Icon(
             Icons.search_rounded,
@@ -613,7 +634,7 @@ class _DropdownFilter extends StatelessWidget {
 class _ComplianceTable extends StatelessWidget {
   const _ComplianceTable({required this.rows});
 
-  final List<ComplianceRecord> rows;
+  final List<BusinessActivityRecord> rows;
 
   @override
   Widget build(BuildContext context) {
@@ -623,87 +644,61 @@ class _ComplianceTable extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: AppColors.cardBorder),
       ),
-      child: rows.isEmpty
-          ? Column(
-              children: [
-                _TableHeader(),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text(
-                      'No records found.',
-                      style: TextStyle(color: AppColors.textGray),
-                    ),
-                  ),
-                ),
-              ],
+      child: Column(
+        children: [
+          const _TableHeader(),
+          const Divider(color: AppColors.cardBorder, height: 1),
+          if (rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32.0),
+              child: Text(
+                'No records found.',
+                style: TextStyle(color: AppColors.textGray),
+              ),
             )
-          : Column(
-              children: [
-                _TableHeader(),
-                const Divider(color: AppColors.cardBorder, height: 1),
-                ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: rows.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(color: AppColors.cardBorder, height: 1),
-                  itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
-                ),
-              ],
+          else
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: rows.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(color: AppColors.cardBorder, height: 1),
+              itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
             ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Table Header (Responsive columns) ────────────────────────────────────────
+// ─── Table Header ─────────────────────────────────────────────────────────────
 
 class _TableHeader extends StatelessWidget {
+  const _TableHeader();
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // In _TableHeader, replace the mobile branch (constraints.maxWidth < 700)
         if (constraints.maxWidth < 900) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
-              children: [
-                Expanded(child: _HeaderCell('Business / Details')),
-                SizedBox(width: 28), // aligns with the eye icon
-              ],
-            ),
-          );
-        } else if (constraints.maxWidth < 1000) {
-          // Small tablet: Show all columns except maybe one
-          return const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              spacing: 5, 
-              children: [
-                Expanded(flex: 2, child: _HeaderCell('Business')),
-                Expanded(flex: 1, child: _HeaderCell('Period')),
-                Expanded(flex: 2, child: _HeaderCell('Status')),
-                Expanded(flex: 1, child: _HeaderCell('Warnings')),
-                Expanded(flex: 3, child: _HeaderCell('Notes')),
-                Expanded(flex: 1, child: _HeaderCell('')),
-              ],
+              children: [Expanded(child: _HeaderCell('Business / Details'))],
             ),
           );
         } else {
-          // Desktop: Full header
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             child: Row(
               children: [
                 Expanded(flex: 3, child: _HeaderCell('Business')),
-                Expanded(flex: 2, child: _HeaderCell('Period')),
-                Expanded(flex: 3, child: _HeaderCell('Status')),
-                Expanded(flex: 2, child: _HeaderCell('Warnings')),
-                Expanded(flex: 3, child: _HeaderCell('Last Notice')),
-                Expanded(flex: 5, child: _HeaderCell('Notes')),
-                Expanded(flex: 1, child: _HeaderCell('History')),
+                Expanded(flex: 2, child: _HeaderCell('Type')),
+                Expanded(flex: 2, child: _HeaderCell('Biz Status')),
+                Expanded(flex: 3, child: _HeaderCell('Activity')),
+                Expanded(flex: 2, child: _HeaderCell('Records')),
+                Expanded(flex: 2, child: _HeaderCell('Guests')),
+                Expanded(flex: 3, child: _HeaderCell('Last Activity')),
               ],
             ),
           );
@@ -730,187 +725,123 @@ class _HeaderCell extends StatelessWidget {
   }
 }
 
-// ─── Compliance Row (Responsive) ──────────────────────────────────────────────
+// ─── Compliance Row ───────────────────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
   const _ComplianceRow({required this.record});
 
-  final ComplianceRecord record;
+  final BusinessActivityRecord record;
+
+  String formatLastActivity(DateTime? dt) {
+    if (dt == null) return '—';
+
+    final now = DateTime.now();
+    final diff = now.difference(dt);
+
+    if (diff.inDays == 0) {
+      return 'Today';
+    } else if (diff.inDays == 1) {
+      return '1 day ago';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays} days ago';
+    } else if (diff.inDays < 30) {
+      final weeks = (diff.inDays / 7).floor();
+      return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+    } else if (diff.inDays < 365) {
+      final months = (diff.inDays / 30).floor();
+      return months == 1 ? '1 month ago' : '$months months ago';
+    } else {
+      final years = (diff.inDays / 365).floor();
+      return years == 1 ? '1 year ago' : '$years years ago';
+    }
+  }
+
+  String _formatNumber(int n) {
+    if (n >= 1000) {
+      return '${(n / 1000).toStringAsFixed(1)}k';
+    }
+    return '$n';
+  }
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Replace the mobile branch (constraints.maxWidth < 900) in _ComplianceRow
-
         if (constraints.maxWidth < 900) {
+          // ── Mobile ──────────────────────────────────────────────────────────
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        record.business,
-                        style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    Text(
+                      record.businessName,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        showDialog(
-                          context: context,
-                          barrierColor: Colors.black.withOpacity(0.70),
-                          builder: (_) => ComplianceMessageDialog(
-                            business: record.business,
-                          ),
-                        );
-                      },
-                      child: const Icon(
-                        Icons.visibility_outlined,
+                    const SizedBox(height: 2),
+                    Text(
+                      record.businessType,
+                      style: const TextStyle(
                         color: AppColors.textGray,
-                        size: 20,
+                        fontSize: 11,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _ActivityBadge(status: record.activityStatus),
+                    if (record.hasWarning)
+                      _BusinessStatusBadge(status: record.businessStatus),
                   ],
                 ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
+                    const Icon(
+                      Icons.receipt_long_outlined,
+                      size: 12,
+                      color: AppColors.textSubtle,
+                    ),
+                    const SizedBox(width: 4),
                     Text(
-                      record.period,
+                      '${record.totalRecords} records · ${_formatNumber(record.totalGuests)} guests',
                       style: const TextStyle(
                         color: AppColors.textGray,
                         fontSize: 11,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    _StatusBadge(status: record.status),
-                    const SizedBox(width: 10),
-                    if (record.warnings != null)
-                      _WarningBadge(count: record.warnings!)
-                    else
-                      const Text(
-                        '—',
-                        style: TextStyle(
-                          color: AppColors.textSubtle,
-                          fontSize: 13,
-                        ),
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 12,
+                      color: AppColors.textSubtle,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                       formatLastActivity(record.lastActivity),
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 11,
                       ),
+                    ),
                   ],
-                ),
-                if (record.lastNotice != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Last Notice: ${record.lastNotice}',
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  record.notes,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else if (constraints.maxWidth < 1000) {
-          // Small tablet: Show most columns
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              spacing: 5, 
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    record.business,
-                    style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    record.period,
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                Expanded(flex: 2, child: _StatusBadge(status: record.status)),
-                Expanded(
-                  flex: 1,
-                  child: record.warnings != null
-                      ? _WarningBadge(count: record.warnings!)
-                      : const Text(
-                          '—',
-                          style: TextStyle(
-                            color: AppColors.textSubtle,
-                            fontSize: 13,
-                          ),
-                        ),
-                ),
-                if (record.lastNotice != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${record.lastNotice}',
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    record.notes,
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 11,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 2,
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    showDialog(
-                      context: context,
-                      barrierColor: Colors.black.withOpacity(0.70),
-                      builder: (_) =>
-                          ComplianceMessageDialog(business: record.business),
-                    );
-                  },
-                  child: const Icon(
-                    Icons.visibility_outlined,
-                    color: AppColors.textGray,
-                    size: 18,
-                  ),
                 ),
               ],
             ),
           );
         } else {
-          // Desktop: Full row
+          // ── Desktop ─────────────────────────────────────────────────────────
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
@@ -918,7 +849,7 @@ class _ComplianceRow extends StatelessWidget {
                 Expanded(
                   flex: 3,
                   child: Text(
-                    record.business,
+                    record.businessName,
                     style: const TextStyle(
                       color: AppColors.textWhite,
                       fontSize: 13.5,
@@ -929,64 +860,56 @@ class _ComplianceRow extends StatelessWidget {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    record.period,
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Expanded(flex: 3, child: _StatusBadge(status: record.status)),
-                Expanded(
-                  flex: 2,
-                  child: record.warnings != null
-                      ? _WarningBadge(count: record.warnings!)
-                      : const Text(
-                          '—',
-                          style: TextStyle(
-                            color: AppColors.textSubtle,
-                            fontSize: 13,
-                          ),
-                        ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    record.lastNotice ?? '—',
-                    style: TextStyle(
-                      color: record.lastNotice != null
-                          ? AppColors.textGray
-                          : AppColors.textSubtle,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 5,
-                  child: Text(
-                    record.notes,
+                    record.businessType,
                     style: const TextStyle(
                       color: AppColors.textGray,
                       fontSize: 12.5,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Expanded(
-                  flex: 1,
-                  child: GestureDetector(
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        barrierColor: Colors.black.withOpacity(0.70),
-                        builder: (_) =>
-                            ComplianceMessageDialog(business: record.business),
-                      );
-                    },
-                    child: const Icon(
-                      Icons.visibility_outlined,
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _BusinessStatusBadge(status: record.businessStatus),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ActivityBadge(status: record.activityStatus),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    '${record.totalRecords}',
+                    style: const TextStyle(
                       color: AppColors.textGray,
-                      size: 18,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    _formatNumber(record.totalGuests),
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    formatLastActivity(record.lastActivity),
+                    style: TextStyle(
+                      color: record.lastActivity != null
+                          ? AppColors.textGray
+                          : AppColors.textSubtle,
+                      fontSize: 13,
                     ),
                   ),
                 ),
@@ -999,22 +922,22 @@ class _ComplianceRow extends StatelessWidget {
   }
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// ─── Shared Status Chip ───────────────────────────────────────────────────────
+// All color/label/icon logic lives inside each badge — no external config needed.
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({
+    required this.color,
+    required this.label,
+    required this.icon,
+  });
 
-  final ComplianceStatus status;
+  final Color color;
+  final String label;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
-    final isCompliant = status == ComplianceStatus.compliant;
-    final color = isCompliant ? AppColors.accentGreen : AppColors.accentRed;
-    final label = isCompliant ? 'Compliant' : 'Non-Compliant';
-    final icon = isCompliant
-        ? Icons.check_circle_outline_rounded
-        : Icons.cancel_outlined;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
@@ -1041,37 +964,216 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ─── Warning Badge ────────────────────────────────────────────────────────────
+// ─── Activity Status Badge ────────────────────────────────────────────────────
 
-class _WarningBadge extends StatelessWidget {
-  const _WarningBadge({required this.count});
+class _ActivityBadge extends StatelessWidget {
+  const _ActivityBadge({required this.status});
 
-  final int count;
+  final ActivityStatus status;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        color: AppColors.accentRed.withOpacity(0.15),
-        shape: BoxShape.circle,
-        border: Border.all(color: AppColors.accentRed.withOpacity(0.4)),
+    return switch (status) {
+      ActivityStatus.active => const _StatusChip(
+        color: AppColors.accentGreen,
+        label: 'Active',
+        icon: Icons.check_circle_outline_rounded,
       ),
-      child: Center(
-        child: Text(
-          '$count',
-          style: const TextStyle(
-            color: AppColors.accentRed,
-            fontSize: 11.5,
-            fontWeight: FontWeight.w700,
-          ),
+      ActivityStatus.lowActivity => const _StatusChip(
+        color: AppColors.accentOrange,
+        label: 'Low Activity',
+        icon: Icons.warning_amber_rounded,
+      ),
+      ActivityStatus.inactive => const _StatusChip(
+        color: AppColors.accentRed,
+        label: 'Inactive',
+        icon: Icons.cancel_outlined,
+      ),
+      ActivityStatus.noActivity => const _StatusChip(
+        color: AppColors.textSubtle,
+        label: 'No Activity',
+        icon: Icons.remove_circle_outline_rounded,
+      ),
+    };
+  }
+}
+
+// ─── Business Status Badge ────────────────────────────────────────────────────
+
+class _BusinessStatusBadge extends StatelessWidget {
+  const _BusinessStatusBadge({required this.status});
+
+  final BusinessStatusLevel status;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (status) {
+      BusinessStatusLevel.warning => const _StatusChip(
+        color: AppColors.accentOrange,
+        label: 'Warning',
+        icon: Icons.warning_amber_rounded,
+      ),
+      BusinessStatusLevel.approved => const _StatusChip(
+        color: AppColors.accentGreen,
+        label: 'Approved',
+        icon: Icons.verified_outlined,
+      ),
+    };
+  }
+}
+
+// ─── Paginator ────────────────────────────────────────────────────────────────
+
+class _Paginator extends StatelessWidget {
+  const _Paginator({
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalItems,
+    required this.pageSize,
+    required this.onPageChanged,
+  });
+
+  final int currentPage;
+  final int totalPages;
+  final int totalItems;
+  final int pageSize;
+  final ValueChanged<int> onPageChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = totalItems == 0 ? 0 : currentPage * pageSize + 1;
+    final end = ((currentPage + 1) * pageSize).clamp(0, totalItems);
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          '$start–$end of $totalItems',
+          style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+        ),
+        Row(
+          children: [
+            _PageBtn(
+              icon: Icons.chevron_left_rounded,
+              enabled: currentPage > 0,
+              onTap: () => onPageChanged(currentPage - 1),
+            ),
+            const SizedBox(width: 4),
+            for (int i = 0; i < totalPages; i++) ...[
+              if (_showPageNumber(i, currentPage, totalPages))
+                _PageNumber(
+                  page: i,
+                  isActive: i == currentPage,
+                  onTap: () => onPageChanged(i),
+                )
+              else if (_showEllipsis(i, currentPage, totalPages))
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text(
+                    '…',
+                    style: TextStyle(color: AppColors.textSubtle, fontSize: 13),
+                  ),
+                ),
+            ],
+            const SizedBox(width: 4),
+            _PageBtn(
+              icon: Icons.chevron_right_rounded,
+              enabled: currentPage < totalPages - 1,
+              onTap: () => onPageChanged(currentPage + 1),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  // Show page number button: always show first, last, current, and ±1 neighbors
+  static bool _showPageNumber(int i, int current, int total) {
+    return i == 0 || i == total - 1 || (i - current).abs() <= 1;
+  }
+
+  // Show ellipsis only at the gap positions (not consecutive with a shown number)
+  static bool _showEllipsis(int i, int current, int total) {
+    if (i == 1 && current > 2) return true;
+    if (i == total - 2 && current < total - 3) return true;
+    return false;
+  }
+}
+
+class _PageBtn extends StatelessWidget {
+  const _PageBtn({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: AppColors.cardBorder),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? AppColors.textGray : AppColors.textSubtle,
         ),
       ),
     );
   }
 }
 
-// ─── Color Extensions ─────────────────────────────────────────────────────────
+class _PageNumber extends StatelessWidget {
+  const _PageNumber({
+    required this.page,
+    required this.isActive,
+    required this.onTap,
+  });
 
+  final int page;
+  final bool isActive;
+  final VoidCallback onTap;
 
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.accentGreen.withOpacity(0.15)
+              : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: isActive
+                ? AppColors.accentGreen.withOpacity(0.5)
+                : AppColors.cardBorder,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            '${page + 1}',
+            style: TextStyle(
+              color: isActive ? AppColors.accentGreen : AppColors.textGray,
+              fontSize: 12,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

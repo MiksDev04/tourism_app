@@ -125,6 +125,7 @@ const _countryOptions = [
   'USA',
   'Venezuela',
   'Vietnam',
+  'Others',
 ];
 
 const _regionOptions = [
@@ -1139,7 +1140,7 @@ class _DesktopDemoRow extends StatelessWidget {
                     onChanged('isOverseas');
                   },
                   activeColor: const Color(0xFF3B82F6),
-                  side: const BorderSide(color: Color(0xFF6B7280), width: 1.4),
+                  side: const BorderSide(color: AppColors.textGray, width: 1.4),
                   visualDensity: VisualDensity.compact,
                 ),
                 const Text(

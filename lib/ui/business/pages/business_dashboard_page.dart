@@ -57,7 +57,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   Future<void> _initBusinessFromSession() async {
-    final session = SessionService.instance.current ??
+    final session =
+        SessionService.instance.current ??
         await SessionService.instance.loadAndCache();
     if (!mounted) return;
     setState(() {
@@ -133,14 +134,14 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         year: _selectedYear,
       );
       final dir = await getTemporaryDirectory();
-      final label =
-          _selectedMonth == 0 ? '$_selectedYear' : '${_monthShort(_selectedMonth)}_$_selectedYear';
+      final label = _selectedMonth == 0
+          ? '$_selectedYear'
+          : '${_monthShort(_selectedMonth)}_$_selectedYear';
       final file = File('${dir.path}/guests_$label.csv')
         ..writeAsStringSync(csv);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'Guest Report – ${_businessName} ($label)',
-      );
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], subject: 'Guest Report – ${_businessName} ($label)');
     } catch (e) {
       _showSnack('Export failed: $e');
     } finally {
@@ -163,7 +164,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           margin: const pw.EdgeInsets.all(32),
-              header: (_) => pw.Column(
+          header: (_) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
@@ -188,10 +189,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             // Stats
             pw.Text(
               'Summary',
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -216,10 +214,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             // sex
             pw.Text(
               'Sex Distribution',
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -247,10 +242,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             // Countries
             pw.Text(
               'Top Countries',
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -269,17 +261,12 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             // Regions
             pw.Text(
               'Top Local Regions (Philippine Visitors)',
-              style: pw.TextStyle(
-                fontSize: 14,
-                fontWeight: pw.FontWeight.bold,
-              ),
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
               headers: ['Region', 'Guests'],
-              data: d.topRegions
-                  .map((r) => [r.region, '${r.count}'])
-                  .toList(),
+              data: d.topRegions.map((r) => [r.region, '${r.count}']).toList(),
               cellStyle: const pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -296,10 +283,9 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
           : '${_monthShort(_selectedMonth)}_$_selectedYear';
       final file = File('${dir.path}/dashboard_$label2.pdf');
       await file.writeAsBytes(await doc.save());
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'Dashboard Report – ${_businessName} ($label)',
-      );
+      await Share.shareXFiles([
+        XFile(file.path),
+      ], subject: 'Dashboard Report – ${_businessName} ($label)');
     } catch (e) {
       _showSnack('PDF export failed: $e');
     } finally {
@@ -314,7 +300,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => SafeArea(
+      builder: (sheetCtx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -356,7 +342,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
               title: 'Export as CSV',
               subtitle: 'Spreadsheet-ready guest data',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 _exportCsv();
               },
             ),
@@ -366,7 +352,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
               title: 'Export as PDF',
               subtitle: 'Formatted report document',
               onTap: () {
-                Navigator.pop(context);
+                Navigator.pop(sheetCtx);
                 _exportPdf();
               },
             ),
@@ -378,13 +364,14 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   void _showSnack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: AppColors.cardBackground,
-      ),
-    );
-  }
+  if (!mounted) return;   // ADD THIS
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(msg),
+      backgroundColor: AppColors.cardBackground,
+    ),
+  );
+}
 
   // ── Build ──────────────────────────────────────────────────────────────────────
 
@@ -510,36 +497,36 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   // ── Label helpers ─────────────────────────────────────────────────────────────
 
   static String _monthName(int m) => const [
-        '',
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ][m];
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][m];
 
   static String _monthShort(int m) => const [
-        '',
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec',
-      ][m];
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m];
 }
 
 // ─── Hotel Header ─────────────────────────────────────────────────────────────
@@ -692,8 +679,10 @@ class _FilterDropdown<T> extends StatelessWidget {
                   color: AppColors.textGray,
                   size: 18,
                 ),
-                style:
-                    const TextStyle(color: AppColors.textWhite, fontSize: 13),
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 13,
+                ),
                 onChanged: (v) {
                   if (v != null) onChanged(v);
                 },
@@ -701,10 +690,7 @@ class _FilterDropdown<T> extends StatelessWidget {
                     .map(
                       (item) => DropdownMenuItem<T>(
                         value: item.$1,
-                        child: Text(
-                          item.$2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        child: Text(item.$2, overflow: TextOverflow.ellipsis),
                       ),
                     )
                     .toList(),
@@ -774,8 +760,7 @@ class _StatCards extends StatelessWidget {
   final DashboardStats stats;
   final int selectedMonth;
 
-  String get _monthLabel =>
-      selectedMonth == 0 ? 'This Year' : 'This Month';
+  String get _monthLabel => selectedMonth == 0 ? 'This Year' : 'This Month';
 
   @override
   Widget build(BuildContext context) {
@@ -972,6 +957,7 @@ class _sexDonut extends StatelessWidget {
         color: AppColors.chartCyan,
         label: 'Male',
         percentage: '$maleP%',
+        count: dist.male, // ADD
         isEmpty: total == 0,
       ),
       _Segment(
@@ -979,6 +965,7 @@ class _sexDonut extends StatelessWidget {
         color: AppColors.chartPurple,
         label: 'Female',
         percentage: '$femaleP%',
+        count: dist.female, // ADD
         isEmpty: total == 0,
       ),
     ];
@@ -1017,31 +1004,11 @@ class _CountriesDonut extends StatelessWidget {
         title: 'Top 5 Countries',
         emptyHint: 'No data for this period',
         segments: const [
-          _Segment(
-            value: 0.2,
-            color: AppColors.chartGreen,
-            isEmpty: true,
-          ),
-          _Segment(
-            value: 0.2,
-            color: AppColors.chartBlue,
-            isEmpty: true,
-          ),
-          _Segment(
-            value: 0.2,
-            color: AppColors.chartOrange,
-            isEmpty: true,
-          ),
-          _Segment(
-            value: 0.2,
-            color: AppColors.chartPurple,
-            isEmpty: true,
-          ),
-          _Segment(
-            value: 0.2,
-            color: AppColors.chartGray,
-            isEmpty: true,
-          ),
+          _Segment(value: 0.2, color: AppColors.chartGreen, isEmpty: true),
+          _Segment(value: 0.2, color: AppColors.chartBlue, isEmpty: true),
+          _Segment(value: 0.2, color: AppColors.chartOrange, isEmpty: true),
+          _Segment(value: 0.2, color: AppColors.chartPurple, isEmpty: true),
+          _Segment(value: 0.2, color: AppColors.chartGray, isEmpty: true),
         ],
         legend: const [],
       );
@@ -1056,10 +1023,13 @@ class _CountriesDonut extends StatelessWidget {
         color: _colors[e.key % _colors.length],
         label: e.value.country,
         percentage: '$pct%',
+        count: e.value.count, // ADD
       );
     }).toList();
 
-    final legendItems = countries.asMap().entries
+    final legendItems = countries
+        .asMap()
+        .entries
         .map(
           (e) => _LegendItem(
             label: e.value.country,
@@ -1099,11 +1069,7 @@ class _RegionsDonut extends StatelessWidget {
         emptyHint: 'No Philippine visitors this period',
         segments: List.generate(
           5,
-          (i) => _Segment(
-            value: 0.2,
-            color: _colors[i],
-            isEmpty: true,
-          ),
+          (i) => _Segment(value: 0.2, color: _colors[i], isEmpty: true),
         ),
         legend: const [],
       );
@@ -1118,10 +1084,13 @@ class _RegionsDonut extends StatelessWidget {
         color: _colors[e.key % _colors.length],
         label: e.value.region,
         percentage: '$pct%',
+        count: e.value.count, 
       );
     }).toList();
 
-    final legendItems = regions.asMap().entries
+    final legendItems = regions
+        .asMap()
+        .entries
         .map(
           (e) => _LegendItem(
             label: e.value.region,
@@ -1167,10 +1136,7 @@ class _DonutCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               emptyHint!,
-              style: const TextStyle(
-                color: AppColors.textSubtle,
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
             ),
           ],
           const SizedBox(height: 16),
@@ -1214,8 +1180,12 @@ class _TouristTrendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chartHeight = MediaQuery.of(context).size.width < 500 ? 180.0 : 220.0;
-    final y1Data = trendData[year1] ?? List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
-    final y2Data = trendData[year2] ?? List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+    final y1Data =
+        trendData[year1] ??
+        List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+    final y2Data =
+        trendData[year2] ??
+        List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
 
     return _DashCard(
       child: Column(
@@ -1224,9 +1194,7 @@ class _TouristTrendCard extends StatelessWidget {
           // Header row
           Row(
             children: [
-              const Expanded(
-                child: _CardTitle(title: 'Tourist Trend'),
-              ),
+              const Expanded(child: _CardTitle(title: 'Tourist Trend')),
               // Year pickers
               _YearPill(
                 year: year1,
@@ -1246,10 +1214,7 @@ class _TouristTrendCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Monthly guest arrivals — year-over-year comparison',
-            style: const TextStyle(
-              color: AppColors.textSubtle,
-              fontSize: 11,
-            ),
+            style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
           ),
           const SizedBox(height: 16),
           if (isLoading)
@@ -1302,11 +1267,7 @@ class _YearPill extends StatelessWidget {
         child: DropdownButton<int>(
           value: year,
           dropdownColor: AppColors.cardBackground,
-          icon: Icon(
-            Icons.arrow_drop_down_rounded,
-            color: color,
-            size: 18,
-          ),
+          icon: Icon(Icons.arrow_drop_down_rounded, color: color, size: 18),
           style: TextStyle(
             color: color,
             fontSize: 12,
@@ -1316,12 +1277,7 @@ class _YearPill extends StatelessWidget {
             if (v != null) onChanged(v);
           },
           items: years
-              .map(
-                (y) => DropdownMenuItem<int>(
-                  value: y,
-                  child: Text('$y'),
-                ),
-              )
+              .map((y) => DropdownMenuItem<int>(value: y, child: Text('$y')))
               .toList(),
         ),
       ),
@@ -1356,7 +1312,6 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
   int _hoveredMonth = -1;
 
   @override
-
   void initState() {
     super.initState();
     _ctrl = AnimationController(
@@ -1445,7 +1400,8 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
 
       // Year1 bar
       final x1 = groupX;
-      final h1 = (widget.year1Data[i].count / effectiveMax) * chartH * _ctrl.value;
+      final h1 =
+          (widget.year1Data[i].count / effectiveMax) * chartH * _ctrl.value;
       if (pos.dx >= x1 && pos.dx <= x1 + barW && pos.dy >= chartH - h1) {
         if (_hoveredMonth != i || _hoveredIsYear2) {
           setState(() {
@@ -1458,7 +1414,8 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
 
       // Year2 bar
       final x2 = groupX + barW + gap;
-      final h2 = (widget.year2Data[i].count / effectiveMax) * chartH * _ctrl.value;
+      final h2 =
+          (widget.year2Data[i].count / effectiveMax) * chartH * _ctrl.value;
       if (pos.dx >= x2 && pos.dx <= x2 + barW && pos.dy >= chartH - h2) {
         if (_hoveredMonth != i || !_hoveredIsYear2) {
           setState(() {
@@ -1494,8 +1451,18 @@ class _ComparisonBarPainter extends CustomPainter {
   final bool hoveredIsYear2;
 
   static const _monthLabels = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   static const _color1 = AppColors.chartPurple;
@@ -1528,11 +1495,7 @@ class _ComparisonBarPainter extends CustomPainter {
     for (int i = 0; i <= ySteps; i++) {
       final val = (effectiveMax * i / ySteps).round();
       final y = chartH - (val / effectiveMax) * chartH;
-      canvas.drawLine(
-        Offset(leftPad, y),
-        Offset(size.width, y),
-        gridPaint,
-      );
+      canvas.drawLine(Offset(leftPad, y), Offset(size.width, y), gridPaint);
       _drawText(canvas, '$val', Offset(0, y - 6), labelStyle, leftPad - 4);
     }
 
@@ -1639,11 +1602,7 @@ class _ComparisonBarPainter extends CustomPainter {
 
     // Year 1 dot + label
     final p1 = Paint()..color = _color1;
-    canvas.drawCircle(
-      Offset(size.width / 2 - 60, y + dotR),
-      dotR,
-      p1,
-    );
+    canvas.drawCircle(Offset(size.width / 2 - 60, y + dotR), dotR, p1);
     _drawText(
       canvas,
       '$year1',
@@ -1828,6 +1787,7 @@ class _Segment {
     required this.color,
     this.label,
     this.percentage,
+    this.count, // ADD THIS
     this.isEmpty = false,
   });
 
@@ -1835,6 +1795,7 @@ class _Segment {
   final Color color;
   final String? label;
   final String? percentage;
+  final int? count; // ADD THIS
   final bool isEmpty;
 }
 
@@ -1890,9 +1851,8 @@ class _DonutChartState extends State<_DonutChart>
       return;
     }
 
-    double angle = math.atan2(dy, dx);
-    angle = (angle + math.pi * 2) % (math.pi * 2);
-    final startAngle = (math.pi / 2 - angle + math.pi * 2) % (math.pi * 2);
+    final angle = math.atan2(dy, dx);
+    final startAngle = (angle + math.pi / 2 + math.pi * 2) % (math.pi * 2);
 
     double acc = 0;
     for (int i = 0; i < widget.segments.length; i++) {
@@ -1979,7 +1939,9 @@ class _DonutTooltip extends StatelessWidget {
             ),
           ),
           Text(
-            segment.percentage!,
+            segment.count != null
+                ? '${segment.count} guests'
+                : segment.percentage!,
             style: const TextStyle(color: Colors.white70, fontSize: 10),
           ),
         ],
@@ -2110,7 +2072,11 @@ class _ErrorSection extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.redAccent,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

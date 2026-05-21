@@ -67,20 +67,12 @@ class GeneratedReport {
     generatedAt: DateTime.parse(row['generated_at'] as String),
     generatedBy: row['generated_by'] as String?,
     sheetOptions: ReportSheetOptions(
-      includeEstablishmentSheet:
+      includeDailySheet: // was: includeEstablishmentSheet
           row['include_sheet_establishment'] as bool? ?? true,
       includeCountrySumSheet: row['include_sheet_country_sum'] as bool? ?? true,
       includeMonthlySummarySheet: row['include_sheet_monthly'] as bool? ?? true,
     ),
   );
-}
-
-// ─── Business Option (for the dialog dropdown) ────────────────────────────────
-
-class _BusinessOption {
-  const _BusinessOption({required this.id, required this.name});
-  final String id;
-  final String name;
 }
 
 // ─── Admin Reports Page ───────────────────────────────────────────────────────
@@ -99,11 +91,9 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   // ── Data ─────────────────────────────────────────────────────────────────
   List<GeneratedReport> _reports = [];
-  List<_BusinessOption> _businesses = [];
 
   // ── UI State ─────────────────────────────────────────────────────────────
   bool _loadingReports = false;
-  bool _loadingBusinesses = false;
   bool _isGenerating = false;
   bool _showFilters = false;
   String _searchQuery = '';
@@ -143,7 +133,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   void initState() {
     super.initState();
     _fetchReports();
-    _fetchBusinesses();
   }
 
   @override
@@ -176,61 +165,21 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     }
   }
 
-  Future<void> _fetchBusinesses() async {
-    if (!mounted) return;
-    setState(() => _loadingBusinesses = true);
-    try {
-      final rows = await _supabase
-          .from('businesses')
-          .select('id, business_name')
-          .eq('status', 'approved')
-          .order('business_name');
-
-      if (!mounted) return;
-      setState(() {
-        _businesses = (rows as List)
-            .map(
-              (r) => _BusinessOption(
-                id: r['id'] as String,
-                name: r['business_name'] as String,
-              ),
-            )
-            .toList();
-      });
-    } catch (e) {
-      _showError('Failed to load businesses: $e');
-    } finally {
-      if (mounted) setState(() => _loadingBusinesses = false);
-    }
-  }
-
   // ── Generate Report ───────────────────────────────────────────────────────
 
   Future<void> _onGenerateReport({
-    required List<_BusinessOption> businesses,
-    required List<int> months, // <-- changed to list
+    required int month,
     required int year,
-    required ReportSheetOptions sheetOptions, // kept for UI, ignored by service
+    required ReportSheetOptions sheetOptions,
   }) async {
     setState(() => _isGenerating = true);
     try {
-      int generatedCount = 0;
-      for (final business in businesses) {
-        final params = ReportParams(
-          months: months,
-          year: year,
-          businessId: business.id,
-        );
-        await _reportService.generateAndUpload(params);
-        generatedCount++;
-      }
-
-      await _fetchReports();
-
-      if (!mounted) return;
-      _showSuccess(
-        'Generated $generatedCount report${generatedCount == 1 ? '' : 's'}',
+      await _reportService.generateAndUpload(
+        ReportParams(month: month, year: year, sheetOptions: sheetOptions),
       );
+      await _fetchReports();
+      if (!mounted) return;
+      _showSuccess('Report generated successfully');
     } catch (e) {
       if (!mounted) return;
       _showError('Error generating report: $e');
@@ -240,28 +189,20 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   }
 
   void _showGenerateDialog() {
-    if (_businesses.isEmpty && !_loadingBusinesses) {
-      _showError('No active businesses found.');
-      return;
-    }
     showDialog(
       context: context,
       builder: (_) => _GenerateReportDialog(
-        businesses: _businesses,
         months: _months.where((m) => m != 'All Months').toList(),
         years: _years.where((y) => y != 'All Years').toList(),
-        isLoading: _loadingBusinesses,
         onGenerate:
             ({
-              required List<_BusinessOption> businesses,
-              required List<int> months, // <-- changed
+              required int month,
               required int year,
               required ReportSheetOptions sheetOptions,
             }) {
               Navigator.pop(context);
               _onGenerateReport(
-                businesses: businesses,
-                months: months, // <-- changed
+                month: month,
                 year: year,
                 sheetOptions: sheetOptions,
               );
@@ -274,22 +215,22 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   Future<void> _downloadReport(GeneratedReport report) async {
     if (!report.hasFile) return;
-    
+
     try {
       _showSuccess('Downloading file...');
-      
+
       // Extract file path from URL or use as-is if it's already a path
       String filePath = report.fileUrl!;
       if (filePath.contains('/')) {
         // If it's a full URL, extract the path after the bucket name
         filePath = filePath.split('/reports/').last;
       }
-      
+
       // Download from Supabase storage
       final fileData = await _supabase.storage
           .from('reports')
           .download(filePath);
-      
+
       // Get local directory (works on all platforms)
       final Directory? downloadsDir = await getApplicationDocumentsDirectory();
       if (downloadsDir == null) {
@@ -298,19 +239,20 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
         }
         return;
       }
-      
+
       // Create filename from report ID
-      final fileName = 'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
+      final fileName =
+          'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
       final localFile = File('${downloadsDir.path}/$fileName');
-      
+
       // Write file to local storage
       await localFile.writeAsBytes(fileData);
-      
+
       // Open the file
       final result = await OpenFile.open(localFile.path);
-      
+
       if (!mounted) return;
-      
+
       if (result.type == ResultType.done) {
         _showSuccess('File opened: $fileName');
       } else {
@@ -716,10 +658,7 @@ class _TableRow extends StatelessWidget {
           // Download
           SizedBox(
             width: 80,
-            child: _DownloadButton(
-              hasFile: report.hasFile,
-              onTap: onDownload,
-            ),
+            child: _DownloadButton(hasFile: report.hasFile, onTap: onDownload),
           ),
         ],
       ),
@@ -817,7 +756,7 @@ class _SheetPills extends StatelessWidget {
       spacing: 4,
       runSpacing: 4,
       children: [
-        if (options!.includeEstablishmentSheet) _Pill('S1'),
+        if (options!.includeDailySheet) _Pill('S1'),
         if (options!.includeCountrySumSheet) _Pill('S2'),
         if (options!.includeMonthlySummarySheet) _Pill('S3'),
       ],
@@ -905,40 +844,28 @@ class _DownloadButton extends StatelessWidget {
 
 // ─── Generate Report Dialog ───────────────────────────────────────────────────
 
+
 class _GenerateReportDialog extends StatefulWidget {
   const _GenerateReportDialog({
-    required this.businesses,
     required this.months,
     required this.years,
-    required this.isLoading,
     required this.onGenerate,
   });
 
-  final List<_BusinessOption> businesses;
-  final List<String> months; // month names (without 'All Months')
+  final List<String> months;
   final List<String> years;
-  final bool isLoading;
   final void Function({
-    required List<_BusinessOption> businesses,
-    required List<int> months, // changed to list
+    required int month,
     required int year,
     required ReportSheetOptions sheetOptions,
-  })
-  onGenerate;
+  }) onGenerate;
 
   @override
   State<_GenerateReportDialog> createState() => _GenerateReportDialogState();
 }
 
 class _GenerateReportDialogState extends State<_GenerateReportDialog> {
-  final TextEditingController _businessSearchCtrl = TextEditingController();
-  final Set<String> _selectedBusinessIds = {};
-  String _businessSearchQuery = '';
-
-  // Multi‑month selection (month indices 1–12)
-  final Set<int> _selectedMonths = {}; // <-- changed
-  final int _maxMonths = 3; // API limit
-
+  String? _selectedMonth;
   String? _selectedYear;
 
   bool _sheet1 = true;
@@ -946,76 +873,14 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
   bool _sheet3 = true;
 
   bool get _canGenerate =>
-      _selectedBusinessIds.isNotEmpty &&
-      _selectedMonths.isNotEmpty && // at least one month
+      _selectedMonth != null &&
       _selectedYear != null &&
       (_sheet1 || _sheet2 || _sheet3);
 
-  List<_BusinessOption> get _filteredBusinesses {
-    final query = _businessSearchQuery.trim().toLowerCase();
-    if (query.isEmpty) return widget.businesses;
-    return widget.businesses
-        .where((b) => b.name.toLowerCase().contains(query))
-        .toList(growable: false);
-  }
-
-  List<_BusinessOption> get _selectedBusinesses => widget.businesses
-      .where((b) => _selectedBusinessIds.contains(b.id))
-      .toList(growable: false);
-
-  @override
-  void dispose() {
-    _businessSearchCtrl.dispose();
-    super.dispose();
-  }
-
-  void _toggleBusiness(String id, bool isSelected) {
-    setState(() {
-      if (isSelected) {
-        _selectedBusinessIds.add(id);
-      } else {
-        _selectedBusinessIds.remove(id);
-      }
-    });
-  }
-
-  void _selectAllBusinesses() {
-    setState(() {
-      _selectedBusinessIds
-        ..clear()
-        ..addAll(widget.businesses.map((b) => b.id));
-    });
-  }
-
-  void _clearBusinesses() {
-    setState(() => _selectedBusinessIds.clear());
-  }
-
-  // Toggle a month selection
-  void _toggleMonth(int monthIndex) {
-    setState(() {
-      if (_selectedMonths.contains(monthIndex)) {
-        _selectedMonths.remove(monthIndex);
-      } else if (_selectedMonths.length < _maxMonths) {
-        _selectedMonths.add(monthIndex);
-      }
-    });
-  }
-
   static int _monthIndex(String name) {
     const names = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return names.indexOf(name) + 1;
   }
@@ -1029,308 +894,57 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
         side: const BorderSide(color: AppColors.cardBorder),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 480),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Dialog header ──
+              // Header
               Row(
                 children: [
                   Container(
-                    width: 36,
-                    height: 36,
+                    width: 36, height: 36,
                     decoration: BoxDecoration(
                       color: AppColors.primaryCyan.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(
-                      Icons.description_rounded,
-                      color: AppColors.primaryCyan,
-                      size: 18,
-                    ),
+                    child: const Icon(Icons.description_rounded,
+                        color: AppColors.primaryCyan, size: 18),
                   ),
                   const SizedBox(width: 12),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Generate DAE-1B Report',
-                        style: TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      Text(
-                        'Choose sheets and export as .xlsx',
-                        style: TextStyle(
-                          color: AppColors.textGray,
-                          fontSize: 11.5,
-                        ),
-                      ),
+                      Text('Generate DAE-1B Report',
+                          style: TextStyle(color: AppColors.textWhite,
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                      Text('All approved establishments · export as .xlsx',
+                          style: TextStyle(color: AppColors.textGray, fontSize: 11.5)),
                     ],
                   ),
                 ],
               ),
               const SizedBox(height: 24),
 
-              // ── Business ──
-              _DialogLabel('Business'),
-              const SizedBox(height: 6),
-              if (widget.isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 10),
-                  child: LinearProgressIndicator(
-                    color: AppColors.primaryCyan,
-                    backgroundColor: AppColors.cardBorder,
-                  ),
-                )
-              else ...[
-                TextField(
-                  controller: _businessSearchCtrl,
-                  onChanged: (v) => setState(() => _businessSearchQuery = v),
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 13,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Search businesses',
-                    hintStyle: const TextStyle(
-                      color: AppColors.textSubtle,
-                      fontSize: 13,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.search_rounded,
-                      color: AppColors.textSubtle,
-                      size: 20,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.backgroundDark,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.cardBorder),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: AppColors.cardBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(
-                        color: AppColors.primaryCyan,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: widget.businesses.isEmpty
-                          ? null
-                          : _selectAllBusinesses,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        minimumSize: Size.zero,
-                      ),
-                      child: const Text(
-                        'Select All',
-                        style: TextStyle(
-                          color: AppColors.primaryCyan,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    TextButton(
-                      onPressed: _selectedBusinessIds.isEmpty
-                          ? null
-                          : _clearBusinesses,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        minimumSize: Size.zero,
-                      ),
-                      child: const Text(
-                        'Clear',
-                        style: TextStyle(
-                          color: AppColors.textGray,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${_selectedBusinessIds.length} selected',
-                      style: const TextStyle(
-                        color: AppColors.textSubtle,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 220,
-                  decoration: BoxDecoration(
-                    color: AppColors.backgroundDark,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.cardBorder),
-                  ),
-                  child: _filteredBusinesses.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'No businesses match your search.',
-                            style: TextStyle(
-                              color: AppColors.textSubtle,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(vertical: 6),
-                          itemCount: _filteredBusinesses.length,
-                          separatorBuilder: (_, __) => const Divider(
-                            color: AppColors.cardBorder,
-                            height: 1,
-                          ),
-                          itemBuilder: (_, index) {
-                            final b = _filteredBusinesses[index];
-                            final selected = _selectedBusinessIds.contains(
-                              b.id,
-                            );
-                            return CheckboxListTile(
-                              dense: true,
-                              value: selected,
-                              onChanged: (v) =>
-                                  _toggleBusiness(b.id, v ?? false),
-                              activeColor: AppColors.primaryCyan,
-                              checkColor: Colors.black,
-                              title: Text(
-                                b.name,
-                                style: TextStyle(
-                                  color: selected
-                                      ? AppColors.textWhite
-                                      : AppColors.textGray,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              controlAffinity: ListTileControlAffinity.leading,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                if (_selectedBusinesses.isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: _selectedBusinesses
-                        .map(
-                          (b) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryCyan.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: AppColors.primaryCyan.withOpacity(0.2),
-                              ),
-                            ),
-                            child: Text(
-                              b.name,
-                              style: const TextStyle(
-                                color: AppColors.primaryCyan,
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(growable: false),
-                  ),
-                ],
-              ],
-              const SizedBox(height: 14),
-
-              // ── Months (multi‑select) ──
-              _DialogLabel('Month(s) — select 1‑3'),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundDark,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.cardBorder),
-                ),
-                constraints: const BoxConstraints(maxHeight: 160),
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  children: widget.months.map((monthName) {
-                    final index = _monthIndex(monthName);
-                    final selected = _selectedMonths.contains(index);
-                    final disabled =
-                        _selectedMonths.length >= _maxMonths && !selected;
-                    return Opacity(
-                      opacity: disabled ? 0.4 : 1.0,
-                      child: CheckboxListTile(
-                        dense: true,
-                        value: selected,
-                        onChanged: disabled ? null : (v) => _toggleMonth(index),
-                        activeColor: AppColors.primaryCyan,
-                        checkColor: Colors.black,
-                        title: Text(
-                          monthName,
-                          style: TextStyle(
-                            color: selected
-                                ? AppColors.textWhite
-                                : AppColors.textGray,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-              if (_selectedMonths.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Select at least one month',
-                    style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5),
-                  ),
-                ),
-              const SizedBox(height: 14),
-
-              // ── Year ──
-              _DialogLabel('Year'),
+              // Month
+              const _DialogLabel('Month'),
               const SizedBox(height: 6),
               _DropdownField<String>(
-                hint: 'Year',
+                hint: 'Select month',
+                value: _selectedMonth,
+                items: widget.months,
+                itemLabel: (m) => m,
+                onChanged: (v) => setState(() => _selectedMonth = v),
+              ),
+              const SizedBox(height: 14),
+
+              // Year
+              const _DialogLabel('Year'),
+              const SizedBox(height: 6),
+              _DropdownField<String>(
+                hint: 'Select year',
                 value: _selectedYear,
                 items: widget.years,
                 itemLabel: (y) => y,
@@ -1338,15 +952,10 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
               ),
               const SizedBox(height: 18),
 
-              // ── Sheet Selection ──
-              const Text(
-                'Include Sheets',
-                style: TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              // Sheet selection
+              const Text('Include Sheets',
+                  style: TextStyle(color: AppColors.textGray,
+                      fontSize: 12, fontWeight: FontWeight.w500)),
               const SizedBox(height: 10),
               Container(
                 decoration: BoxDecoration(
@@ -1357,23 +966,23 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                 child: Column(
                   children: [
                     _SheetToggle(
-                      label: 'Sheet 1 — Daily Breakdown',
-                      subtitle: 'Guest arrivals per day per country',
+                      label: 'Daily Breakdown',
+                      subtitle: 'One tab per establishment for selected month',
                       value: _sheet1,
                       onChanged: (v) => setState(() => _sheet1 = v),
                       isFirst: true,
                     ),
                     const Divider(color: AppColors.cardBorder, height: 1),
                     _SheetToggle(
-                      label: 'Sheet 2 — Country Summary',
-                      subtitle: 'Monthly totals by country',
+                      label: 'Country Summary',
+                      subtitle: 'All establishments combined — selected month',
                       value: _sheet2,
                       onChanged: (v) => setState(() => _sheet2 = v),
                     ),
                     const Divider(color: AppColors.cardBorder, height: 1),
                     _SheetToggle(
-                      label: 'Sheet 3 — Monthly Summary',
-                      subtitle: 'Monthly pivot + Part II indicators',
+                      label: 'Monthly Summary',
+                      subtitle: 'All 12 months of the year — all establishments',
                       value: _sheet3,
                       onChanged: (v) => setState(() => _sheet3 = v),
                       isLast: true,
@@ -1381,48 +990,39 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                   ],
                 ),
               ),
-
               if (!_sheet1 && !_sheet2 && !_sheet3)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Select at least one sheet to generate.',
-                    style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5),
-                  ),
+                  child: Text('Select at least one sheet to generate.',
+                      style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5)),
                 ),
               const SizedBox(height: 20),
 
-              // ── Actions ──
+              // Actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(color: AppColors.textGray, fontSize: 13),
-                    ),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: AppColors.textGray, fontSize: 13)),
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: _canGenerate
                         ? () => widget.onGenerate(
-                            businesses: _selectedBusinesses,
-                            months: _selectedMonths.toList(), // convert to list
-                            year: int.parse(_selectedYear!),
-                            sheetOptions: ReportSheetOptions(
-                              includeEstablishmentSheet: _sheet1,
-                              includeCountrySumSheet: _sheet2,
-                              includeMonthlySummarySheet: _sheet3,
-                            ),
-                          )
+                              month: _monthIndex(_selectedMonth!),
+                              year: int.parse(_selectedYear!),
+                              sheetOptions: ReportSheetOptions(
+                                includeDailySheet: _sheet1,
+                                includeCountrySumSheet: _sheet2,
+                                includeMonthlySummarySheet: _sheet3,
+                              ),
+                            )
                         : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                       decoration: BoxDecoration(
                         color: _canGenerate
                             ? AppColors.primaryCyan
@@ -1432,22 +1032,13 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
-                            Icons.auto_awesome_rounded,
-                            size: 15,
-                            color: _canGenerate ? Colors.black : Colors.black45,
-                          ),
+                          Icon(Icons.auto_awesome_rounded, size: 15,
+                              color: _canGenerate ? Colors.black : Colors.black45),
                           const SizedBox(width: 6),
-                          Text(
-                            'Generate & Save',
-                            style: TextStyle(
-                              color: _canGenerate
-                                  ? Colors.black
-                                  : Colors.black45,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          Text('Generate & Save',
+                              style: TextStyle(
+                                  color: _canGenerate ? Colors.black : Colors.black45,
+                                  fontSize: 13, fontWeight: FontWeight.w600)),
                         ],
                       ),
                     ),
@@ -1882,11 +1473,7 @@ class _PageHeader extends StatelessWidget {
         children: [
           titleBlock,
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [filterBtn, generateBtn],
-          ),
+          Wrap(spacing: 10, runSpacing: 10, children: [filterBtn, generateBtn]),
         ],
       );
     }
