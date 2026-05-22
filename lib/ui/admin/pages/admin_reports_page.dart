@@ -1553,7 +1553,7 @@ class _HeaderButton extends StatelessWidget {
     if (isPrimary) {
       bg = AppColors.primaryCyan;
       border = AppColors.primaryCyan;
-      fg = Colors.black;
+      fg = Colors.white;
     } else if (isActive) {
       bg = AppColors.primaryCyan.withOpacity(0.15);
       border = AppColors.primaryCyan;
@@ -1567,12 +1567,26 @@ class _HeaderButton extends StatelessWidget {
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: isPrimary
+            ? BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              )
+            : BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: border),
+              ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

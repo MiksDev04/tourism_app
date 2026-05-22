@@ -16,6 +16,13 @@ const _activityStatusOptions = [
   'No Activity',
 ];
 
+const _businessStatusOptions = [
+  'All Business Statuses',
+  'Active',
+  'Warning',
+  'Suspended',
+];
+
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
 
 class AdminCompliancePage extends StatefulWidget {
@@ -116,9 +123,11 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       }
 
       if (_selectedBusinessStatus != 'All Business Statuses') {
-        final want = _selectedBusinessStatus == 'Warning'
-            ? BusinessStatusLevel.warning
-            : BusinessStatusLevel.approved;
+        final want = switch (_selectedBusinessStatus) {
+          'Warning' => BusinessStatusLevel.warning,
+          'Suspended' => BusinessStatusLevel.suspended,
+          _ => BusinessStatusLevel.approved,
+        };
         if (r.businessStatus != want) return false;
       }
 
@@ -156,6 +165,41 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
     }
   }
 
+  // ── Status change handler ──────────────────────────────────────────────────
+  Future<void> _handleStatusChange(
+    BusinessActivityRecord record,
+    BusinessStatusLevel newStatus,
+  ) async {
+    // Optimistic update
+    setState(() {
+      final idx = _allRecords.indexWhere((r) => r.id == record.id);
+      if (idx != -1) {
+        _allRecords[idx] = _allRecords[idx].copyWith(businessStatus: newStatus);
+      }
+    });
+
+    try {
+      await AdminComplianceApi.updateBusinessStatus(record.id, newStatus);
+    } catch (e) {
+      // Revert on failure
+      setState(() {
+        final idx = _allRecords.indexWhere((r) => r.id == record.id);
+        if (idx != -1) {
+          _allRecords[idx] =
+              _allRecords[idx].copyWith(businessStatus: record.businessStatus);
+        }
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $e'),
+            backgroundColor: AppColors.accentRed,
+          ),
+        );
+      }
+    }
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -171,7 +215,10 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _PageHeader(onRefresh: _load, totalAccommodations: _pagedRows.length),
+                _PageHeader(
+                  onRefresh: _load,
+                  totalAccommodations: _pagedRows.length,
+                ),
                 const SizedBox(height: 20),
                 if (_isLoading)
                   _LoadingState()
@@ -208,7 +255,10 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                     }),
                   ),
                   const SizedBox(height: 14),
-                  _ComplianceTable(rows: _pagedRows),
+                  _ComplianceTable(
+                    rows: _pagedRows,
+                    onStatusChange: _handleStatusChange,
+                  ),
                   const SizedBox(height: 12),
                   Paginator(
                     currentPage: _currentPage,
@@ -237,8 +287,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 class _PageHeader extends StatelessWidget {
   const _PageHeader({
     required this.onRefresh,
-    required this.totalAccommodations
-    });
+    required this.totalAccommodations,
+  });
 
   final VoidCallback onRefresh;
   final int totalAccommodations;
@@ -327,9 +377,9 @@ class _ErrorState extends StatelessWidget {
             size: 28,
           ),
           const SizedBox(height: 10),
-          Text(
+          const Text(
             'Failed to load compliance data',
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textWhite,
               fontWeight: FontWeight.w600,
             ),
@@ -508,9 +558,9 @@ class _FilterRow extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedActivityStatus,
-                      items: _activityStatusOptions,
-                      onChanged: onActivityStatusChanged,
+                      value: selectedBusinessStatus,
+                      items: _businessStatusOptions,
+                      onChanged: onBusinessStatusChanged,
                     ),
                   ),
                 ],
@@ -534,6 +584,14 @@ class _FilterRow extends StatelessWidget {
                   value: selectedActivityStatus,
                   items: _activityStatusOptions,
                   onChanged: onActivityStatusChanged,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DropdownFilter(
+                  value: selectedBusinessStatus,
+                  items: _businessStatusOptions,
+                  onChanged: onBusinessStatusChanged,
                 ),
               ),
               const SizedBox(width: 10),
@@ -628,9 +686,14 @@ class _DropdownFilter extends StatelessWidget {
 // ─── Compliance Table ─────────────────────────────────────────────────────────
 
 class _ComplianceTable extends StatelessWidget {
-  const _ComplianceTable({required this.rows});
+  const _ComplianceTable({
+    required this.rows,
+    required this.onStatusChange,
+  });
 
   final List<BusinessActivityRecord> rows;
+  final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
+      onStatusChange;
 
   @override
   Widget build(BuildContext context) {
@@ -659,7 +722,10 @@ class _ComplianceTable extends StatelessWidget {
               itemCount: rows.length,
               separatorBuilder: (_, __) =>
                   const Divider(color: AppColors.cardBorder, height: 1),
-              itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
+              itemBuilder: (_, i) => _ComplianceRow(
+                record: rows[i],
+                onStatusChange: onStatusChange,
+              ),
             ),
         ],
       ),
@@ -690,10 +756,12 @@ class _TableHeader extends StatelessWidget {
               children: [
                 Expanded(flex: 3, child: _HeaderCell('Business')),
                 Expanded(flex: 2, child: _HeaderCell('Type')),
+                Expanded(flex: 2, child: _HeaderCell('Business Status')),
                 Expanded(flex: 3, child: _HeaderCell('Activity Status')),
                 Expanded(flex: 2, child: _HeaderCell('Records')),
                 Expanded(flex: 2, child: _HeaderCell('Guests')),
                 Expanded(flex: 3, child: _HeaderCell('Last Activity')),
+                SizedBox(width: 44, child: _HeaderCell('')),
               ],
             ),
           );
@@ -723,39 +791,45 @@ class _HeaderCell extends StatelessWidget {
 // ─── Compliance Row ───────────────────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
-  const _ComplianceRow({required this.record});
+  const _ComplianceRow({
+    required this.record,
+    required this.onStatusChange,
+  });
 
   final BusinessActivityRecord record;
+  final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
+      onStatusChange;
 
-  String formatLastActivity(DateTime? dt) {
+  String _formatLastActivity(DateTime? dt) {
     if (dt == null) return '—';
-
     final now = DateTime.now();
     final diff = now.difference(dt);
-
-    if (diff.inDays == 0) {
-      return 'Today';
-    } else if (diff.inDays == 1) {
-      return '1 day ago';
-    } else if (diff.inDays < 7) {
-      return '${diff.inDays} days ago';
-    } else if (diff.inDays < 30) {
+    if (diff.inDays == 0) return 'Today';
+    if (diff.inDays == 1) return '1 day ago';
+    if (diff.inDays < 7) return '${diff.inDays} days ago';
+    if (diff.inDays < 30) {
       final weeks = (diff.inDays / 7).floor();
       return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
-    } else if (diff.inDays < 365) {
+    }
+    if (diff.inDays < 365) {
       final months = (diff.inDays / 30).floor();
       return months == 1 ? '1 month ago' : '$months months ago';
-    } else {
-      final years = (diff.inDays / 365).floor();
-      return years == 1 ? '1 year ago' : '$years years ago';
     }
+    final years = (diff.inDays / 365).floor();
+    return years == 1 ? '1 year ago' : '$years years ago';
   }
 
-  String _formatNumber(int n) {
-    if (n >= 1000) {
-      return '${(n / 1000).toStringAsFixed(1)}k';
-    }
-    return '$n';
+  String _formatNumber(int n) =>
+      n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
+
+  void _showStatusModal(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => _StatusChangeDialog(
+        record: record,
+        onConfirm: (newStatus) => onStatusChange(record, newStatus),
+      ),
+    );
   }
 
   @override
@@ -769,32 +843,43 @@ class _ComplianceRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      record.businessName,
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            record.businessName,
+                            style: const TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            record.businessType,
+                            style: const TextStyle(
+                              color: AppColors.textGray,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      record.businessType,
-                      style: const TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 11,
-                      ),
-                    ),
+                    _ActionButton(onTap: () => _showStatusModal(context)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: [_ActivityBadge(status: record.activityStatus)],
+                  children: [
+                    _ActivityBadge(status: record.activityStatus),
+                    _BusinessStatusBadge(status: record.businessStatus),
+                  ],
                 ),
                 const SizedBox(height: 6),
                 Row(
@@ -820,7 +905,7 @@ class _ComplianceRow extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      formatLastActivity(record.lastActivity),
+                      _formatLastActivity(record.lastActivity),
                       style: const TextStyle(
                         color: AppColors.textGray,
                         fontSize: 11,
@@ -859,6 +944,13 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _BusinessStatusBadge(status: record.businessStatus),
+                  ),
+                ),
+                Expanded(
                   flex: 3,
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -888,7 +980,7 @@ class _ComplianceRow extends StatelessWidget {
                 Expanded(
                   flex: 3,
                   child: Text(
-                    formatLastActivity(record.lastActivity),
+                    _formatLastActivity(record.lastActivity),
                     style: TextStyle(
                       color: record.lastActivity != null
                           ? AppColors.textGray
@@ -896,6 +988,10 @@ class _ComplianceRow extends StatelessWidget {
                       fontSize: 13,
                     ),
                   ),
+                ),
+                SizedBox(
+                  width: 44,
+                  child: _ActionButton(onTap: () => _showStatusModal(context)),
                 ),
               ],
             ),
@@ -906,8 +1002,397 @@ class _ComplianceRow extends StatelessWidget {
   }
 }
 
+// ─── Action Button ────────────────────────────────────────────────────────────
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Manage Status',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: const Icon(
+            Icons.tune_rounded,
+            size: 15,
+            color: AppColors.textGray,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Status Change Dialog ─────────────────────────────────────────────────────
+
+class _StatusChangeDialog extends StatefulWidget {
+  const _StatusChangeDialog({
+    required this.record,
+    required this.onConfirm,
+  });
+
+  final BusinessActivityRecord record;
+  final Future<void> Function(BusinessStatusLevel) onConfirm;
+
+  @override
+  State<_StatusChangeDialog> createState() => _StatusChangeDialogState();
+}
+
+class _StatusChangeDialogState extends State<_StatusChangeDialog> {
+  late BusinessStatusLevel _selected;
+  bool _isSaving = false;
+
+  // Warning and Suspended are only available when activity is inactive/noActivity
+  bool get _restrictedOptionsEnabled =>
+      widget.record.activityStatus == ActivityStatus.inactive ||
+      widget.record.activityStatus == ActivityStatus.noActivity;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.record.businessStatus;
+  }
+
+  Future<void> _confirm() async {
+    if (_selected == widget.record.businessStatus) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _isSaving = true);
+    await widget.onConfirm(_selected);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.cardBackground,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColors.cardBorder),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Header ─────────────────────────────────────────────────────
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      color: AppColors.primaryCyan,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Manage Business Status',
+                          style: TextStyle(
+                            color: AppColors.textWhite,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.record.businessName,
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed:
+                        _isSaving ? null : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    color: AppColors.textGray,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Divider(color: AppColors.cardBorder, height: 1),
+              const SizedBox(height: 20),
+
+              // ── Current Status Row ─────────────────────────────────────────
+              Row(
+                children: [
+                  const Text(
+                    'Current Status',
+                    style: TextStyle(color: AppColors.textGray, fontSize: 12),
+                  ),
+                  const Spacer(),
+                  _BusinessStatusBadge(status: widget.record.businessStatus),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // ── Restriction Notice ─────────────────────────────────────────
+              if (!_restrictedOptionsEnabled) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentOrange.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.accentOrange.withOpacity(0.25),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: AppColors.accentOrange,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Warning and Suspended statuses are only available for establishments with Inactive or No Activity.',
+                          style: const TextStyle(
+                            color: AppColors.accentOrange,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // ── Status Selector ────────────────────────────────────────────
+              const Text(
+                'Set New Status',
+                style: TextStyle(
+                  color: AppColors.textGray,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 10),
+              _StatusOption(
+                label: 'Active',
+                description: 'Business is in good standing.',
+                icon: Icons.check_circle_outline_rounded,
+                color: AppColors.accentGreen,
+                isSelected: _selected == BusinessStatusLevel.approved,
+                isEnabled: true,
+                onTap: () => setState(
+                  () => _selected = BusinessStatusLevel.approved,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _StatusOption(
+                label: 'Warning',
+                description: 'Business requires attention or follow-up.',
+                icon: Icons.warning_amber_rounded,
+                color: AppColors.accentOrange,
+                isSelected: _selected == BusinessStatusLevel.warning,
+                isEnabled: _restrictedOptionsEnabled,
+                onTap: () {
+                  if (_restrictedOptionsEnabled) {
+                    setState(() => _selected = BusinessStatusLevel.warning);
+                  }
+                },
+              ),
+              const SizedBox(height: 8),
+              _StatusOption(
+                label: 'Suspended',
+                description: 'Business access and operations are suspended.',
+                icon: Icons.block_rounded,
+                color: AppColors.accentRed,
+                isSelected: _selected == BusinessStatusLevel.suspended,
+                isEnabled: _restrictedOptionsEnabled,
+                onTap: () {
+                  if (_restrictedOptionsEnabled) {
+                    setState(() => _selected = BusinessStatusLevel.suspended);
+                  }
+                },
+              ),
+              const SizedBox(height: 24),
+
+              // ── Actions ────────────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed:
+                          _isSaving ? null : () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textGray,
+                        side: BorderSide(color: AppColors.cardBorder),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _isSaving ? null : _confirm,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.primaryCyan,
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.black54,
+                              ),
+                            )
+                          : const Text(
+                              'Confirm',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Status Option Tile ───────────────────────────────────────────────────────
+
+class _StatusOption extends StatelessWidget {
+  const _StatusOption({
+    required this.label,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.isSelected,
+    required this.isEnabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final bool isSelected;
+  final bool isEnabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveColor = isEnabled ? color : AppColors.textSubtle;
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.4,
+      child: GestureDetector(
+        onTap: isEnabled ? onTap : null,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? effectiveColor.withOpacity(0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected
+                  ? effectiveColor.withOpacity(0.4)
+                  : AppColors.cardBorder,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: effectiveColor, size: 16),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isSelected
+                            ? effectiveColor
+                            : AppColors.textWhite,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        color: AppColors.textSubtle,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isSelected)
+                Icon(
+                  Icons.check_circle_rounded,
+                  color: effectiveColor,
+                  size: 16,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Shared Status Chip ───────────────────────────────────────────────────────
-// All color/label/icon logic lives inside each badge — no external config needed.
 
 class _StatusChip extends StatelessWidget {
   const _StatusChip({
@@ -977,6 +1462,35 @@ class _ActivityBadge extends StatelessWidget {
         color: AppColors.textSubtle,
         label: 'No Activity',
         icon: Icons.remove_circle_outline_rounded,
+      ),
+    };
+  }
+}
+
+// ─── Business Status Badge ────────────────────────────────────────────────────
+
+class _BusinessStatusBadge extends StatelessWidget {
+  const _BusinessStatusBadge({required this.status});
+
+  final BusinessStatusLevel status;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (status) {
+      BusinessStatusLevel.approved => const _StatusChip(
+        color: AppColors.accentGreen,
+        label: 'Approved',
+        icon: Icons.verified_outlined,
+      ),
+      BusinessStatusLevel.warning => const _StatusChip(
+        color: AppColors.accentOrange,
+        label: 'Warning',
+        icon: Icons.warning_amber_rounded,
+      ),
+      BusinessStatusLevel.suspended => const _StatusChip(
+        color: AppColors.accentRed,
+        label: 'Suspended',
+        icon: Icons.block_rounded,
       ),
     };
   }

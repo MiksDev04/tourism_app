@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 enum ActivityStatus { active, lowActivity, inactive, noActivity }
 
-enum BusinessStatusLevel { approved, warning }
+enum BusinessStatusLevel { approved, warning, suspended }
 
 // ─── Model ────────────────────────────────────────────────────────────────────
 
@@ -34,9 +34,7 @@ class BusinessActivityRecord {
       id: json['id'] as String,
       businessName: json['business_name'] as String,
       businessType: json['business_type'] as String,
-      businessStatus: (json['business_status'] as String) == 'warning'
-          ? BusinessStatusLevel.warning
-          : BusinessStatusLevel.approved,
+      businessStatus: _parseBusinessStatus(json['business_status'] as String),
       totalRecords: (json['total_records'] as num).toInt(),
       totalGuests: (json['total_guests'] as num).toInt(),
       lastActivity: json['last_activity'] != null
@@ -44,6 +42,18 @@ class BusinessActivityRecord {
           : null,
       activityStatus: _parseActivityStatus(json['activity_status'] as String),
     );
+  }
+
+  static BusinessStatusLevel _parseBusinessStatus(String raw) {
+    switch (raw) {
+      case 'warning':
+        return BusinessStatusLevel.warning;
+      case 'suspended':
+        return BusinessStatusLevel.suspended;
+      case 'active':
+      default:
+        return BusinessStatusLevel.approved;
+    }
   }
 
   static ActivityStatus _parseActivityStatus(String raw) {
@@ -65,6 +75,22 @@ class BusinessActivityRecord {
 
   /// Returns true when business_status is 'warning'.
   bool get hasWarning => businessStatus == BusinessStatusLevel.warning;
+
+  /// Returns true when business_status is 'suspended'.
+  bool get isSuspended => businessStatus == BusinessStatusLevel.suspended;
+
+  BusinessActivityRecord copyWith({BusinessStatusLevel? businessStatus}) {
+    return BusinessActivityRecord(
+      id: id,
+      businessName: businessName,
+      businessType: businessType,
+      businessStatus: businessStatus ?? this.businessStatus,
+      totalRecords: totalRecords,
+      totalGuests: totalGuests,
+      lastActivity: lastActivity,
+      activityStatus: activityStatus,
+    );
+  }
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -83,5 +109,22 @@ class AdminComplianceApi {
     return (response as List<dynamic>)
         .map((e) => BusinessActivityRecord.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Updates the [business_status] of an accommodation by [id].
+  static Future<void> updateBusinessStatus(
+    String id,
+    BusinessStatusLevel status,
+  ) async {
+    final String statusStr = switch (status) {
+      BusinessStatusLevel.approved => 'active',
+      BusinessStatusLevel.warning => 'warning',
+      BusinessStatusLevel.suspended => 'suspended',
+    };
+
+    await _supabase
+        .from('accommodations')
+        .update({'business_status': statusStr})
+        .eq('id', id);
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_dashboard_api.dart';
+import '../../../core/services/session_service.dart';
 
 // ─── Admin Dashboard Page ─────────────────────────────────────────────────────
 
@@ -147,7 +148,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   _DonutChartsRow(
                     genderDist: _dashData!.genderDistribution,
                     topNationalities: _dashData!.topNationalities,
-                    regions: _dashData!.topRegions,
+                    topRegions: _dashData!.topRegions,
                     isNarrow: isNarrow,
                     isMedium: isMedium,
                   ),
@@ -506,14 +507,14 @@ class _DonutChartsRow extends StatelessWidget {
   const _DonutChartsRow({
     required this.genderDist,
     required this.topNationalities,
-    required this.regions,
+    required this.topRegions,
     required this.isNarrow,
     required this.isMedium,
   });
 
   final GenderDistribution genderDist;
   final List<NationalityCount> topNationalities;
-  final List<RegionCount> regions;
+  final List<RegionCount> topRegions;
   final bool isNarrow;
   final bool isMedium;
 
@@ -521,7 +522,7 @@ class _DonutChartsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final genderCard = _GenderDonut(dist: genderDist);
     final nationalitiesCard = _NationalitiesDonut(nationalities: topNationalities);
-    final regionsCard = _RegionsPieCard(regions: regions);
+    final regionsCard = _RegionsDonut(regions: topRegions);
 
     if (isNarrow) {
       return Column(
@@ -540,31 +541,25 @@ class _DonutChartsRow extends StatelessWidget {
         children: [
           genderCard,
           const SizedBox(height: 14),
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: nationalitiesCard),
-                const SizedBox(width: 14),
-                Expanded(child: regionsCard),
-              ],
-            ),
+          Row(
+            children: [
+              Expanded(child: nationalitiesCard),
+              const SizedBox(width: 14),
+              Expanded(child: regionsCard),
+            ],
           ),
         ],
       );
     }
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: genderCard),
-          const SizedBox(width: 14),
-          Expanded(child: nationalitiesCard),
-          const SizedBox(width: 14),
-          Expanded(child: regionsCard),
-        ],
-      ),
+    return Row(
+      children: [
+        Expanded(child: genderCard),
+        const SizedBox(width: 14),
+        Expanded(child: nationalitiesCard),
+        const SizedBox(width: 14),
+        Expanded(child: regionsCard),
+      ],
     );
   }
 }
@@ -579,8 +574,6 @@ class _GenderDonut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = dist.total;
-    final maleP = total == 0 ? 0 : (dist.maleRatio * 100).round();
-    final femaleP = total == 0 ? 0 : (dist.femaleRatio * 100).round();
 
     return _DonutCard(
       title: 'Gender Distribution',
@@ -590,14 +583,14 @@ class _GenderDonut extends StatelessWidget {
           value: total == 0 ? 0.5 : dist.maleRatio,
           color: AppColors.chartCyan,
           label: 'Male',
-          percentage: '$maleP%',
+          percentage: '${dist.male} visitors',
           isEmpty: total == 0,
         ),
         _Segment(
           value: total == 0 ? 0.5 : dist.femaleRatio,
           color: AppColors.chartPurple,
           label: 'Female',
-          percentage: '$femaleP%',
+          percentage: '${dist.female} visitors',
           isEmpty: total == 0,
         ),
       ],
@@ -645,7 +638,7 @@ class _NationalitiesDonut extends StatelessWidget {
         value: ratio,
         color: _colors[e.key % _colors.length],
         label: e.value.nationality,
-        percentage: '${(ratio * 100).round()}%',
+        percentage: '${e.value.count} visitors',
       );
     }).toList();
 
@@ -665,6 +658,66 @@ class _NationalitiesDonut extends StatelessWidget {
     );
   }
 }
+
+// ─── Transport Donut ──────────────────────────────────────────────────────────
+
+// ─── Regions Donut ────────────────────────────────────────────────────────────
+
+class _RegionsDonut extends StatelessWidget {
+  const _RegionsDonut({required this.regions});
+
+  final List<RegionCount> regions;
+
+  static const _colors = [
+    AppColors.chartCyan,
+    AppColors.chartGreen,
+    AppColors.chartOrange,
+    AppColors.chartPurple,
+    AppColors.chartGray,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (regions.isEmpty) {
+      return _DonutCard(
+        title: 'Top Local Regions',
+        emptyHint: 'No Philippine visitors for this period',
+        segments: List.generate(
+          5,
+          (i) => _Segment(value: 0.2, color: _colors[i], isEmpty: true),
+        ),
+        legend: const [],
+      );
+    }
+
+    final total = regions.fold<int>(0, (s, r) => s + r.count);
+    final segments = regions.asMap().entries.map((e) {
+      final ratio = total == 0 ? 1 / regions.length : e.value.count / total;
+      return _Segment(
+        value: ratio,
+        color: _colors[e.key % _colors.length],
+        label: e.value.region,
+        percentage: '${e.value.count} visitors',
+      );
+    }).toList();
+
+    final legend = regions.asMap().entries
+        .map(
+          (e) => _LegendItem(
+            label: e.value.region,
+            color: _colors[e.key % _colors.length],
+          ),
+        )
+        .toList();
+
+    return _DonutCard(
+      title: 'Top Local Regions',
+      segments: segments,
+      legend: legend,
+    );
+  }
+}
+
 
 // ─── Shared Donut Card ────────────────────────────────────────────────────────
 
@@ -705,212 +758,6 @@ class _DonutCard extends StatelessWidget {
       ),
     );
   }
-}
-
-// ─── Top Regions Card ─────────────────────────────────────────────────────────
-
-class _RegionsPieCard extends StatelessWidget {
-  const _RegionsPieCard({required this.regions});
-
-  final List<RegionCount> regions;
-
-  @override
-  Widget build(BuildContext context) {
-    if (regions.isEmpty) {
-      return _DashCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            _CardTitle(title: 'Top Local Regions (Philippine Visitors Only)'),
-            SizedBox(height: 8),
-            Text(
-              'No Philippine visitors for this period',
-              style: TextStyle(color: AppColors.textSubtle, fontSize: 11),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final total = regions.fold<int>(0, (sum, region) => sum + region.count);
-    final colors = [
-      AppColors.chartCyan,
-      AppColors.chartGreen,
-      AppColors.chartBlue,
-      AppColors.chartOrange,
-      AppColors.chartPurple,
-    ];
-    final segments = regions.asMap().entries.map((entry) {
-      final ratio = total == 0 ? 1 / regions.length : entry.value.count / total;
-      return _Segment(
-        value: ratio,
-        color: colors[entry.key % colors.length],
-        label: entry.value.region,
-        percentage: '${(ratio * 100).round()}%',
-      );
-    }).toList();
-
-    final legend = regions.asMap().entries
-        .map(
-          (entry) => _LegendItem(
-            label: entry.value.region,
-            color: colors[entry.key % colors.length],
-          ),
-        )
-        .toList();
-
-    return _DashCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _CardTitle(title: 'Top Local Regions (Philippine Visitors Only)'),
-          const SizedBox(height: 16),
-          Center(child: _PieChart(segments: segments, size: 130)),
-          const SizedBox(height: 14),
-          _Legend(items: legend),
-        ],
-      ),
-    );
-  }
-}
-
-class _PieChart extends StatefulWidget {
-  const _PieChart({required this.segments, required this.size});
-
-  final List<_Segment> segments;
-  final double size;
-
-  @override
-  State<_PieChart> createState() => _PieChartState();
-}
-
-class _PieChartState extends State<_PieChart>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  int _hoveredIdx = -1;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      duration: const Duration(milliseconds: 900),
-      vsync: this,
-    )..forward();
-  }
-
-  @override
-  void didUpdateWidget(covariant _PieChart old) {
-    super.didUpdateWidget(old);
-    _ctrl
-      ..reset()
-      ..forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onHover: (e) {
-        final box = context.findRenderObject() as RenderBox?;
-        if (box == null) return;
-        final pos = box.globalToLocal(e.position);
-        final center = Offset(widget.size / 2, widget.size / 2);
-        final dx = pos.dx - center.dx;
-        final dy = pos.dy - center.dy;
-        final dist = math.sqrt(dx * dx + dy * dy);
-        if (dist > widget.size / 2) {
-          if (_hoveredIdx != -1) setState(() => _hoveredIdx = -1);
-          return;
-        }
-
-        double angle = math.atan2(dy, dx);
-        angle = (angle + math.pi * 2) % (math.pi * 2);
-        final startAngle = (math.pi / 2 - angle + math.pi * 2) % (math.pi * 2);
-
-        double acc = 0;
-        for (int i = 0; i < widget.segments.length; i++) {
-          final sweep = widget.segments[i].value * math.pi * 2;
-          if (startAngle >= acc && startAngle <= acc + sweep) {
-            if (_hoveredIdx != i) setState(() => _hoveredIdx = i);
-            return;
-          }
-          acc += sweep;
-        }
-
-        if (_hoveredIdx != -1) setState(() => _hoveredIdx = -1);
-      },
-      onExit: (_) => setState(() => _hoveredIdx = -1),
-      child: AnimatedBuilder(
-        animation: _ctrl,
-        builder: (_, __) => SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              CustomPaint(
-                painter: _PiePainter(
-                  segments: widget.segments,
-                  animValue: _ctrl.value,
-                  hoveredIdx: _hoveredIdx,
-                ),
-                size: Size(widget.size, widget.size),
-              ),
-              if (_hoveredIdx != -1 && widget.segments[_hoveredIdx].label != null)
-                _DonutTooltip(segment: widget.segments[_hoveredIdx]),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PiePainter extends CustomPainter {
-  const _PiePainter({
-    required this.segments,
-    required this.animValue,
-    required this.hoveredIdx,
-  });
-
-  final List<_Segment> segments;
-  final double animValue;
-  final int hoveredIdx;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    double startAngle = -math.pi / 2;
-    for (int i = 0; i < segments.length; i++) {
-      final seg = segments[i];
-      final sweep = seg.value * 2 * math.pi * animValue;
-      final isHov = hoveredIdx == i;
-      final paint = Paint()
-        ..color = seg.isEmpty
-            ? seg.color.withOpacity(0.18)
-            : (isHov ? seg.color : seg.color.withOpacity(0.88));
-      canvas.drawArc(
-        rect,
-        startAngle,
-        sweep,
-        true,
-        paint,
-      );
-      startAngle += sweep;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _PiePainter old) =>
-      old.animValue != animValue || old.hoveredIdx != hoveredIdx;
 }
 
 // ─── Tourist Trend Card ───────────────────────────────────────────────────────
@@ -1423,150 +1270,6 @@ class _ComparisonBarPainter extends CustomPainter {
       old.year2 != year2;
 }
 
-// ─── Gauge Chart ──────────────────────────────────────────────────────────────
-
-class _GaugeChart extends StatefulWidget {
-  const _GaugeChart({required this.value});
-
-  final double value;
-
-  @override
-  State<_GaugeChart> createState() => _GaugeChartState();
-}
-
-class _GaugeChartState extends State<_GaugeChart>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _valueAnimation;
-  bool _isHovered = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
-    );
-    _valueAnimation = Tween<double>(begin: 0, end: widget.value).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
-    _controller.forward();
-  }
-
-  @override
-  void didUpdateWidget(covariant _GaugeChart old) {
-    super.didUpdateWidget(old);
-    if (old.value != widget.value) {
-      _valueAnimation = Tween<double>(begin: 0, end: widget.value).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-      );
-      _controller
-        ..reset()
-        ..forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: SizedBox(
-        width: 130,
-        height: 130,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            AnimatedBuilder(
-              animation: _valueAnimation,
-              builder: (_, __) => CustomPaint(
-                painter: _GaugePainter(
-                  value: _valueAnimation.value,
-                  isHovered: _isHovered,
-                ),
-                size: const Size(130, 130),
-              ),
-            ),
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: widget.value),
-                  duration: const Duration(milliseconds: 1200),
-                  builder: (_, val, __) => Text(
-                    '${(val * 100).toInt()}%',
-                    style: TextStyle(
-                      color: _isHovered
-                          ? AppColors.chartGreen
-                          : AppColors.textWhite,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const Text(
-                  'compliance rate',
-                  style: TextStyle(color: AppColors.textSubtle, fontSize: 10),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GaugePainter extends CustomPainter {
-  const _GaugePainter({required this.value, required this.isHovered});
-
-  final double value;
-  final bool isHovered;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 12;
-    const strokeW = 20.0;
-    final rect = Rect.fromCircle(center: center, radius: radius);
-
-    canvas.drawArc(
-      rect,
-      0,
-      math.pi * 2,
-      false,
-      Paint()
-        ..color = AppColors.chartGray
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeW,
-    );
-
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      value * math.pi * 2,
-      false,
-      Paint()
-        ..color = isHovered
-            ? AppColors.chartGreen.withOpacity(0.9)
-            : AppColors.chartGreen
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isHovered ? strokeW + 2 : strokeW
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _GaugePainter old) =>
-      old.value != value || old.isHovered != isHovered;
-}
-
 // ─── Shared Widgets ───────────────────────────────────────────────────────────
 
 class _DashCard extends StatelessWidget {
@@ -1724,7 +1427,8 @@ class _DonutChartState extends State<_DonutChart>
 
     double angle = math.atan2(dy, dx);
     angle = (angle + math.pi * 2) % (math.pi * 2);
-    final startAngle = (math.pi / 2 - angle + math.pi * 2) % (math.pi * 2);
+    // Map atan2 angle to arc position: top=0, right=π/2, bottom=π, left=3π/2
+    final startAngle = (angle + math.pi / 2) % (math.pi * 2);
 
     double acc = 0;
     for (int i = 0; i < widget.segments.length; i++) {
