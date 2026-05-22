@@ -1,7 +1,9 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../api/messages_api.dart';
+import '../../../core/services/session_service.dart';
 import '../widgets/message_view_dialog.dart';
 import '../../shared/layouts/business_layout.dart';
 
@@ -22,118 +24,112 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   final _api = MessagesApi();
 
   _Filter _activeFilter = _Filter.all;
-  List<Message> _messages = [];
 
-  /// Tracks IDs that have been optimistically marked read in this session,
-  /// since Message.isRead is immutable (we can't mutate the model directly).
+  // InboxMessage (not Message) — includes per-recipient read state
+  List<InboxMessage> _messages = [];
+
+  /// Optimistic local read tracking for this session.
+  /// Keyed on `InboxMessage.recipientId` (message_recipients.id).
   final Set<String> _locallyRead = {};
 
-  bool _isLoading = true;
+  bool    _isLoading  = true;
   String? _error;
   String? _businessId;
 
   @override
   void initState() {
     super.initState();
+    _initSession();
+  }
+
+  // ── Session + Data Loading ────────────────────────────────────────────────
+
+  Future<void> _initSession() async {
+    final session = SessionService.instance.current ??
+        await SessionService.instance.loadAndCache();
+    if (!mounted) return;
+    setState(() => _businessId = session?.businessId);
     _loadData();
   }
 
-  // ── Data Loading ─────────────────────────────────────────────────────────────
-
   Future<void> _loadData() async {
+    if (_businessId == null) {
+      setState(() {
+        _error     = 'No business account found for this user.';
+        _isLoading = false;
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
-      _error = null;
+      _error     = null;
     });
 
     try {
-      // Resolve the businessId that belongs to the currently authenticated user.
-      _businessId ??= await _resolveBusinessId();
-
-      if (_businessId == null) {
-        setState(() {
-          _error = 'No business account found for this user.';
-          _isLoading = false;
-        });
-        return;
-      }
-
-      final messages = await _api.fetchForBusiness(_businessId!);
+      final messages = await _api.fetchInbox(_businessId!);
       if (mounted) {
         setState(() {
-          _messages = messages;
+          _messages  = messages;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to load messages. Please try again.';
+          _error     = 'Failed to load messages. Please try again.';
           _isLoading = false;
         });
       }
     }
   }
 
-  /// Looks up the `businesses.id` for the currently signed-in user.
-  Future<String?> _resolveBusinessId() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return null;
+  // ── Computed ──────────────────────────────────────────────────────────────
 
-    final data = await Supabase.instance.client
-        .from('businesses')
-        .select('id')
-        .eq('profile_id', userId)
-        .maybeSingle();
+  /// True if the message has been read — either from the DB or optimistically.
+  bool _isRead(InboxMessage msg) =>
+      msg.isRead || _locallyRead.contains(msg.recipientId);
 
-    return data?['id'] as String?;
-  }
+  int get _unreadCount => _messages.where((m) => !_isRead(m)).length;
 
-  // ── Computed ─────────────────────────────────────────────────────────────────
-
-  bool _isRead(Message msg) => msg.isRead || _locallyRead.contains(msg.id);
-
-  int get _unreadCount =>
-      _messages.where((m) => !_isRead(m)).length;
-
-  List<Message> get _filtered => _messages.where((m) {
+  List<InboxMessage> get _filtered => _messages.where((m) {
         return switch (_activeFilter) {
-          _Filter.all => true,
-          _Filter.compliance => m.messageType == MessageType.compliance,
+          _Filter.all          => true,
+          _Filter.compliance   => m.messageType == MessageType.compliance,
           _Filter.announcement => m.messageType == MessageType.announcement,
-          _Filter.general => m.messageType == MessageType.general,
+          _Filter.general      => m.messageType == MessageType.general,
         };
       }).toList();
 
-  // ── Actions ───────────────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
 
-  Future<void> _openMessage(Message msg) async {
+  Future<void> _openMessage(InboxMessage msg) async {
     // Optimistic update — mark read immediately in the UI.
     if (!_isRead(msg)) {
-      setState(() => _locallyRead.add(msg.id));
-      // Fire-and-forget; errors are non-fatal for the UI.
-      _api.markAsRead(msg.id).catchError((_) {});
+      setState(() => _locallyRead.add(msg.recipientId));
+      // Fire-and-forget on the recipient row (message_recipients.id).
+      _api.markAsRead(msg.recipientId).catchError((_) {});
     }
 
     if (!mounted) return;
     showMessageViewDialog(context, msg);
   }
 
-  // ── Build ─────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return BusinessLayout(
-      title: 'Messages',
+      title:         'Messages',
       selectedIndex: 4,
       onNavSelected: (_) {},
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 600;
           return RefreshIndicator(
-            color: AppColors.primaryCyan,
+            color:           AppColors.primaryCyan,
             backgroundColor: AppColors.cardBackground,
-            onRefresh: _loadData,
+            onRefresh:       _loadData,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.all(isNarrow ? 16 : 24),
@@ -167,10 +163,10 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _MessageCard(
-            message: msg,
-            isRead: _isRead(msg),
+            message:  msg,
+            isRead:   _isRead(msg),
             isNarrow: isNarrow,
-            onTap: () => _openMessage(msg),
+            onTap:    () => _openMessage(msg),
           ),
         );
       }).toList(),
@@ -192,8 +188,8 @@ class _PageHeader extends StatelessWidget {
         const Text(
           'Messages',
           style: TextStyle(
-            color: AppColors.textWhite,
-            fontSize: 22,
+            color:      AppColors.textWhite,
+            fontSize:   22,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -206,7 +202,7 @@ class _PageHeader extends StatelessWidget {
             color: unreadCount > 0
                 ? AppColors.primaryCyan
                 : AppColors.textSubtle,
-            fontSize: 13,
+            fontSize:   13,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -220,7 +216,7 @@ class _PageHeader extends StatelessWidget {
 class _FilterTabBar extends StatelessWidget {
   const _FilterTabBar({required this.activeFilter, required this.onChanged});
 
-  final _Filter activeFilter;
+  final _Filter               activeFilter;
   final ValueChanged<_Filter> onChanged;
 
   @override
@@ -230,31 +226,31 @@ class _FilterTabBar extends StatelessWidget {
       child: Row(
         children: [
           _FilterChip(
-            label: 'All',
-            emoji: null,
+            label:    'All',
+            emoji:    null,
             isActive: activeFilter == _Filter.all,
-            onTap: () => onChanged(_Filter.all),
+            onTap:    () => onChanged(_Filter.all),
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'Compliance',
-            emoji: '⚠️',
+            label:    'Compliance',
+            emoji:    '⚠️',
             isActive: activeFilter == _Filter.compliance,
-            onTap: () => onChanged(_Filter.compliance),
+            onTap:    () => onChanged(_Filter.compliance),
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'Announcement',
-            emoji: '📣',
+            label:    'Announcement',
+            emoji:    '📣',
             isActive: activeFilter == _Filter.announcement,
-            onTap: () => onChanged(_Filter.announcement),
+            onTap:    () => onChanged(_Filter.announcement),
           ),
           const SizedBox(width: 8),
           _FilterChip(
-            label: 'General',
-            emoji: '💬',
+            label:    'General',
+            emoji:    '💬',
             isActive: activeFilter == _Filter.general,
-            onTap: () => onChanged(_Filter.general),
+            onTap:    () => onChanged(_Filter.general),
           ),
         ],
       ),
@@ -270,9 +266,9 @@ class _FilterChip extends StatelessWidget {
     required this.onTap,
   });
 
-  final String label;
-  final String? emoji;
-  final bool isActive;
+  final String       label;
+  final String?      emoji;
+  final bool         isActive;
   final VoidCallback onTap;
 
   @override
@@ -281,14 +277,14 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding:  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           gradient: isActive
               ? const LinearGradient(
                   colors: [AppColors.gradientStart, AppColors.gradientEnd],
                 )
               : null,
-          color: isActive ? null : AppColors.cardBackground,
+          color:        isActive ? null : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive ? Colors.transparent : AppColors.cardBorder,
@@ -304,8 +300,8 @@ class _FilterChip extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: isActive ? Colors.white : AppColors.textGray,
-                fontSize: 13,
+                color:      isActive ? Colors.white : AppColors.textGray,
+                fontSize:   13,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
@@ -326,11 +322,9 @@ class _MessageCard extends StatelessWidget {
     required this.onTap,
   });
 
-  final Message message;
-
-  /// Derived outside the card (combines isRead + locallyRead).
-  final bool isRead;
-  final bool isNarrow;
+  final InboxMessage message;
+  final bool         isRead;
+  final bool         isNarrow;
   final VoidCallback onTap;
 
   @override
@@ -340,8 +334,8 @@ class _MessageCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
+        duration:  const Duration(milliseconds: 200),
+        padding:   const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: isUnread ? AppColors.activeNavBg : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(12),
@@ -363,8 +357,8 @@ class _MessageCard extends StatelessWidget {
 
 class _WideLayout extends StatelessWidget {
   const _WideLayout({required this.message, required this.isUnread});
-  final Message message;
-  final bool isUnread;
+  final InboxMessage message;
+  final bool         isUnread;
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +371,7 @@ class _WideLayout extends StatelessWidget {
           child: Icon(
             isUnread ? Icons.email_rounded : Icons.drafts_rounded,
             color: isUnread ? AppColors.primaryCyan : AppColors.textSubtle,
-            size: 20,
+            size:  20,
           ),
         ),
 
@@ -392,8 +386,8 @@ class _WideLayout extends StatelessWidget {
                     child: Text(
                       message.subject,
                       style: TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 14,
+                        color:      AppColors.textWhite,
+                        fontSize:   14,
                         fontWeight:
                             isUnread ? FontWeight.w600 : FontWeight.w500,
                       ),
@@ -403,7 +397,7 @@ class _WideLayout extends StatelessWidget {
                   if (isUnread) ...[
                     const SizedBox(width: 8),
                     Container(
-                      width: 8,
+                      width:  8,
                       height: 8,
                       decoration: const BoxDecoration(
                         color: AppColors.primaryCyan,
@@ -417,9 +411,9 @@ class _WideLayout extends StatelessWidget {
               Text(
                 message.content,
                 style: const TextStyle(
-                  color: AppColors.textGray,
+                  color:    AppColors.textGray,
                   fontSize: 12.5,
-                  height: 1.4,
+                  height:   1.4,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -428,17 +422,20 @@ class _WideLayout extends StatelessWidget {
           ),
         ),
 
-        // Right side: type badge + date
+        // Right side: type badge + broadcast tag + date
         const SizedBox(width: 16),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             _TypeBadge(type: message.messageType),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
+            if (message.isBroadcast)
+              const _BroadcastTag(),
+            const SizedBox(height: 4),
             Text(
-              _formatDate(message.createdAt),
+              _formatDate(message.sentAt),
               style: const TextStyle(
-                color: AppColors.textSubtle,
+                color:    AppColors.textSubtle,
                 fontSize: 11.5,
               ),
             ),
@@ -453,29 +450,33 @@ class _WideLayout extends StatelessWidget {
 
 class _NarrowLayout extends StatelessWidget {
   const _NarrowLayout({required this.message, required this.isUnread});
-  final Message message;
-  final bool isUnread;
+  final InboxMessage message;
+  final bool         isUnread;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Top row: icon + badge + date
+        // Top row: icon + badge + broadcast + date
         Row(
           children: [
             Icon(
               isUnread ? Icons.email_rounded : Icons.drafts_rounded,
               color: isUnread ? AppColors.primaryCyan : AppColors.textSubtle,
-              size: 18,
+              size:  18,
             ),
             const SizedBox(width: 8),
             _TypeBadge(type: message.messageType),
+            if (message.isBroadcast) ...[
+              const SizedBox(width: 6),
+              const _BroadcastTag(),
+            ],
             const Spacer(),
             Text(
-              _formatDate(message.createdAt),
+              _formatDate(message.sentAt),
               style: const TextStyle(
-                color: AppColors.textSubtle,
+                color:    AppColors.textSubtle,
                 fontSize: 11.5,
               ),
             ),
@@ -490,15 +491,15 @@ class _NarrowLayout extends StatelessWidget {
               child: Text(
                 message.subject,
                 style: TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 13.5,
+                  color:      AppColors.textWhite,
+                  fontSize:   13.5,
                   fontWeight: isUnread ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
             ),
             if (isUnread)
               Container(
-                width: 8,
+                width:  8,
                 height: 8,
                 margin: const EdgeInsets.only(left: 8),
                 decoration: const BoxDecoration(
@@ -510,13 +511,13 @@ class _NarrowLayout extends StatelessWidget {
         ),
         const SizedBox(height: 6),
 
-        // Body
+        // Body preview
         Text(
           message.content,
           style: const TextStyle(
-            color: AppColors.textGray,
+            color:    AppColors.textGray,
             fontSize: 12.5,
-            height: 1.4,
+            height:   1.4,
           ),
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
@@ -532,52 +533,73 @@ class _TypeBadge extends StatelessWidget {
   const _TypeBadge({required this.type});
   final MessageType type;
 
-  static _BadgeStyle _styleFor(MessageType t) {
-    switch (t) {
-      case MessageType.general:
-        return const _BadgeStyle(
-          label: 'General',
-          color: AppColors.primaryBlue,
-        );
-      case MessageType.compliance:
-        return const _BadgeStyle(
-          label: 'Compliance',
-          color: AppColors.accentRed,
-        );
-      case MessageType.announcement:
-        return const _BadgeStyle(
-          label: 'Announcement',
-          color: AppColors.accentPurple,
-        );
-    }
-  }
+  static ({String label, Color color, String emoji}) _styleFor(MessageType t) =>
+      switch (t) {
+        MessageType.general      => (label: 'General',      color: AppColors.primaryBlue,   emoji: '💬'),
+        MessageType.compliance   => (label: 'Compliance',   color: AppColors.accentRed,     emoji: '⚠️'),
+        MessageType.announcement => (label: 'Announcement', color: AppColors.accentPurple,  emoji: '📣'),
+      };
 
   @override
   Widget build(BuildContext context) {
-    final style = _styleFor(type);
+    final s = _styleFor(type);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: style.color.withOpacity(0.12),
+        color:        s.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: style.color.withOpacity(0.35)),
+        border:       Border.all(color: s.color.withOpacity(0.35)),
       ),
-      child: Text(
-        style.label,
-        style: TextStyle(
-          color: style.color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(s.emoji, style: const TextStyle(fontSize: 10)),
+          const SizedBox(width: 4),
+          Text(
+            s.label,
+            style: TextStyle(
+              color:      s.color,
+              fontSize:   11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _BadgeStyle {
-  const _BadgeStyle({required this.label, required this.color});
-  final String label;
-  final Color color;
+// ─── Broadcast Tag ────────────────────────────────────────────────────────────
+
+class _BroadcastTag extends StatelessWidget {
+  const _BroadcastTag();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color:        const Color(0xFF22C55E).withOpacity(0.10),
+        borderRadius: BorderRadius.circular(20),
+        border:       Border.all(color: const Color(0xFF22C55E).withOpacity(0.3)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.campaign_rounded, size: 10, color: Color(0xFF22C55E)),
+          SizedBox(width: 3),
+          Text(
+            'Broadcast',
+            style: TextStyle(
+              color:      Color(0xFF22C55E),
+              fontSize:   10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Loading State ────────────────────────────────────────────────────────────
@@ -591,7 +613,7 @@ class _LoadingState extends StatelessWidget {
       padding: EdgeInsets.symmetric(vertical: 64),
       child: Center(
         child: CircularProgressIndicator(
-          color: AppColors.primaryCyan,
+          color:       AppColors.primaryCyan,
           strokeWidth: 2,
         ),
       ),
@@ -603,7 +625,7 @@ class _LoadingState extends StatelessWidget {
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
-  final String message;
+  final String       message;
   final VoidCallback onRetry;
 
   @override
@@ -615,7 +637,7 @@ class _ErrorState extends StatelessWidget {
           Icon(
             Icons.error_outline_rounded,
             color: AppColors.accentRed.withOpacity(0.6),
-            size: 44,
+            size:  44,
           ),
           const SizedBox(height: 12),
           Text(
@@ -627,8 +649,7 @@ class _ErrorState extends StatelessWidget {
           GestureDetector(
             onTap: onRetry,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [AppColors.gradientStart, AppColors.gradientEnd],
@@ -638,8 +659,8 @@ class _ErrorState extends StatelessWidget {
               child: const Text(
                 'Retry',
                 style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
+                  color:      Colors.white,
+                  fontSize:   13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -659,14 +680,14 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 48),
+      padding:   const EdgeInsets.symmetric(vertical: 48),
       alignment: Alignment.center,
       child: Column(
         children: [
           Icon(
             Icons.inbox_rounded,
             color: AppColors.textSubtle.withOpacity(0.4),
-            size: 48,
+            size:  48,
           ),
           const SizedBox(height: 12),
           const Text(
@@ -681,7 +702,6 @@ class _EmptyState extends StatelessWidget {
 
 // ─── Date Formatter ───────────────────────────────────────────────────────────
 
-/// Returns `yyyy-MM-dd` without any external date package.
 String _formatDate(DateTime dt) {
   final y = dt.year.toString();
   final m = dt.month.toString().padLeft(2, '0');

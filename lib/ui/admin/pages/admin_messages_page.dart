@@ -1,36 +1,38 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:tourism_app/core/services/session_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../api/messages_api.dart';
+import '../../../core/services/session_service.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../widgets/compose_message_modal.dart';
 import '../widgets/message_view_dialog.dart';
-import '../../../api/messages_api.dart';
 
 // ─── Admin Messages Page ──────────────────────────────────────────────────────
 
 class AdminMessagesPage extends StatefulWidget {
-  const AdminMessagesPage({super.key,});
-  
+  const AdminMessagesPage({super.key});
+
   @override
   State<AdminMessagesPage> createState() => _AdminMessagesPageState();
 }
 
 class _AdminMessagesPageState extends State<AdminMessagesPage> {
+  // ── Session + API (resolved once in initState) ─────────────────────────────
+  final _api = MessagesApi();
+  String? _senderId;
 
-  static final _api = MessagesApi();
-  static final senderId = SessionService.instance.current?.userId ?? '';
-  // ── Filters ────────────────────────────────────────────────────────────────
-  String _searchQuery = '';
-  String _selectedType = 'All Types';
-  String _selectedStatus = 'All Statuses';
+  // ── Filter state ───────────────────────────────────────────────────────────
+  String _searchQuery   = '';
+  String _selectedType  = 'All Types';
+  String _selectedScope = 'All'; // 'All' | 'Broadcast' | 'Targeted'
+
   final _searchCtrl = TextEditingController();
 
-  // ── Data ───────────────────────────────────────────────────────────────────
+  // ── Data state ─────────────────────────────────────────────────────────────
   List<Message> _messages = [];
-  bool _loading = true;
-  String? _error;
+  bool          _loading  = true;
+  String?       _error;
 
   static const _typeOptions = [
     'All Types',
@@ -39,18 +41,24 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
     'General',
   ];
 
-  static const _statusOptions = [
-    'All Statuses',
-    'Sent',
-    'Read',
-    'Archived',
-  ];
+  static const _scopeOptions = ['All', 'Broadcast', 'Targeted'];
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
+    _initSession();
+  }
+
+  Future<void> _initSession() async {
+    final session = SessionService.instance.current ??
+        await SessionService.instance.loadAndCache();
+    if (!mounted) return;
+    setState(() => _senderId = session?.userId);
     _loadMessages();
   }
+
 
   @override
   void dispose() {
@@ -58,28 +66,29 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
     super.dispose();
   }
 
-  // ── Data Loader ────────────────────────────────────────────────────────────
+  // ── Data ───────────────────────────────────────────────────────────────────
 
   Future<void> _loadMessages() async {
+    if (_senderId == null) return; // session not yet loaded
     setState(() {
       _loading = true;
-      _error = null;
+      _error   = null;
     });
     try {
-      final msgs = await _api.fetchSentByAdmin(senderId);
+      final msgs = await _api.fetchSentByAdmin(_senderId!);
       if (mounted) setState(() => _messages = msgs);
     } catch (e) {
-      if (mounted) setState(() => _error = 'Failed to load messages.');
+      if (mounted) setState(() => _error = 'Failed to load messages. Tap to retry.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ── Filtering ──────────────────────────────────────────────────────────────
+  // ── Filter ─────────────────────────────────────────────────────────────────
 
   List<Message> get _filtered {
     return _messages.where((m) {
-      final q = _searchQuery.toLowerCase();
+      final q             = _searchQuery.toLowerCase();
       final matchesSearch = q.isEmpty ||
           m.subject.toLowerCase().contains(q) ||
           (m.senderName?.toLowerCase().contains(q) ?? false);
@@ -87,10 +96,13 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
       final matchesType = _selectedType == 'All Types' ||
           m.messageType.label == _selectedType;
 
-      final matchesStatus = _selectedStatus == 'All Statuses' ||
-          m.status.dbValue == _selectedStatus.toLowerCase();
+      final matchesScope = switch (_selectedScope) {
+        'Broadcast' => m.isBroadcast,
+        'Targeted'  => !m.isBroadcast,
+        _           => true,
+      };
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesType && matchesScope;
     }).toList();
   }
 
@@ -99,18 +111,20 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   Future<void> _openCompose() async {
     final sent = await showComposeMessageDialog(
       context,
-      api: _api,
-      senderId: senderId,
+      api:      _api,
+      senderId: _senderId!,
     );
     if (sent == true && mounted) {
       await _loadMessages();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Message sent successfully'),
-          backgroundColor: AppColors.accentGreen,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:         Text('Message sent successfully'),
+            backgroundColor: AppColors.accentGreen,
+            duration:        Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 
@@ -119,9 +133,9 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
-      title: 'Messages',
-      selectedIndex: 3,
-      onNavSelected: (_) {},
+      title:           'Messages',
+      selectedIndex:   3,
+      onNavSelected:   (_) {},
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 900;
@@ -130,38 +144,27 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ─────────────────────────────────────────────────
                 _PageHeader(onCompose: _openCompose),
                 const SizedBox(height: 16),
-
-                // ── Filters ────────────────────────────────────────────────
                 _FilterRow(
-                  searchCtrl: _searchCtrl,
-                  onSearchChanged: (v) =>
-                      setState(() => _searchQuery = v),
-                  selectedType: _selectedType,
-                  onTypeChanged: (v) =>
-                      setState(() => _selectedType = v!),
-                  selectedStatus: _selectedStatus,
-                  onStatusChanged: (v) =>
-                      setState(() => _selectedStatus = v!),
-                  typeOptions: _typeOptions,
-                  statusOptions: _statusOptions,
+                  searchCtrl:      _searchCtrl,
+                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  selectedType:    _selectedType,
+                  onTypeChanged:   (v) => setState(() => _selectedType = v!),
+                  selectedScope:   _selectedScope,
+                  onScopeChanged:  (v) => setState(() => _selectedScope = v!),
+                  typeOptions:     _typeOptions,
+                  scopeOptions:    _scopeOptions,
                 ),
                 const SizedBox(height: 14),
-
-                // ── Table ──────────────────────────────────────────────────
                 if (_loading)
-                  _LoadingTable()
+                  _LoadingState()
                 else if (_error != null)
-                  _ErrorTable(
-                    message: _error!,
-                    onRetry: _loadMessages,
-                  )
+                  _ErrorState(message: _error!, onRetry: _loadMessages)
                 else
                   _MessagesTable(
-                    rows: _filtered,
-                    api: _api,
+                    rows:      _filtered,
+                    api:       _api,
                     onRefresh: _loadMessages,
                   ),
               ],
@@ -195,8 +198,8 @@ class _PageHeader extends StatelessWidget {
                   Text(
                     'Messages & Announcements',
                     style: TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: isSmall ? 18 : 22,
+                      color:      AppColors.textWhite,
+                      fontSize:   isSmall ? 18 : 22,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -204,7 +207,7 @@ class _PageHeader extends StatelessWidget {
                   Text(
                     'Send notices to accommodation establishments',
                     style: TextStyle(
-                      color: AppColors.textGray,
+                      color:    AppColors.textGray,
                       fontSize: isSmall ? 11 : 13,
                     ),
                   ),
@@ -215,8 +218,7 @@ class _PageHeader extends StatelessWidget {
             GestureDetector(
               onTap: onCompose,
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [AppColors.gradientStart, AppColors.gradientEnd],
@@ -224,7 +226,7 @@ class _PageHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primaryBlue.withOpacity(0.3),
+                      color:  AppColors.primaryBlue.withOpacity(0.3),
                       blurRadius: 12,
                       offset: const Offset(0, 3),
                     ),
@@ -237,8 +239,8 @@ class _PageHeader extends StatelessWidget {
                     Text(
                       'Compose Message',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13.5,
+                        color:      Colors.white,
+                        fontSize:   13.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -261,20 +263,20 @@ class _FilterRow extends StatelessWidget {
     required this.onSearchChanged,
     required this.selectedType,
     required this.onTypeChanged,
-    required this.selectedStatus,
-    required this.onStatusChanged,
+    required this.selectedScope,
+    required this.onScopeChanged,
     required this.typeOptions,
-    required this.statusOptions,
+    required this.scopeOptions,
   });
 
   final TextEditingController searchCtrl;
-  final ValueChanged<String> onSearchChanged;
-  final String selectedType;
+  final ValueChanged<String>  onSearchChanged;
+  final String                selectedType;
   final ValueChanged<String?> onTypeChanged;
-  final String selectedStatus;
-  final ValueChanged<String?> onStatusChanged;
-  final List<String> typeOptions;
-  final List<String> statusOptions;
+  final String                selectedScope;
+  final ValueChanged<String?> onScopeChanged;
+  final List<String>          typeOptions;
+  final List<String>          scopeOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -286,24 +288,24 @@ class _FilterRow extends StatelessWidget {
                 children: [
                   _SearchField(
                     controller: searchCtrl,
-                    onChanged: onSearchChanged,
+                    onChanged:  onSearchChanged,
                   ),
                   const SizedBox(height: 10),
                   Row(
                     children: [
                       Expanded(
                         child: _DropdownFilter(
-                          value: selectedType,
-                          items: typeOptions,
+                          value:     selectedType,
+                          items:     typeOptions,
                           onChanged: onTypeChanged,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _DropdownFilter(
-                          value: selectedStatus,
-                          items: statusOptions,
-                          onChanged: onStatusChanged,
+                          value:     selectedScope,
+                          items:     scopeOptions,
+                          onChanged: onScopeChanged,
                         ),
                       ),
                     ],
@@ -314,26 +316,26 @@ class _FilterRow extends StatelessWidget {
                 children: [
                   SizedBox(
                     height: 38,
-                    width: 220,
+                    width:  220,
                     child: _SearchField(
                       controller: searchCtrl,
-                      onChanged: onSearchChanged,
+                      onChanged:  onSearchChanged,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedType,
-                      items: typeOptions,
+                      value:     selectedType,
+                      items:     typeOptions,
                       onChanged: onTypeChanged,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _DropdownFilter(
-                      value: selectedStatus,
-                      items: statusOptions,
-                      onChanged: onStatusChanged,
+                      value:     selectedScope,
+                      items:     scopeOptions,
+                      onChanged: onScopeChanged,
                     ),
                   ),
                 ],
@@ -347,32 +349,31 @@ class _SearchField extends StatelessWidget {
   const _SearchField({required this.controller, required this.onChanged});
 
   final TextEditingController controller;
-  final ValueChanged<String> onChanged;
+  final ValueChanged<String>  onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color:        AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
+        border:       Border.all(color: AppColors.cardBorder),
       ),
       child: TextField(
         controller: controller,
-        onChanged: onChanged,
+        onChanged:  onChanged,
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
         decoration: const InputDecoration(
-          hintText: 'Search subject or sender...',
+          hintText:  'Search subject...',
           hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13),
           prefixIcon: Icon(
             Icons.search_rounded,
             color: AppColors.textSubtle,
-            size: 18,
+            size:  18,
           ),
-          border: InputBorder.none,
-          contentPadding:
-              EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          isDense: true,
+          border:          InputBorder.none,
+          contentPadding:  EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          isDense:         true,
         ),
       ),
     );
@@ -386,8 +387,8 @@ class _DropdownFilter extends StatelessWidget {
     required this.onChanged,
   });
 
-  final String value;
-  final List<String> items;
+  final String                value;
+  final List<String>          items;
   final ValueChanged<String?> onChanged;
 
   @override
@@ -395,19 +396,18 @@ class _DropdownFilter extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color:        AppColors.cardBackground,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
+        border:       Border.all(color: AppColors.cardBorder),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
-          isDense: true,
-          isExpanded: true,
-          dropdownColor: AppColors.cardBackground,
-          iconEnabledColor: AppColors.textGray,
-          style:
-              const TextStyle(color: AppColors.textGray, fontSize: 13),
+          value:              value,
+          isDense:            true,
+          isExpanded:         true,
+          dropdownColor:      AppColors.cardBackground,
+          iconEnabledColor:   AppColors.textGray,
+          style:              const TextStyle(color: AppColors.textGray, fontSize: 13),
           items: items
               .map((e) => DropdownMenuItem(value: e, child: Text(e)))
               .toList(),
@@ -420,41 +420,38 @@ class _DropdownFilter extends StatelessWidget {
 
 // ─── Loading / Error States ───────────────────────────────────────────────────
 
-class _LoadingTable extends StatelessWidget {
+class _LoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color:        AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
+        border:       Border.all(color: AppColors.cardBorder),
       ),
       child: const Center(
         child: Padding(
           padding: EdgeInsets.all(48),
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.textGray,
-          ),
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textGray),
         ),
       ),
     );
   }
 }
 
-class _ErrorTable extends StatelessWidget {
-  const _ErrorTable({required this.message, required this.onRetry});
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.message, required this.onRetry});
 
-  final String message;
+  final String       message;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color:        AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
+        border:       Border.all(color: AppColors.cardBorder),
       ),
       child: Center(
         child: Padding(
@@ -467,25 +464,24 @@ class _ErrorTable extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 message,
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13.5),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13.5),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               GestureDetector(
                 onTap: onRetry,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 9),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 9),
                   decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
+                    color:        AppColors.cardBackground,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.cardBorder),
+                    border:       Border.all(color: AppColors.cardBorder),
                   ),
                   child: const Text(
                     'Retry',
                     style: TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 13,
+                      color:      AppColors.textWhite,
+                      fontSize:   13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -509,16 +505,16 @@ class _MessagesTable extends StatelessWidget {
   });
 
   final List<Message> rows;
-  final MessagesApi api;
-  final VoidCallback onRefresh;
+  final MessagesApi   api;
+  final VoidCallback  onRefresh;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color:        AppColors.cardBackground,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.cardBorder),
+        border:       Border.all(color: AppColors.cardBorder),
       ),
       child: Column(
         children: [
@@ -536,13 +532,13 @@ class _MessagesTable extends StatelessWidget {
                 )
               : ListView.separated(
                   shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: rows.length,
+                  physics:    const NeverScrollableScrollPhysics(),
+                  itemCount:  rows.length,
                   separatorBuilder: (_, __) =>
                       const Divider(color: AppColors.cardBorder, height: 1),
                   itemBuilder: (_, i) => _MessageRow(
-                    message: rows[i],
-                    api: api,
+                    message:   rows[i],
+                    api:       api,
                     onRefresh: onRefresh,
                   ),
                 ),
@@ -562,24 +558,17 @@ class _TableHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMedium = constraints.maxWidth < 900;
+        if (isMedium) return const SizedBox.shrink();
         return Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(
-            children: isMedium
-                ? const [
-                    Expanded(
-                        flex: 5, child: _HeaderCell('Type / Subject')),
-                    Expanded(flex: 2, child: _HeaderCell('Status')),
-                    Expanded(flex: 2, child: _HeaderCell('Date')),
-                  ]
-                : const [
-                    Expanded(flex: 3, child: _HeaderCell('Type')),
-                    Expanded(flex: 5, child: _HeaderCell('Subject')),
-                    Expanded(flex: 3, child: _HeaderCell('Sent At')),
-                    Expanded(flex: 2, child: _HeaderCell('Status')),
-                    Expanded(flex: 1, child: _HeaderCell('Action')),
-                  ],
+            children: const [
+              Expanded(flex: 2, child: _HeaderCell('Type')),
+              Expanded(flex: 5, child: _HeaderCell('Subject')),
+              Expanded(flex: 2, child: _HeaderCell('Scope')),
+              Expanded(flex: 2, child: _HeaderCell('Sent At')),
+              Expanded(flex: 1, child: _HeaderCell('View', alignment: Alignment.center)),
+            ],
           ),
         );
       },
@@ -588,17 +577,24 @@ class _TableHeader extends StatelessWidget {
 }
 
 class _HeaderCell extends StatelessWidget {
-  const _HeaderCell(this.label);
+  const _HeaderCell(this.label, {this.alignment = Alignment.centerLeft});
   final String label;
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: const TextStyle(
-        color: AppColors.textGray,
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
+    return Align(
+      alignment: alignment,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color:      AppColors.textGray,
+            fontSize:   12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -613,52 +609,53 @@ class _MessageRow extends StatelessWidget {
     required this.onRefresh,
   });
 
-  final Message message;
-  final MessagesApi api;
+  final Message      message;
+  final MessagesApi  api;
   final VoidCallback onRefresh;
-  
-  String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+
+  String _fmt(DateTime dt) {
+    const m = [
+      'Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec',
     ];
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
+    return '${m[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
 
-  Future<void> _openMessage(BuildContext context) async {
+  /// Opens the view dialog; also lazily loads the delivery report.
+  void _openMessage(BuildContext context) {
     final typeLabel = switch (message.messageType) {
-      MessageType.compliance => 'COMPLIANCE NOTICE',
+      MessageType.compliance   => 'COMPLIANCE NOTICE',
       MessageType.announcement => 'ANNOUNCEMENT',
-      MessageType.general => 'GENERAL NOTICE',
+      MessageType.general      => 'GENERAL NOTICE',
     };
-
-    final recipientName =
-        await api.fetchReceiverName(message.businessId) ?? message.businessId;
 
     showMessageViewDialog(
       context,
       api,
       MessageViewData(
-        subject: message.subject,
-        recipient: recipientName,
-        date: _formatDate(message.createdAt),
-        messageType: typeLabel,
+        subject:        message.subject,
+        // Show "All Businesses (Broadcast)" for broadcast messages;
+        // for targeted, the delivery report in the dialog can list recipients.
+        recipient:      message.isBroadcast
+                            ? 'All Businesses (Broadcast)'
+                            : 'Targeted Recipients',
+        date:           _fmt(message.createdAt),
+        messageType:    typeLabel,
         messageContent: message.content,
       ),
     );
   }
 
   @override
-
   Widget build(BuildContext context) {
-    final dateStr = _formatDate(message.createdAt);
+    final dateStr = _fmt(message.createdAt);
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final isMedium = constraints.maxWidth < 900;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           child: isMedium
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -666,82 +663,195 @@ class _MessageRow extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _TypeBadge(type: message.messageType),
-                        const SizedBox(width: 8),
                         Expanded(
-                          child: Text(
-                            message.subject,
-                            style: const TextStyle(
-                              color: AppColors.textWhite,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Subject',
+                                  style: TextStyle(
+                                    color: AppColors.textGray,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  message.subject,
+                                  style: const TextStyle(
+                                    color: AppColors.textWhite,
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
                         GestureDetector(
                           onTap: () => _openMessage(context),
-                          child: const Icon(
-                            Icons.visibility_outlined,
-                            color: AppColors.textGray,
-                            size: 18,
+                          child: const Padding(
+                            padding: EdgeInsets.only(left: 8),
+                            child: Icon(
+                              Icons.visibility_outlined,
+                              color: AppColors.textGray,
+                              size: 18,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _StatusBadge(status: message.status),
-                        const Spacer(),
-                        Text(
-                          dateStr,
-                          style: const TextStyle(
-                            color: AppColors.textGray,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 12),
+                    LayoutBuilder(
+                      builder: (ctx, bc) {
+                        final total = bc.maxWidth;
+                        final desired = (total - 24) / 3; // prefer three columns with spacing
+                        final columnWidth = desired < 140 ? (total - 12) / 2 : desired; // switch to two columns if narrow
+                        return Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          children: [
+                            SizedBox(
+                              width: columnWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Type',
+                                    style: TextStyle(
+                                      color: AppColors.textGray,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  LayoutBuilder(
+                                    builder: (ctx2, bc2) => ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: bc2.maxWidth),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: _TypeBadge(type: message.messageType),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: columnWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Scope',
+                                    style: TextStyle(
+                                      color: AppColors.textGray,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  LayoutBuilder(
+                                    builder: (ctx2, bc2) => ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: bc2.maxWidth),
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: _ScopeBadge(isBroadcast: message.isBroadcast),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: columnWidth,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Sent',
+                                    style: TextStyle(
+                                      color: AppColors.textGray,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    dateStr,
+                                    style: const TextStyle(
+                                      color: AppColors.textGray,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 )
               : Row(
                   children: [
                     Expanded(
-                        flex: 3,
-                        child: _TypeBadge(type: message.messageType)),
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _TypeBadge(type: message.messageType),
+                      ),
+                    ),
                     Expanded(
                       flex: 5,
-                      child: Text(
-                        message.subject,
-                        style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        dateStr,
-                        style: const TextStyle(
-                          color: AppColors.textGray,
-                          fontSize: 13,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          message.subject,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color:      AppColors.textWhite,
+                            fontSize:   13.5,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ),
                     Expanded(
-                        flex: 2,
-                        child: _StatusBadge(status: message.status)),
+                      flex: 2,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _ScopeBadge(isBroadcast: message.isBroadcast),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          dateStr,
+                          style: const TextStyle(
+                            color:    AppColors.textGray,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
                     Expanded(
                       flex: 1,
-                      child: GestureDetector(
-                        onTap: () => _openMessage(context),
-                        child: const Icon(
-                          Icons.visibility_outlined,
-                          color: AppColors.textGray,
-                          size: 18,
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: GestureDetector(
+                          onTap: () => _openMessage(context),
+                          child: const Icon(
+                            Icons.visibility_outlined,
+                            color: AppColors.textGray,
+                            size:  18,
+                          ),
                         ),
                       ),
                     ),
@@ -760,42 +870,32 @@ class _TypeBadge extends StatelessWidget {
 
   final MessageType type;
 
-  static ({String icon, Color color}) _styleFor(MessageType t) =>
-      switch (t) {
-        MessageType.compliance => (
-            icon: '⚠️',
-            color: const Color(0xFFFF4D6A),
-          ),
-        MessageType.announcement => (
-            icon: '📣',
-            color: const Color(0xFF9B8AFB),
-          ),
-        MessageType.general => (
-            icon: '💬',
-            color: const Color(0xFF1A6FFF),
-          ),
+  static ({Color color}) _style(MessageType t) => switch (t) {
+        MessageType.compliance   => (color: const Color(0xFFFF4D6A)),
+        MessageType.announcement => (color: const Color(0xFF9B8AFB)),
+        MessageType.general      => (color: const Color(0xFF1A6FFF)),
       };
 
   @override
   Widget build(BuildContext context) {
-    final s = _styleFor(type);
+    final s = _style(type);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: s.color.withOpacity(0.12),
+        color:        s.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: s.color.withOpacity(0.3)),
+        border:       Border.all(color: s.color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(s.icon, style: const TextStyle(fontSize: 11)),
+          Text(type.icon, style: const TextStyle(fontSize: 11)),
           const SizedBox(width: 5),
           Text(
             type.label,
             style: TextStyle(
-              color: s.color,
-              fontSize: 11.5,
+              color:      s.color,
+              fontSize:   11.5,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -805,53 +905,41 @@ class _TypeBadge extends StatelessWidget {
   }
 }
 
-// ─── Status Badge ─────────────────────────────────────────────────────────────
+// ─── Scope Badge (Broadcast vs Targeted) ─────────────────────────────────────
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
+class _ScopeBadge extends StatelessWidget {
+  const _ScopeBadge({required this.isBroadcast});
 
-  final MessageStatus status;
-
-  static ({String label, Color color, IconData icon}) _styleFor(
-          MessageStatus s) =>
-      switch (s) {
-        MessageStatus.sent => (
-            label: 'Sent',
-            color: const Color(0xFF1A6FFF),
-            icon: Icons.send_rounded,
-          ),
-        MessageStatus.read => (
-            label: 'Read',
-            color: const Color(0xFF22C55E),
-            icon: Icons.done_all_rounded,
-          ),
-        MessageStatus.archived => (
-            label: 'Archived',
-            color: AppColors.textGray,
-            icon: Icons.archive_outlined,
-          ),
-      };
+  final bool isBroadcast;
 
   @override
   Widget build(BuildContext context) {
-    final s = _styleFor(status);
+    const broadcastColor = Color(0xFF22C55E);
+    const targetColor    = Color(0xFFF59E0B);
+
+    final color  = isBroadcast ? broadcastColor : targetColor;
+    final label  = isBroadcast ? 'Broadcast'   : 'Targeted';
+    final icon   = isBroadcast
+        ? Icons.campaign_rounded
+        : Icons.person_pin_rounded;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: s.color.withOpacity(0.12),
+        color:        color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: s.color.withOpacity(0.3)),
+        border:       Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(s.icon, size: 11, color: s.color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Text(
-            s.label,
+            label,
             style: TextStyle(
-              color: s.color,
-              fontSize: 11.5,
+              color:      color,
+              fontSize:   11.5,
               fontWeight: FontWeight.w600,
             ),
           ),

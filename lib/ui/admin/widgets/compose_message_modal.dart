@@ -6,26 +6,31 @@ import '../../../api/messages_api.dart';
 
 enum SendToMode { specific, all }
 
-// ─── Draft (DB-aligned) ────────────────────────────────────────────────────────
+// ─── Draft ────────────────────────────────────────────────────────────────────
 
 class ComposeMessageDraft {
   ComposeMessageDraft({
     this.sendToMode = SendToMode.specific,
-    this.selectedBusiness, // holds UUID + name from businesses table
+    this.selectedBusinesses = const [],
     this.messageType,
     this.subject = '',
     this.messageContent = '',
   });
 
-  SendToMode sendToMode;
-  BusinessSummary? selectedBusiness; // was String? — now a proper model
+  SendToMode            sendToMode;
+
+  /// List of selected businesses (supports multi-select for specific mode).
+  /// All items are guaranteed eligible (approved/warning) since the dropdown
+  /// is loaded via fetchEligibleBusinesses().
+  List<BusinessSummary> selectedBusinesses;
+
   MessageType? messageType;
-  String subject;
-  String messageContent;
+  String       subject;
+  String       messageContent;
 
   bool get isValid {
     final hasRecipient = sendToMode == SendToMode.all ||
-        selectedBusiness != null;
+        selectedBusinesses.isNotEmpty;
     return hasRecipient &&
         messageType != null &&
         subject.trim().isNotEmpty &&
@@ -33,44 +38,36 @@ class ComposeMessageDraft {
   }
 
   ComposeMessageDraft copyWith({
-    SendToMode? sendToMode,
-    BusinessSummary? selectedBusiness,
-    bool clearBusiness = false,
-    MessageType? messageType,
-    String? subject,
-    String? messageContent,
+    SendToMode?            sendToMode,
+    List<BusinessSummary>? selectedBusinesses,
+    MessageType?           messageType,
+    String?                subject,
+    String?                messageContent,
   }) {
     return ComposeMessageDraft(
-      sendToMode: sendToMode ?? this.sendToMode,
-      selectedBusiness:
-          clearBusiness ? null : (selectedBusiness ?? this.selectedBusiness),
-      messageType: messageType ?? this.messageType,
-      subject: subject ?? this.subject,
-      messageContent: messageContent ?? this.messageContent,
+      sendToMode:          sendToMode          ?? this.sendToMode,
+      selectedBusinesses:  selectedBusinesses  ?? this.selectedBusinesses,
+      messageType:         messageType         ?? this.messageType,
+      subject:             subject             ?? this.subject,
+      messageContent:      messageContent      ?? this.messageContent,
     );
   }
 }
 
 // ─── Show Helper ──────────────────────────────────────────────────────────────
 
-/// [api]      — injected MessagesApi instance
-/// [senderId] — the logged-in admin's profiles.id (UUID)
+/// Returns true on successful send, null on dismiss/cancel.
 Future<bool?> showComposeMessageDialog(
   BuildContext context, {
   required MessagesApi api,
-  required String senderId,
-  ComposeMessageDraft? initialDraft,
+  required String      senderId,
 }) {
   return showDialog<bool>(
     context: context,
     // ignore: deprecated_member_use
     barrierColor: Colors.black.withOpacity(0.65),
     barrierDismissible: true,
-    builder: (_) => ComposeMessageDialog(
-      api: api,
-      senderId: senderId,
-      initialDraft: initialDraft,
-    ),
+    builder: (_) => ComposeMessageDialog(api: api, senderId: senderId),
   );
 }
 
@@ -82,15 +79,22 @@ String _buildLetter(ComposeMessageDraft d) {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ];
-  final dateStr = '${months[now.month - 1]} ${now.day}, ${now.year}';
+  final dateStr   = '${months[now.month - 1]} ${now.day}, ${now.year}';
   final typeLabel = switch (d.messageType) {
-    MessageType.compliance  => 'COMPLIANCE NOTICE',
+    MessageType.compliance   => 'COMPLIANCE NOTICE',
     MessageType.announcement => 'ANNOUNCEMENT',
     _                        => 'GENERAL NOTICE',
   };
-  final recipient = d.sendToMode == SendToMode.all
-      ? 'All Registered Accommodations'
-      : (d.selectedBusiness?.name ?? '—');
+  final String recipient;
+  if (d.sendToMode == SendToMode.all) {
+    recipient = 'All Registered Accommodations (Approved & Warning)';
+  } else if (d.selectedBusinesses.length == 1) {
+    recipient = d.selectedBusinesses.first.name;
+  } else if (d.selectedBusinesses.isEmpty) {
+    recipient = '—';
+  } else {
+    recipient = d.selectedBusinesses.map((b) => b.name).join(', ');
+  }
   final ref = 'MSG-${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}';
 
   return '''REPUBLIC OF THE PHILIPPINES
@@ -130,12 +134,10 @@ class ComposeMessageDialog extends StatefulWidget {
     super.key,
     required this.api,
     required this.senderId,
-    this.initialDraft,
   });
 
   final MessagesApi api;
-  final String senderId;
-  final ComposeMessageDraft? initialDraft;
+  final String      senderId;
 
   @override
   State<ComposeMessageDialog> createState() => _ComposeMessageDialogState();
@@ -145,22 +147,22 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
     with SingleTickerProviderStateMixin {
   // ── Animation ──────────────────────────────────────────────────────────────
   late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+  late Animation<double>   _fadeAnim;
+  late Animation<Offset>   _slideAnim;
 
   // ── State ──────────────────────────────────────────────────────────────────
   late ComposeMessageDraft _draft;
   bool _previewMode = false;
-  bool _sending = false;
+  bool _sending     = false;
 
-  /// Tracks which fields the user has interacted with.
-  /// Errors only show for touched fields (or all after first submit attempt).
+  /// Fields touched by the user — errors only appear after a field is touched
+  /// or after the first failed submit attempt.
   final Set<String> _touched = {};
 
-  // ── Businesses (loaded from API) ───────────────────────────────────────────
-  List<BusinessSummary> _businesses = [];
-  bool _loadingBusinesses = true;
-  String? _businessesError;
+  // ── Businesses ─────────────────────────────────────────────────────────────
+  List<BusinessSummary> _businesses      = [];
+  bool                  _loadingBiz      = true;
+  String?               _bizLoadError;
 
   // ── Text Controllers ───────────────────────────────────────────────────────
   late final TextEditingController _subjectCtrl;
@@ -174,21 +176,17 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
       vsync: this,
       duration: const Duration(milliseconds: 260),
     );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _fadeAnim  = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.05),
-      end: Offset.zero,
+      end:   Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
     _animCtrl.forward();
 
-    _draft = widget.initialDraft ??
-        ComposeMessageDraft(
-          sendToMode: SendToMode.specific,
-          messageType: MessageType.general,
-        );
+    _draft = ComposeMessageDraft(messageType: MessageType.general);
 
-    _subjectCtrl = TextEditingController(text: _draft.subject);
-    _contentCtrl = TextEditingController(text: _draft.messageContent);
+    _subjectCtrl = TextEditingController();
+    _contentCtrl = TextEditingController();
 
     _loadBusinesses();
   }
@@ -201,41 +199,33 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
     super.dispose();
   }
 
-  // ── Business Loader ────────────────────────────────────────────────────────
+  // ── Loaders ────────────────────────────────────────────────────────────────
 
   Future<void> _loadBusinesses() async {
-    setState(() {
-      _loadingBusinesses = true;
-      _businessesError = null;
-    });
+    setState(() { _loadingBiz = true; _bizLoadError = null; });
     try {
-      final list = await widget.api.fetchBusinesses();
+      final list = await widget.api.fetchEligibleBusinesses();
       if (mounted) setState(() => _businesses = list);
-    } catch (e) {
-      if (mounted) setState(() => _businessesError = 'Failed to load businesses.');
+    } catch (_) {
+      if (mounted) setState(() => _bizLoadError = 'Failed to load businesses.');
     } finally {
-      if (mounted) setState(() => _loadingBusinesses = false);
+      if (mounted) setState(() => _loadingBiz = false);
     }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   void _syncText() {
-    _draft.subject = _subjectCtrl.text;
+    _draft.subject        = _subjectCtrl.text;
     _draft.messageContent = _contentCtrl.text;
   }
 
   void _touch(String field) {
-    if (!_touched.contains(field)) {
-      setState(() => _touched.add(field));
-    }
+    if (!_touched.contains(field)) setState(() => _touched.add(field));
   }
 
-  /// Returns an error string when the field is touched and invalid, else null.
-  String? _err(String field, bool invalid, String message) {
-    if (_touched.contains(field) && invalid) return message;
-    return null;
-  }
+  String? _err(String field, bool invalid, String msg) =>
+      (_touched.contains(field) && invalid) ? msg : null;
 
   void _togglePreview() {
     _syncText();
@@ -245,14 +235,8 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
   Future<void> _send() async {
     _syncText();
 
-    // Mark every field as touched so all errors surface at once
-    setState(() {
-      _touched
-        ..add('business')
-        ..add('messageType')
-        ..add('subject')
-        ..add('content');
-    });
+    // Surface all errors at once on submit attempt.
+    setState(() => _touched.addAll(['business', 'messageType', 'subject', 'content']));
 
     if (!_draft.isValid) return;
 
@@ -260,32 +244,32 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
 
     try {
       if (_draft.sendToMode == SendToMode.all) {
+        // Broadcast — snapshots approved + warning businesses server-side.
         await widget.api.sendToAll(
-          senderId: widget.senderId,
+          senderId:    widget.senderId,
           messageType: _draft.messageType!,
-          subject: _draft.subject,
-          content: _draft.messageContent,
+          subject:     _draft.subject,
+          content:     _draft.messageContent,
         );
       } else {
-        await widget.api.sendToOne(
-          senderId: widget.senderId,
-          businessId: _draft.selectedBusiness!.id, // UUID — no ambiguity
+        // Targeted — send to selected businesses only.
+        await widget.api.sendToSelected(
+          senderId:    widget.senderId,
+          businessIds: _draft.selectedBusinesses.map((b) => b.id).toList(),
           messageType: _draft.messageType!,
-          subject: _draft.subject,
-          content: _draft.messageContent,
+          subject:     _draft.subject,
+          content:     _draft.messageContent,
         );
       }
 
-      if (mounted) Navigator.of(context).pop(true); // success
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
         setState(() => _sending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send message: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to send: $e'),
+          backgroundColor: Colors.redAccent,
+        ));
       }
     }
   }
@@ -294,28 +278,20 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
 
   @override
   Widget build(BuildContext context) {
-    // Derive validation errors
+    _syncText();
+
     final businessErr = _err(
       'business',
       _draft.sendToMode == SendToMode.specific &&
-          _draft.selectedBusiness == null,
-      'Please select a business',
+          _draft.selectedBusinesses.isEmpty,
+      'Please select at least one business',
     );
-    final typeErr = _err(
-      'messageType',
-      _draft.messageType == null,
-      'Please select a message type',
-    );
-    final subjectErr = _err(
-      'subject',
-      _draft.subject.trim().isEmpty,
-      'Subject is required',
-    );
-    final contentErr = _err(
-      'content',
-      _draft.messageContent.trim().isEmpty,
-      'Message content is required',
-    );
+    final typeErr    = _err('messageType', _draft.messageType == null,
+                            'Please select a message type');
+    final subjectErr = _err('subject', _draft.subject.trim().isEmpty,
+                            'Subject is required');
+    final contentErr = _err('content', _draft.messageContent.trim().isEmpty,
+                            'Message content is required');
 
     return GestureDetector(
       onTap: () => Navigator.of(context).pop(),
@@ -333,15 +309,15 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
+                      color:        AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.cardBorder),
+                      border:       Border.all(color: AppColors.cardBorder),
                       boxShadow: [
                         BoxShadow(
                           // ignore: deprecated_member_use
-                          color: Colors.black.withOpacity(0.55),
+                          color:      Colors.black.withOpacity(0.55),
                           blurRadius: 48,
-                          offset: const Offset(0, 18),
+                          offset:     const Offset(0, 18),
                         ),
                       ],
                     ),
@@ -350,8 +326,8 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
                       children: [
                         _Header(
                           previewMode: _previewMode,
-                          onToggle: _togglePreview,
-                          onClose: () => Navigator.of(context).pop(),
+                          onToggle:    _togglePreview,
+                          onClose:     () => Navigator.of(context).pop(),
                         ),
                         const Divider(color: AppColors.cardBorder, height: 1),
                         Flexible(
@@ -359,35 +335,34 @@ class _ComposeMessageDialogState extends State<ComposeMessageDialog>
                             duration: const Duration(milliseconds: 220),
                             child: _previewMode
                                 ? _LetterPreview(
-                                    key: const ValueKey('preview'),
+                                    key:  const ValueKey('preview'),
                                     text: _buildLetter(_draft),
                                   )
                                 : _Form(
-                                    key: const ValueKey('form'),
-                                    draft: _draft,
-                                    subjectCtrl: _subjectCtrl,
-                                    contentCtrl: _contentCtrl,
-                                    businesses: _businesses,
-                                    loadingBusinesses: _loadingBusinesses,
-                                    businessesError: _businessesError,
-                                    onRetryBusinesses: _loadBusinesses,
-                                    businessErr: businessErr,
-                                    typeErr: typeErr,
-                                    subjectErr: subjectErr,
-                                    contentErr: contentErr,
-                                    onChanged: (d) =>
-                                        setState(() => _draft = d),
-                                    onTouch: _touch,
-                                    onSyncText: _syncText,
+                                    key:             const ValueKey('form'),
+                                    draft:           _draft,
+                                    subjectCtrl:     _subjectCtrl,
+                                    contentCtrl:     _contentCtrl,
+                                    businesses:      _businesses,
+                                    loadingBiz:      _loadingBiz,
+                                    bizLoadError:    _bizLoadError,
+                                    onRetryBiz:      _loadBusinesses,
+                                    businessErr:     businessErr,
+                                    typeErr:         typeErr,
+                                    subjectErr:      subjectErr,
+                                    contentErr:      contentErr,
+                                    onChanged:       (d) => setState(() => _draft = d),
+                                    onTouch:         _touch,
+                                    onSyncText:      _syncText,
                                   ),
                           ),
                         ),
                         const Divider(color: AppColors.cardBorder, height: 1),
                         _Footer(
-                          canSend: _draft.isValid && !_sending,
-                          sending: _sending,
+                          canSend:  _draft.isValid && !_sending,
+                          sending:  _sending,
                           onCancel: () => Navigator.of(context).pop(),
-                          onSend: _send,
+                          onSend:   _send,
                         ),
                       ],
                     ),
@@ -411,7 +386,7 @@ class _Header extends StatelessWidget {
     required this.onClose,
   });
 
-  final bool previewMode;
+  final bool         previewMode;
   final VoidCallback onToggle;
   final VoidCallback onClose;
 
@@ -424,9 +399,9 @@ class _Header extends StatelessWidget {
           const Text(
             'Compose Message',
             style: TextStyle(
-              color: AppColors.textWhite,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+              color:       AppColors.textWhite,
+              fontSize:    16,
+              fontWeight:  FontWeight.w700,
               letterSpacing: -0.2,
             ),
           ),
@@ -434,18 +409,17 @@ class _Header extends StatelessWidget {
           GestureDetector(
             onTap: onToggle,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.cardBackground,
+                color:        AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.cardBorder),
+                border:       Border.all(color: AppColors.cardBorder),
               ),
               child: Text(
                 previewMode ? 'Edit' : 'Preview Letter',
                 style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 12.5,
+                  color:      AppColors.textWhite,
+                  fontSize:   12.5,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -455,12 +429,12 @@ class _Header extends StatelessWidget {
           GestureDetector(
             onTap: onClose,
             child: Container(
-              width: 28,
+              width:  28,
               height: 28,
               decoration: BoxDecoration(
-                color: AppColors.cardBackground,
+                color:        AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.cardBorder),
+                border:       Border.all(color: AppColors.cardBorder),
               ),
               child: const Icon(Icons.close_rounded,
                   color: AppColors.textGray, size: 16),
@@ -481,9 +455,9 @@ class _Form extends StatelessWidget {
     required this.subjectCtrl,
     required this.contentCtrl,
     required this.businesses,
-    required this.loadingBusinesses,
-    required this.businessesError,
-    required this.onRetryBusinesses,
+    required this.loadingBiz,
+    required this.bizLoadError,
+    required this.onRetryBiz,
     required this.businessErr,
     required this.typeErr,
     required this.subjectErr,
@@ -493,20 +467,20 @@ class _Form extends StatelessWidget {
     required this.onSyncText,
   });
 
-  final ComposeMessageDraft draft;
-  final TextEditingController subjectCtrl;
-  final TextEditingController contentCtrl;
-  final List<BusinessSummary> businesses;
-  final bool loadingBusinesses;
-  final String? businessesError;
-  final VoidCallback onRetryBusinesses;
-  final String? businessErr;
-  final String? typeErr;
-  final String? subjectErr;
-  final String? contentErr;
+  final ComposeMessageDraft           draft;
+  final TextEditingController         subjectCtrl;
+  final TextEditingController         contentCtrl;
+  final List<BusinessSummary>         businesses;
+  final bool                          loadingBiz;
+  final String?                       bizLoadError;
+  final VoidCallback                  onRetryBiz;
+  final String?                       businessErr;
+  final String?                       typeErr;
+  final String?                       subjectErr;
+  final String?                       contentErr;
   final ValueChanged<ComposeMessageDraft> onChanged;
-  final ValueChanged<String> onTouch;
-  final VoidCallback onSyncText;
+  final ValueChanged<String>          onTouch;
+  final VoidCallback                  onSyncText;
 
   @override
   Widget build(BuildContext context) {
@@ -515,7 +489,7 @@ class _Form extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Send To ────────────────────────────────────────────────────────
+          // ── Send To ──────────────────────────────────────────────────────
           const _Label('Send To'),
           const SizedBox(height: 10),
           _SendToToggle(
@@ -523,37 +497,44 @@ class _Form extends StatelessWidget {
             onChanged: (m) {
               onTouch('business');
               onChanged(draft.copyWith(
-                sendToMode: m,
-                clearBusiness: m == SendToMode.all,
+                sendToMode:         m,
+                // clear selection when switching to broadcast
+                selectedBusinesses: m == SendToMode.all ? [] : draft.selectedBusinesses,
               ));
             },
           ),
 
-          // ── Business Picker ────────────────────────────────────────────────
+          // ── Business picker (specific mode only) ─────────────────────────
           if (draft.sendToMode == SendToMode.specific) ...[
             const SizedBox(height: 18),
             const _Label('Select Business'),
             const SizedBox(height: 10),
-            _BusinessDropdown(
-              selected: draft.selectedBusiness,
-              businesses: businesses,
-              loading: loadingBusinesses,
-              loadError: businessesError,
-              onRetry: onRetryBusinesses,
-              errorText: businessErr,
-              onChanged: (b) {
+            _BusinessPicker(
+              selected:     draft.selectedBusinesses,
+              businesses:   businesses,
+              loading:      loadingBiz,
+              loadError:    bizLoadError,
+              onRetry:      onRetryBiz,
+              errorText:    businessErr,
+              onChanged: (list) {
                 onTouch('business');
-                onChanged(draft.copyWith(selectedBusiness: b));
+                onChanged(draft.copyWith(selectedBusinesses: list));
               },
             ),
           ],
 
-          // ── Message Type ───────────────────────────────────────────────────
+          // ── Broadcast notice ─────────────────────────────────────────────
+          if (draft.sendToMode == SendToMode.all) ...[
+            const SizedBox(height: 12),
+            _BroadcastNotice(),
+          ],
+
+          // ── Message Type ─────────────────────────────────────────────────
           const SizedBox(height: 18),
           const _Label('Message Type'),
           const SizedBox(height: 10),
           _TypeSelector(
-            selected: draft.messageType,
+            selected:  draft.messageType,
             errorText: typeErr,
             onChanged: (t) {
               onTouch('messageType');
@@ -561,14 +542,14 @@ class _Form extends StatelessWidget {
             },
           ),
 
-          // ── Subject ────────────────────────────────────────────────────────
+          // ── Subject ──────────────────────────────────────────────────────
           const SizedBox(height: 18),
           const _Label('Subject'),
           const SizedBox(height: 10),
           _StyledTextField(
             controller: subjectCtrl,
-            hint: 'Enter subject...',
-            errorText: subjectErr,
+            hint:       'Enter subject...',
+            errorText:  subjectErr,
             onChanged: (v) {
               onTouch('subject');
               onSyncText();
@@ -577,15 +558,15 @@ class _Form extends StatelessWidget {
             onEditingComplete: () => onTouch('subject'),
           ),
 
-          // ── Message Content ────────────────────────────────────────────────
+          // ── Message Content ───────────────────────────────────────────────
           const SizedBox(height: 18),
           const _Label('Message Content'),
           const SizedBox(height: 10),
           _StyledTextField(
             controller: contentCtrl,
-            hint: 'Write your message here...',
-            maxLines: 6,
-            errorText: contentErr,
+            hint:       'Write your message here...',
+            maxLines:   6,
+            errorText:  contentErr,
             onChanged: (v) {
               onTouch('content');
               onSyncText();
@@ -604,7 +585,7 @@ class _Form extends StatelessWidget {
 class _SendToToggle extends StatelessWidget {
   const _SendToToggle({required this.mode, required this.onChanged});
 
-  final SendToMode mode;
+  final SendToMode              mode;
   final ValueChanged<SendToMode> onChanged;
 
   @override
@@ -613,20 +594,20 @@ class _SendToToggle extends StatelessWidget {
       children: [
         Expanded(
           child: _Segment(
-            label: 'Specific Business',
-            active: mode == SendToMode.specific,
-            leftRounded: true,
+            label:        'Specific Business',
+            active:       mode == SendToMode.specific,
+            leftRounded:  true,
             rightRounded: false,
-            onTap: () => onChanged(SendToMode.specific),
+            onTap:        () => onChanged(SendToMode.specific),
           ),
         ),
         Expanded(
           child: _Segment(
-            label: 'All Businesses',
-            active: mode == SendToMode.all,
-            leftRounded: false,
+            label:        'All Businesses',
+            active:       mode == SendToMode.all,
+            leftRounded:  false,
             rightRounded: true,
-            onTap: () => onChanged(SendToMode.all),
+            onTap:        () => onChanged(SendToMode.all),
           ),
         ),
       ],
@@ -643,10 +624,10 @@ class _Segment extends StatelessWidget {
     required this.onTap,
   });
 
-  final String label;
-  final bool active;
-  final bool leftRounded;
-  final bool rightRounded;
+  final String   label;
+  final bool     active;
+  final bool     leftRounded;
+  final bool     rightRounded;
   final VoidCallback onTap;
 
   @override
@@ -655,16 +636,15 @@ class _Segment extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding:  const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           gradient: active
               ? const LinearGradient(
-                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
-                )
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd])
               : null,
-          color: active ? null : AppColors.cardBackground,
+          color:        active ? null : AppColors.cardBackground,
           borderRadius: BorderRadius.horizontal(
-            left: leftRounded ? const Radius.circular(10) : Radius.zero,
+            left:  leftRounded  ? const Radius.circular(10) : Radius.zero,
             right: rightRounded ? const Radius.circular(10) : Radius.zero,
           ),
           border: Border.all(
@@ -675,8 +655,8 @@ class _Segment extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: active ? Colors.white : AppColors.textGray,
-              fontSize: 13,
+              color:      active ? Colors.white : AppColors.textGray,
+              fontSize:   13,
               fontWeight: active ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
@@ -686,10 +666,46 @@ class _Segment extends StatelessWidget {
   }
 }
 
-// ─── Business Dropdown ────────────────────────────────────────────────────────
+// ─── Broadcast Notice ─────────────────────────────────────────────────────────
 
-class _BusinessDropdown extends StatelessWidget {
-  const _BusinessDropdown({
+class _BroadcastNotice extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        // ignore: deprecated_member_use
+        color:        const Color(0xFF9B8AFB).withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border:       Border.all(
+          // ignore: deprecated_member_use
+          color: const Color(0xFF9B8AFB).withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: const [
+          Icon(Icons.info_outline_rounded, color: Color(0xFF9B8AFB), size: 14),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Will be sent to all businesses with Approved or Warning status at time of sending.',
+              style: TextStyle(
+                color:    Color(0xFF9B8AFB),
+                fontSize: 12,
+                height:   1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Business Picker ──────────────────────────────────────────────────────────
+
+class _BusinessPicker extends StatelessWidget {
+  const _BusinessPicker({
     required this.selected,
     required this.businesses,
     required this.loading,
@@ -699,159 +715,207 @@ class _BusinessDropdown extends StatelessWidget {
     this.errorText,
   });
 
-  final BusinessSummary? selected;
-  final List<BusinessSummary> businesses;
-  final bool loading;
-  final String? loadError;
-  final VoidCallback onRetry;
-  final ValueChanged<BusinessSummary?> onChanged;
-  final String? errorText;
+  final List<BusinessSummary>              selected;
+  final List<BusinessSummary>              businesses;
+  final bool                               loading;
+  final String?                            loadError;
+  final VoidCallback                       onRetry;
+  final ValueChanged<List<BusinessSummary>> onChanged;
+  final String?                            errorText;
+
+  void _toggle(BusinessSummary biz, List<BusinessSummary> current) {
+    final updated = List<BusinessSummary>.from(current);
+    final idx     = updated.indexWhere((b) => b.id == biz.id);
+    if (idx >= 0) {
+      updated.removeAt(idx);
+    } else {
+      updated.add(biz);
+    }
+    onChanged(updated);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final hasError = errorText != null;
+    // ── Loading ──────────────────────────────────────────────────────────────
+    if (loading) {
+      return Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color:        AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(10),
+          border:       Border.all(color: AppColors.cardBorder),
+        ),
+        child: const Center(
+          child: SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2, color: AppColors.textGray,
+            ),
+          ),
+        ),
+      );
+    }
 
+    // ── Load error ───────────────────────────────────────────────────────────
+    if (loadError != null) {
+      return Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color:        AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(10),
+          border:       Border.all(
+              // ignore: deprecated_member_use
+              color: Colors.redAccent.withOpacity(0.5)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: Colors.redAccent, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(loadError!,
+                  style: const TextStyle(
+                      color: Colors.redAccent, fontSize: 13)),
+            ),
+            GestureDetector(
+              onTap: onRetry,
+              child: const Text('Retry',
+                  style: TextStyle(
+                    color:      AppColors.textWhite,
+                    fontSize:   12.5,
+                    fontWeight: FontWeight.w600,
+                  )),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Picker ───────────────────────────────────────────────────────────────
+    final hasError = errorText != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Loading state ──────────────────────────────────────────────────
-        if (loading)
-          Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.cardBorder),
-            ),
-            child: const Center(
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.textGray,
-                ),
-              ),
-            ),
-          )
-
-        // ── Error state ────────────────────────────────────────────────────
-        else if (loadError != null)
-          Container(
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.5)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                const Icon(Icons.warning_amber_rounded,
-                    color: Colors.redAccent, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    loadError!,
-                    style: const TextStyle(
-                        color: Colors.redAccent, fontSize: 13),
+        // Selected chips
+        if (selected.isNotEmpty) ...[
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: selected.map((b) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  // ignore: deprecated_member_use
+                  color:        AppColors.primaryBlue.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    // ignore: deprecated_member_use
+                    color: AppColors.primaryBlue.withOpacity(0.4),
                   ),
                 ),
-                GestureDetector(
-                  onTap: onRetry,
-                  child: const Text(
-                    'Retry',
-                    style: TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(b.name,
+                        style: const TextStyle(
+                          color:    AppColors.textWhite,
+                          fontSize: 12,
+                        )),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => _toggle(b, selected),
+                      child: const Icon(Icons.close_rounded,
+                          color: AppColors.textGray, size: 12),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          )
-
-        // ── Dropdown ───────────────────────────────────────────────────────
-        else
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: hasError
-                    ? Colors.redAccent
-                    : AppColors.cardBorder,
-              ),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<BusinessSummary>(
-                value: selected,
-                hint: const Text(
-                  'Choose business...',
-                  style: TextStyle(
-                      color: AppColors.textSubtle, fontSize: 13.5),
-                ),
-                isExpanded: true,
-                dropdownColor: AppColors.cardBackground,
-                iconEnabledColor: AppColors.textGray,
-                style: const TextStyle(
-                    color: AppColors.textWhite, fontSize: 13.5),
-                // Compare by UUID so equality works correctly
-                items: businesses
-                    .map(
-                      (b) => DropdownMenuItem<BusinessSummary>(
-                        value: b,
-                        child: Row(
-                          children: [
-                            Expanded(child: Text(b.name)),
-                            // Show status badge for non-active businesses
-                            if (b.status != null && b.status != 'active')
-                              Container(
-                                margin: const EdgeInsets.only(left: 6),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                      color: Colors.orange.withOpacity(0.4)),
-                                ),
-                                child: Text(
-                                  b.status!,
-                                  style: const TextStyle(
-                                    color: Colors.orange,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: onChanged,
-              ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 8),
+        ],
+        // Dropdown
+        Container(
+          decoration: BoxDecoration(
+            color:        AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: hasError ? Colors.redAccent : AppColors.cardBorder,
             ),
           ),
-
-        // ── Inline error ───────────────────────────────────────────────────
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<BusinessSummary>(
+              value:           null,
+              hint: const Text(
+                'Add business...',
+                style: TextStyle(
+                    color: AppColors.textSubtle, fontSize: 13.5),
+              ),
+              isExpanded:       true,
+              dropdownColor:    AppColors.cardBackground,
+              iconEnabledColor: AppColors.textGray,
+              style: const TextStyle(
+                  color: AppColors.textWhite, fontSize: 13.5),
+              items: businesses.map((b) {
+                final isSelected =
+                    selected.any((s) => s.id == b.id);
+                return DropdownMenuItem<BusinessSummary>(
+                  value: b,
+                  child: Row(
+                    children: [
+                      if (isSelected)
+                        const Padding(
+                          padding: EdgeInsets.only(right: 6),
+                          child: Icon(Icons.check_rounded,
+                              color: AppColors.primaryBlue, size: 14),
+                        ),
+                      Expanded(child: Text(b.name)),
+                      // Status badge for warning businesses
+                      if (b.status == 'warning')
+                        Container(
+                          margin: const EdgeInsets.only(left: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            // ignore: deprecated_member_use
+                            color: Colors.orange.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              // ignore: deprecated_member_use
+                              color: Colors.orange.withOpacity(0.4),
+                            ),
+                          ),
+                          child: const Text('Warning',
+                              style: TextStyle(
+                                color:      Colors.orange,
+                                fontSize:   10,
+                                fontWeight: FontWeight.w600,
+                              )),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: (b) {
+                if (b != null) _toggle(b, selected);
+              },
+            ),
+          ),
+        ),
+        // Inline error
         if (hasError) ...[
           const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.error_outline,
-                  color: Colors.redAccent, size: 13),
-              const SizedBox(width: 4),
-              Text(
-                errorText!,
+          Row(children: [
+            const Icon(Icons.error_outline,
+                color: Colors.redAccent, size: 13),
+            const SizedBox(width: 4),
+            Text(errorText!,
                 style: const TextStyle(
-                    color: Colors.redAccent, fontSize: 12),
-              ),
-            ],
-          ),
+                    color: Colors.redAccent, fontSize: 12)),
+          ]),
         ],
       ],
     );
@@ -867,23 +931,14 @@ class _TypeSelector extends StatelessWidget {
     this.errorText,
   });
 
-  final MessageType? selected;
+  final MessageType?              selected;
   final ValueChanged<MessageType> onChanged;
-  final String? errorText;
+  final String?                   errorText;
 
   static const _opts = [
-    (
-      type: MessageType.compliance,
-      color: Color(0xFFFF4D6A),
-    ),
-    (
-      type: MessageType.announcement,
-      color: Color(0xFF9B8AFB),
-    ),
-    (
-      type: MessageType.general,
-      color: Color(0xFF1A6FFF),
-    ),
+    (type: MessageType.compliance,   color: Color(0xFFFF4D6A)),
+    (type: MessageType.announcement, color: Color(0xFF9B8AFB)),
+    (type: MessageType.general,      color: Color(0xFF1A6FFF)),
   ];
 
   @override
@@ -893,12 +948,11 @@ class _TypeSelector extends StatelessWidget {
       children: [
         Row(
           children: List.generate(_opts.length, (i) {
-            final opt = _opts[i];
+            final opt      = _opts[i];
             final isActive = selected == opt.type;
             return Expanded(
               child: Padding(
-                padding:
-                    EdgeInsets.only(right: i < _opts.length - 1 ? 8 : 0),
+                padding: EdgeInsets.only(right: i < _opts.length - 1 ? 8 : 0),
                 child: GestureDetector(
                   onTap: () => onChanged(opt.type),
                   child: AnimatedContainer(
@@ -915,6 +969,7 @@ class _TypeSelector extends StatelessWidget {
                             // ignore: deprecated_member_use
                             ? opt.color.withOpacity(0.5)
                             : (errorText != null
+                                // ignore: deprecated_member_use
                                 ? Colors.redAccent.withOpacity(0.5)
                                 : AppColors.cardBorder),
                         width: isActive ? 1.5 : 1,
@@ -934,7 +989,7 @@ class _TypeSelector extends StatelessWidget {
                               color: isActive
                                   ? opt.color
                                   : AppColors.textGray,
-                              fontSize: 12.5,
+                              fontSize:   12.5,
                               fontWeight: isActive
                                   ? FontWeight.w600
                                   : FontWeight.w400,
@@ -951,18 +1006,14 @@ class _TypeSelector extends StatelessWidget {
         ),
         if (errorText != null) ...[
           const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.error_outline,
-                  color: Colors.redAccent, size: 13),
-              const SizedBox(width: 4),
-              Text(
-                errorText!,
-                style:
-                    const TextStyle(color: Colors.redAccent, fontSize: 12),
-              ),
-            ],
-          ),
+          Row(children: [
+            const Icon(Icons.error_outline,
+                color: Colors.redAccent, size: 13),
+            const SizedBox(width: 4),
+            Text(errorText!,
+                style: const TextStyle(
+                    color: Colors.redAccent, fontSize: 12)),
+          ]),
         ],
       ],
     );
@@ -982,11 +1033,11 @@ class _StyledTextField extends StatelessWidget {
   });
 
   final TextEditingController controller;
-  final String hint;
-  final int maxLines;
+  final String                hint;
+  final int                   maxLines;
   final ValueChanged<String>? onChanged;
-  final VoidCallback? onEditingComplete;
-  final String? errorText;
+  final VoidCallback?         onEditingComplete;
+  final String?               errorText;
 
   @override
   Widget build(BuildContext context) {
@@ -996,39 +1047,36 @@ class _StyledTextField extends StatelessWidget {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.cardBackground,
+            color:        AppColors.cardBackground,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: hasError ? Colors.redAccent : AppColors.cardBorder,
             ),
           ),
           child: TextField(
-            controller: controller,
-            onChanged: onChanged,
-            onEditingComplete: onEditingComplete,
-            maxLines: maxLines,
+            controller:         controller,
+            onChanged:          onChanged,
+            onEditingComplete:  onEditingComplete,
+            maxLines:           maxLines,
+            maxLength:          maxLines == 1 ? 255 : null,
             style: const TextStyle(
-              color: AppColors.textWhite,
+              color:    AppColors.textWhite,
               fontSize: 13.5,
-              height: 1.55,
+              height:   1.55,
             ),
             decoration: InputDecoration(
-              hintText: hint,
+              hintText:        hint,
               hintStyle: const TextStyle(
                   color: AppColors.textSubtle, fontSize: 13.5),
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
+              border:          InputBorder.none,
+              contentPadding:  const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 12),
-              // Live character counter for subject (max 255 per DB schema)
-              counterText: maxLines == 1
-                  ? '${controller.text.length}/255'
-                  : null,
-              counterStyle: const TextStyle(
-                  color: AppColors.textSubtle, fontSize: 10.5),
             ),
-            maxLength: maxLines == 1 ? 255 : null, // matches DB varchar(255)
+            // Character counter for subject only (matches DB varchar(255))
             buildCounter: maxLines == 1
-                ? (_, {required currentLength, required isFocused, maxLength}) =>
+                ? (_, {required currentLength,
+                        required isFocused,
+                        maxLength}) =>
                     Text(
                       '$currentLength/${maxLength ?? 255}',
                       style: TextStyle(
@@ -1043,18 +1091,14 @@ class _StyledTextField extends StatelessWidget {
         ),
         if (hasError) ...[
           const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(Icons.error_outline,
-                  color: Colors.redAccent, size: 13),
-              const SizedBox(width: 4),
-              Text(
-                errorText!,
-                style:
-                    const TextStyle(color: Colors.redAccent, fontSize: 12),
-              ),
-            ],
-          ),
+          Row(children: [
+            const Icon(Icons.error_outline,
+                color: Colors.redAccent, size: 13),
+            const SizedBox(width: 4),
+            Text(errorText!,
+                style: const TextStyle(
+                    color: Colors.redAccent, fontSize: 12)),
+          ]),
         ],
       ],
     );
@@ -1073,19 +1117,19 @@ class _LetterPreview extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Container(
-        width: double.infinity,
+        width:   double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.cardBackground,
+          color:        AppColors.cardBackground,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.cardBorder),
+          border:       Border.all(color: AppColors.cardBorder),
         ),
         child: Text(
           text,
           style: const TextStyle(
-            color: AppColors.textWhite,
+            color:    AppColors.textWhite,
             fontSize: 13,
-            height: 1.75,
+            height:   1.75,
           ),
         ),
       ),
@@ -1104,8 +1148,8 @@ class _Label extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: AppColors.textGray,
-        fontSize: 12.5,
+        color:      AppColors.textGray,
+        fontSize:   12.5,
         fontWeight: FontWeight.w600,
       ),
     );
@@ -1122,8 +1166,8 @@ class _Footer extends StatelessWidget {
     required this.onSend,
   });
 
-  final bool canSend;
-  final bool sending;
+  final bool         canSend;
+  final bool         sending;
   final VoidCallback onCancel;
   final VoidCallback onSend;
 
@@ -1136,18 +1180,18 @@ class _Footer extends StatelessWidget {
           GestureDetector(
             onTap: onCancel,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 12),
               decoration: BoxDecoration(
-                color: AppColors.cardBackground,
+                color:        AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.cardBorder),
+                border:       Border.all(color: AppColors.cardBorder),
               ),
               child: const Text(
                 'Cancel',
                 style: TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 13.5,
+                  color:      AppColors.textGray,
+                  fontSize:   13.5,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1159,14 +1203,14 @@ class _Footer extends StatelessWidget {
               onTap: canSend ? onSend : null,
               child: AnimatedOpacity(
                 duration: const Duration(milliseconds: 200),
-                opacity: canSend ? 1.0 : 0.4,
+                opacity:  canSend ? 1.0 : 0.4,
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [
                         AppColors.gradientStart,
-                        AppColors.gradientEnd
+                        AppColors.gradientEnd,
                       ],
                     ),
                     borderRadius: BorderRadius.circular(10),
@@ -1186,11 +1230,9 @@ class _Footer extends StatelessWidget {
                     children: [
                       if (sending)
                         const SizedBox(
-                          width: 14,
-                          height: 14,
+                          width: 14, height: 14,
                           child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                            strokeWidth: 2, color: Colors.white,
                           ),
                         )
                       else
@@ -1200,8 +1242,8 @@ class _Footer extends StatelessWidget {
                       Text(
                         sending ? 'Sending...' : 'Send Message',
                         style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
+                          color:      Colors.white,
+                          fontSize:   13.5,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

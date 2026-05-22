@@ -1,5 +1,4 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum MessageType {
@@ -7,24 +6,25 @@ enum MessageType {
   announcement,
   general;
 
-  /// Matches the Postgres enum values in the `messages` table.
-  String get dbValue => name; // 'compliance' | 'announcement' | 'general'
+  /// Matches the Postgres enum value in the `messages` table.
+  String get dbValue => name;
 
   String get label => switch (this) {
-    MessageType.compliance => 'Compliance',
-    MessageType.announcement => 'Announcement',
-    MessageType.general => 'General',
-  };
+        MessageType.compliance   => 'Compliance',
+        MessageType.announcement => 'Announcement',
+        MessageType.general      => 'General',
+      };
 
   String get icon => switch (this) {
-    MessageType.compliance => '⚠️',
-    MessageType.announcement => '📣',
-    MessageType.general => '💬',
-  };
+        MessageType.compliance   => '⚠️',
+        MessageType.announcement => '📣',
+        MessageType.general      => '💬',
+      };
 }
 
-enum MessageStatus {
-  sent,
+/// Matches the `recipient_status` Postgres enum on `message_recipients`.
+enum RecipientStatus {
+  unread,
   read,
   archived;
 
@@ -33,104 +33,200 @@ enum MessageStatus {
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
+/// Lightweight business representation used in the compose dropdown.
+/// Only approved + warning businesses are eligible as message recipients.
 class BusinessSummary {
-  const BusinessSummary({required this.id, required this.name, this.status});
+  const BusinessSummary({
+    required this.id,
+    required this.name,
+    required this.status,
+  });
 
-  /// UUID from `businesses.id`
+  /// `businesses.id` — UUID used as the FK in `message_recipients`.
   final String id;
 
   /// `businesses.business_name`
   final String name;
 
-  /// `businesses.status` — useful for showing inactive/pending badges in the dropdown
-  final String? status;
+  /// `businesses.status` — used to show status badges in the dropdown
+  /// and to guard against sending to ineligible businesses.
+  final String status;
+
+  /// Only approved and warning businesses can receive messages.
+  bool get isEligible => status == 'approved' || status == 'warning';
 
   factory BusinessSummary.fromJson(Map<String, dynamic> json) =>
       BusinessSummary(
-        id: json['id'] as String,
-        name: json['business_name'] as String,
-        status: json['status'] as String?,
+        id:     json['id']            as String,
+        name:   json['business_name'] as String,
+        status: json['status']        as String,
       );
 }
 
+/// Represents a row from `messages` joined with its sender profile.
+/// Used on the admin outbox side.
 class Message {
   const Message({
     required this.id,
     required this.senderId,
-    required this.businessId,
     required this.messageType,
     required this.subject,
     required this.content,
+    required this.isBroadcast,
+    required this.createdAt,
+    this.senderName,
+  });
+
+  final String      id;
+  final String      senderId;
+  final MessageType messageType;
+  final String      subject;
+  final String      content;
+
+  /// True when the message was sent via "All Businesses".
+  /// False when sent to a specific selection.
+  final bool        isBroadcast;
+
+  final DateTime    createdAt;
+
+  /// Joined from `profiles.full_name` via the `sender` relation.
+  final String?     senderName;
+
+  factory Message.fromJson(Map<String, dynamic> json) => Message(
+        id:          json['id']          as String,
+        senderId:    json['sender_id']   as String,
+        messageType: MessageType.values.firstWhere(
+          (e) => e.dbValue == json['message_type'],
+          orElse: () => MessageType.general,
+        ),
+        subject:     json['subject']     as String,
+        content:     json['content']     as String,
+        isBroadcast: json['is_broadcast'] as bool,
+        createdAt:   DateTime.parse(json['created_at'] as String),
+        senderName:  (json['sender'] as Map<String, dynamic>?)?['full_name']
+                         as String?,
+      );
+}
+
+/// Represents a row from `message_recipients` joined with its parent message.
+/// Used on the business inbox side.
+class InboxMessage {
+  const InboxMessage({
+    required this.recipientId,
+    required this.messageId,
+    required this.businessId,
     required this.status,
     required this.isRead,
     required this.createdAt,
     this.readAt,
+    // joined from messages
+    required this.messageType,
+    required this.subject,
+    required this.content,
+    required this.isBroadcast,
+    required this.sentAt,
     this.senderName,
   });
 
-  final String id;
-  final String senderId;
-  final String businessId;
+  // ── message_recipients fields ──────────────────────────────────────────────
+  final String          recipientId; // message_recipients.id
+  final String          messageId;
+  final String          businessId;
+  final RecipientStatus status;
+  final bool            isRead;
+  final DateTime        createdAt;   // when this recipient row was created (= send time)
+  final DateTime?       readAt;
+
+  // ── joined from messages ───────────────────────────────────────────────────
   final MessageType messageType;
-  final String subject;
-  final String content;
-  final MessageStatus status;
-  final bool isRead;
-  final DateTime createdAt;
-  final DateTime? readAt;
+  final String      subject;
+  final String      content;
+  final bool        isBroadcast;
+  final DateTime    sentAt;      // messages.created_at
+  final String?     senderName;
 
-  /// Joined from `profiles.full_name` via the `sender` relation.
-  final String? senderName;
+  factory InboxMessage.fromJson(Map<String, dynamic> json) {
+    final msg = json['message'] as Map<String, dynamic>;
+    return InboxMessage(
+      recipientId:  json['id']          as String,
+      messageId:    json['message_id']  as String,
+      businessId:   json['business_id'] as String,
+      status: RecipientStatus.values.firstWhere(
+        (e) => e.dbValue == json['status'],
+        orElse: () => RecipientStatus.unread,
+      ),
+      isRead:    json['is_read'] as bool,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      readAt:    json['read_at'] != null
+                     ? DateTime.parse(json['read_at'] as String)
+                     : null,
+      messageType: MessageType.values.firstWhere(
+        (e) => e.dbValue == msg['message_type'],
+        orElse: () => MessageType.general,
+      ),
+      subject:     msg['subject']      as String,
+      content:     msg['content']      as String,
+      isBroadcast: msg['is_broadcast'] as bool,
+      sentAt:      DateTime.parse(msg['created_at'] as String),
+      senderName:  (msg['sender'] as Map<String, dynamic>?)?['full_name']
+                       as String?,
+    );
+  }
+}
 
-  factory Message.fromJson(Map<String, dynamic> json) => Message(
-    id: json['id'] as String,
-    senderId: json['sender_id'] as String,
-    businessId: json['business_id'] as String,
-    messageType: MessageType.values.firstWhere(
-      (e) => e.dbValue == json['message_type'],
-      orElse: () => MessageType.general,
-    ),
-    subject: json['subject'] as String,
-    content: json['content'] as String,
-    status: MessageStatus.values.firstWhere(
-      (e) => e.dbValue == json['status'],
-      orElse: () => MessageStatus.sent,
-    ),
-    isRead: json['is_read'] as bool,
-    createdAt: DateTime.parse(json['created_at'] as String),
-    readAt: json['read_at'] != null
-        ? DateTime.parse(json['read_at'] as String)
-        : null,
-    senderName:
-        (json['sender'] as Map<String, dynamic>?)?['full_name'] as String?,
-  );
+/// Per-business read state for a single message.
+/// Used in the admin delivery report.
+class DeliveryReceipt {
+  const DeliveryReceipt({
+    required this.recipientId,
+    required this.businessId,
+    required this.businessName,
+    required this.businessStatus,
+    required this.status,
+    required this.isRead,
+    this.readAt,
+  });
+
+  final String          recipientId;
+  final String          businessId;
+  final String          businessName;
+  final String          businessStatus;
+  final RecipientStatus status;
+  final bool            isRead;
+  final DateTime?       readAt;
+
+  factory DeliveryReceipt.fromJson(Map<String, dynamic> json) {
+    final biz = json['business'] as Map<String, dynamic>;
+    return DeliveryReceipt(
+      recipientId:    json['id']          as String,
+      businessId:     json['business_id'] as String,
+      businessName:   biz['business_name'] as String,
+      businessStatus: biz['status']        as String,
+      status: RecipientStatus.values.firstWhere(
+        (e) => e.dbValue == json['status'],
+        orElse: () => RecipientStatus.unread,
+      ),
+      isRead: json['is_read'] as bool,
+      readAt: json['read_at'] != null
+                  ? DateTime.parse(json['read_at'] as String)
+                  : null,
+    );
+  }
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 class MessagesApi {
   MessagesApi({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
   // ── Businesses ─────────────────────────────────────────────────────────────
 
-  /// Fetch all non-deleted businesses for the compose dropdown.
-  /// Ordered alphabetically by business name.
-  Future<List<BusinessSummary>> fetchBusinesses() async {
-    final data = await _client
-        .from('businesses')
-        .select('id, business_name, status')
-        .filter('deleted_at', 'is', null)
-        .filter('status', 'eq', 'approved')
-        .order('business_name', ascending: true);
-
-    return (data as List<dynamic>)
-        .map((b) => BusinessSummary.fromJson(b as Map<String, dynamic>))
-        .toList();
-  }
-
+  /// Fetches all approved + warning businesses for the compose dropdown.
+  /// These are the only statuses eligible to receive messages.
+  /// 
   Future<String?> fetchReceiverName(String businessId) async {
     final data = await _client
         .from('businesses')
@@ -144,83 +240,125 @@ class MessagesApi {
 
     return data?['business_name'];
   }
+  Future<List<BusinessSummary>> fetchEligibleBusinesses() async {
+    final data = await _client
+        .from('businesses')
+        .select('id, business_name, status')
+        .inFilter('status', ['approved', 'warning'])
+        .filter('deleted_at', 'is', null)
+        .order('business_name', ascending: true);
+
+    return (data as List<dynamic>)
+        .map((b) => BusinessSummary.fromJson(b as Map<String, dynamic>))
+        .toList();
+  }
 
   // ── Send ───────────────────────────────────────────────────────────────────
 
-  /// Send a message to a single business.
-  /// `senderId` is the admin's `profiles.id`.
-  Future<void> sendToOne({
-    required String senderId,
-    required String businessId,
-    required MessageType messageType,
-    required String subject,
-    required String content,
+  /// Send a message to a specific selection of businesses.
+  /// Inserts one row into `messages`, then one row per business
+  /// into `message_recipients`.
+  ///
+  /// The [businessIds] list should only contain approved/warning IDs —
+  /// the UI enforces this, but only eligible businesses will have rows
+  /// in `message_recipients` because they were loaded via [fetchEligibleBusinesses].
+  Future<String> sendToSelected({
+    required String           senderId,
+    required List<String>     businessIds,
+    required MessageType      messageType,
+    required String           subject,
+    required String           content,
   }) async {
-    await _client.from('messages').insert({
-      'sender_id': senderId,
-      'business_id': businessId,
-      'message_type': messageType.dbValue,
-      'subject': subject.trim(),
-      'content': content.trim(),
-      // status defaults to 'sent', is_read defaults to false in DB
-    });
+    assert(businessIds.isNotEmpty, 'businessIds must not be empty');
+
+    // 1. Insert the single canonical message record.
+    final msgResult = await _client
+        .from('messages')
+        .insert({
+          'sender_id':    senderId,
+          'message_type': messageType.dbValue,
+          'subject':      subject.trim(),
+          'content':      content.trim(),
+          'is_broadcast': false,
+        })
+        .select('id')
+        .single();
+
+    final messageId = msgResult['id'] as String;
+
+    // 2. Bulk insert one recipient row per business.
+    final recipients = businessIds
+        .map((bizId) => {
+              'message_id':  messageId,
+              'business_id': bizId,
+              // status defaults to 'unread', is_read defaults to false in DB
+            })
+        .toList();
+
+    await _client.from('message_recipients').insert(recipients);
+
+    return messageId;
   }
 
-  /// Send the same message to every non-deleted business (bulk insert).
-  /// Returns the count of businesses messaged.
-  Future<int> sendToAll({
-    required String senderId,
+  /// Send a broadcast message to all approved + warning businesses.
+  /// Snapshots eligible businesses at this exact moment — businesses
+  /// registered or approved after this call will NOT see the message.
+  ///
+  /// Returns the message ID and the count of recipients inserted.
+  Future<({String messageId, int recipientCount})> sendToAll({
+    required String      senderId,
     required MessageType messageType,
-    required String subject,
-    required String content,
+    required String      subject,
+    required String      content,
   }) async {
-    // Fetch all active business IDs
+    // 1. Snapshot eligible business IDs right now.
     final businesses = await _client
         .from('businesses')
         .select('id')
-        .filter('deleted_at', 'is', null)
-        .filter('status', 'eq', 'approved');
+        .inFilter('status', ['approved', 'warning'])
+        .filter('deleted_at', 'is', null);
 
-    if ((businesses as List).isEmpty) return 0;
-
-    final rows = businesses
-        .map(
-          (b) => {
-            'sender_id': senderId,
-            'business_id': b['id'] as String,
-            'message_type': messageType.dbValue,
-            'subject': subject.trim(),
-            'content': content.trim(),
-          },
-        )
+    final bizIds = (businesses as List<dynamic>)
+        .map((b) => b['id'] as String)
         .toList();
 
-    await _client.from('messages').insert(rows);
-    return rows.length;
-  }
+    if (bizIds.isEmpty) return (messageId: '', recipientCount: 0);
 
-  // ── Fetch ──────────────────────────────────────────────────────────────────
-
-  /// Fetch all messages for a specific business (receiver/business-owner view).
-  Future<List<Message>> fetchForBusiness(String businessId) async {
-    final data = await _client
+    // 2. Insert the single canonical message record.
+    final msgResult = await _client
         .from('messages')
-        .select('*, sender:profiles!sender_id(full_name)')
-        .eq('business_id', businessId)
-        .order('created_at', ascending: false);
+        .insert({
+          'sender_id':    senderId,
+          'message_type': messageType.dbValue,
+          'subject':      subject.trim(),
+          'content':      content.trim(),
+          'is_broadcast': true,
+        })
+        .select('id')
+        .single();
 
-    return (data as List<dynamic>)
-        .map((m) => Message.fromJson(m as Map<String, dynamic>))
+    final messageId = msgResult['id'] as String;
+
+    // 3. Bulk insert one recipient row per eligible business.
+    final recipients = bizIds
+        .map((bizId) => {
+              'message_id':  messageId,
+              'business_id': bizId,
+            })
         .toList();
+
+    await _client.from('message_recipients').insert(recipients);
+
+    return (messageId: messageId, recipientCount: bizIds.length);
   }
 
-  /// Fetch all messages sent by an admin (sender view).
+  // ── Admin: Outbox ──────────────────────────────────────────────────────────
+
+  /// Fetches all messages sent by the admin, newest first.
   Future<List<Message>> fetchSentByAdmin(String adminId) async {
     final data = await _client
         .from('messages')
-        .select(
-          '*, sender:profiles!sender_id(full_name), business:businesses(business_name)',
-        )
+        .select('*, sender:profiles!sender_id(full_name)')
         .eq('sender_id', adminId)
         .order('created_at', ascending: false);
 
@@ -229,36 +367,79 @@ class MessagesApi {
         .toList();
   }
 
-  // ── Update ─────────────────────────────────────────────────────────────────
+  /// Fetches the per-business delivery report for a single message.
+  /// Shows which businesses have read, not read, or archived the message.
+  Future<List<DeliveryReceipt>> fetchDeliveryReport(String messageId) async {
+    final data = await _client
+        .from('message_recipients')
+        .select('*, business:businesses(business_name, status)')
+        .eq('message_id', messageId)
+        .order('is_read', ascending: true)    // unread first
+        .order('business(business_name)', ascending: true);
 
-  /// Mark a single message as read.
-  Future<void> markAsRead(String messageId) async {
-    await _client
-        .from('messages')
-        .update({
-          'is_read': true,
-          'status': MessageStatus.read.dbValue,
-          'read_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', messageId);
+    return (data as List<dynamic>)
+        .map((r) => DeliveryReceipt.fromJson(r as Map<String, dynamic>))
+        .toList();
   }
 
-  /// Archive a message.
-  Future<void> archive(String messageId) async {
-    await _client
-        .from('messages')
-        .update({'status': MessageStatus.archived.dbValue})
-        .eq('id', messageId);
+  // ── Business: Inbox ────────────────────────────────────────────────────────
+
+  /// Fetches all inbox messages for a business, newest first.
+  /// Excludes archived messages by default — pass [includeArchived] to show them.
+  Future<List<InboxMessage>> fetchInbox(
+    String businessId, {
+    bool includeArchived = false,
+  }) async {
+    var query = _client
+        .from('message_recipients')
+        .select(
+          '*, message:messages(*, sender:profiles!sender_id(full_name))',
+        )
+        .eq('business_id', businessId);
+
+    if (!includeArchived) {
+      query = query.neq('status', RecipientStatus.archived.dbValue);
+    }
+
+    final data = await query.order('created_at', ascending: false);
+
+    return (data as List<dynamic>)
+        .map((r) => InboxMessage.fromJson(r as Map<String, dynamic>))
+        .toList();
   }
 
-  /// Get unread message count for a business (for badge indicators).
-  Future<int> unreadCount(String businessId) async {
+  /// Returns the unread message count for a business (for badge indicators).
+  Future<int> fetchUnreadCount(String businessId) async {
     final response = await _client
-        .from('messages')
+        .from('message_recipients')
         .select('id')
         .eq('business_id', businessId)
         .eq('is_read', false);
 
     return (response as List).length;
+  }
+
+  // ── Business: Update State ─────────────────────────────────────────────────
+
+  /// Marks a recipient row as read.
+  /// Updates `message_recipients` only — `messages` is immutable.
+  Future<void> markAsRead(String recipientId) async {
+    await _client
+        .from('message_recipients')
+        .update({
+          'is_read': true,
+          'status':  RecipientStatus.read.dbValue,
+          'read_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', recipientId)
+        .eq('is_read', false); // no-op if already read
+  }
+
+  /// Archives a recipient row so it no longer appears in the default inbox.
+  Future<void> archive(String recipientId) async {
+    await _client
+        .from('message_recipients')
+        .update({'status': RecipientStatus.archived.dbValue})
+        .eq('id', recipientId);
   }
 }
