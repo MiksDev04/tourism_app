@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../../shared/widgets/paginator.dart';
 import '../widgets/business_details_modal.dart';
 import '../models/accommodation_models.dart';
 import '../../../api/admin_accommodation_api.dart';
@@ -39,6 +40,10 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   int _selectedTab = 0;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
+  int _currentPage = 0;
+  int _pageSize = 10;
+
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   List<Accommodation> _accommodations = [];
   bool _isLoading = true;
@@ -74,6 +79,16 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
           a.owner.toLowerCase().contains(q);
       return matchesTab && matchesSearch;
     }).toList();
+  }
+
+  int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
+
+  int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
+
+  List<Accommodation> get _pagedRows {
+    final start = _clampedPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filtered.length);
+    return _filtered.sublist(start, end);
   }
 
   int _countForStatus(AccommodationStatus? status) => status == null
@@ -160,12 +175,18 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                     selectedTab: _selectedTab,
                     tabs: _filterTabs,
                     countForStatus: _countForStatus,
-                    onTabSelected: (i) => setState(() => _selectedTab = i),
+                    onTabSelected: (i) => setState(() {
+                      _selectedTab = i;
+                      _currentPage = 0;
+                    }),
                   ),
                   const SizedBox(height: 14),
                   _SearchBar(
                     controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onChanged: (v) => setState(() {
+                      _searchQuery = v;
+                      _currentPage = 0;
+                    }),
                   ),
                   const SizedBox(height: 14),
                   if (_isLoading)
@@ -186,15 +207,35 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                       ),
                     )
                   else
-                    isNarrow
-                        ? _AccommodationCardList(
-                            rows: _filtered,
-                            onStatusUpdate: _updateStatus,
-                          )
-                        : _AccommodationTable(
-                            rows: _filtered,
-                            onStatusUpdate: _updateStatus,
-                          ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        isNarrow
+                            ? _AccommodationCardList(
+                                rows: _pagedRows,
+                                onStatusUpdate: _updateStatus,
+                              )
+                            : _AccommodationTable(
+                                rows: _pagedRows,
+                                onStatusUpdate: _updateStatus,
+                              ),
+                        const SizedBox(height: 12),
+                        Paginator(
+                          currentPage: _clampedPage,
+                          totalPages: _totalPages,
+                          totalItems: _filtered.length,
+                          pageSize: _pageSize,
+                          pageSizeOptions: _pageSizeOptions,
+                          onPageSizeChanged: (size) => setState(() {
+                            _pageSize = size;
+                            _currentPage = 0;
+                          }),
+                          onPageChanged: (page) => setState(() {
+                            _currentPage = page;
+                          }),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),

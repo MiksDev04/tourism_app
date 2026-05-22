@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../../shared/widgets/paginator.dart';
 import '../../../api/admin_report_api.dart'; // <-- updated import
 
 // ─── Generated Report Model ───────────────────────────────────────────────────
@@ -99,8 +100,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   String _searchQuery = '';
   String _filterMonth = '';
   String _filterYear = '';
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   final _searchCtrl = TextEditingController();
+
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   static const List<String> _months = [
     'All Months',
@@ -273,6 +278,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       _filterYear = '';
       _searchQuery = '';
       _searchCtrl.clear();
+      _currentPage = 0;
     });
   }
 
@@ -291,6 +297,18 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     }
     return list;
   }
+
+  int get _totalPages => (_filteredReports.length / _pageSize).ceil().clamp(1, 999);
+
+  int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
+
+  List<GeneratedReport> get _pagedReports {
+    final start = _clampedPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filteredReports.length);
+    return _filteredReports.sublist(start, end);
+  }
+
+  void _resetPage() => _currentPage = 0;
 
   // ── Snackbars ─────────────────────────────────────────────────────────────
 
@@ -321,7 +339,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
-      title: 'Reports',
+      title: 'Report',
       selectedIndex: 2,
       onNavSelected: (_) {},
       child: LayoutBuilder(
@@ -341,8 +359,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                   _PageHeader(
                     showFilters: _showFilters,
                     isGenerating: _isGenerating,
-                    onFilterTap: () =>
-                        setState(() => _showFilters = !_showFilters),
+                    onFilterTap: () => setState(() => _showFilters = !_showFilters),
                     onGenerateTap: _showGenerateDialog,
                   ),
                   const SizedBox(height: 16),
@@ -354,10 +371,14 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                       years: _years,
                       selectedMonth: _filterMonth,
                       selectedYear: _filterYear,
-                      onMonthChanged: (v) =>
-                          setState(() => _filterMonth = v ?? ''),
-                      onYearChanged: (v) =>
-                          setState(() => _filterYear = v ?? ''),
+                      onMonthChanged: (v) => setState(() {
+                        _filterMonth = v ?? '';
+                        _resetPage();
+                      }),
+                      onYearChanged: (v) => setState(() {
+                        _filterYear = v ?? '';
+                        _resetPage();
+                      }),
                       onClear: _clearFilters,
                     ),
                     const SizedBox(height: 16),
@@ -366,7 +387,10 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                   // ── Search ──
                   _SearchBar(
                     controller: _searchCtrl,
-                    onChanged: (v) => setState(() => _searchQuery = v),
+                    onChanged: (v) => setState(() {
+                      _searchQuery = v;
+                      _resetPage();
+                    }),
                   ),
                   const SizedBox(height: 20),
 
@@ -390,9 +414,24 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
                   // ── Table ──
                   _GeneratedReportsTable(
-                    rows: _filteredReports,
+                    rows: _pagedReports,
                     isLoading: _loadingReports,
                     onDownload: _downloadReport,
+                  ),
+                  const SizedBox(height: 12),
+                  Paginator(
+                    currentPage: _clampedPage,
+                    totalPages: _totalPages,
+                    totalItems: _filteredReports.length,
+                    pageSize: _pageSize,
+                    pageSizeOptions: _pageSizeOptions,
+                    onPageSizeChanged: (size) => setState(() {
+                      _pageSize = size;
+                      _currentPage = 0;
+                    }),
+                    onPageChanged: (page) => setState(() {
+                      _currentPage = page;
+                    }),
                   ),
                   const SizedBox(height: 24),
                 ],

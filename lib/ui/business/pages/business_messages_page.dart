@@ -6,6 +6,7 @@ import '../../../api/messages_api.dart';
 import '../../../core/services/session_service.dart';
 import '../widgets/message_view_dialog.dart';
 import '../../shared/layouts/business_layout.dart';
+import '../../shared/widgets/paginator.dart';
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
@@ -24,6 +25,8 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   final _api = MessagesApi();
 
   _Filter _activeFilter = _Filter.all;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   // InboxMessage (not Message) — includes per-recipient read state
   List<InboxMessage> _messages = [];
@@ -35,6 +38,8 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   bool    _isLoading  = true;
   String? _error;
   String? _businessId;
+
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   @override
   void initState() {
@@ -101,6 +106,18 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
         };
       }).toList();
 
+  int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
+
+  int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
+
+  List<InboxMessage> get _pagedRows {
+    final start = _clampedPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filtered.length);
+    return _filtered.sublist(start, end);
+  }
+
+  void _resetPage() => _currentPage = 0;
+
   // ── Actions ───────────────────────────────────────────────────────────────
 
   Future<void> _openMessage(InboxMessage msg) async {
@@ -140,7 +157,10 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
                   const SizedBox(height: 16),
                   _FilterTabBar(
                     activeFilter: _activeFilter,
-                    onChanged: (f) => setState(() => _activeFilter = f),
+                    onChanged: (f) => setState(() {
+                      _activeFilter = f;
+                      _resetPage();
+                    }),
                   ),
                   const SizedBox(height: 16),
                   _buildBody(isNarrow),
@@ -159,7 +179,10 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
     if (_filtered.isEmpty) return const _EmptyState();
 
     return Column(
-      children: _filtered.map((msg) {
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: _pagedRows.map((msg) {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: _MessageCard(
@@ -169,7 +192,24 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
             onTap:    () => _openMessage(msg),
           ),
         );
-      }).toList(),
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        Paginator(
+          currentPage: _clampedPage,
+          totalPages: _totalPages,
+          totalItems: _filtered.length,
+          pageSize: _pageSize,
+          pageSizeOptions: _pageSizeOptions,
+          onPageSizeChanged: (size) => setState(() {
+            _pageSize = size;
+            _currentPage = 0;
+          }),
+          onPageChanged: (page) => setState(() {
+            _currentPage = page;
+          }),
+        ),
+      ],
     );
   }
 }

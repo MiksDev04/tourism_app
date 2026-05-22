@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_compliance_api.dart';
+import '../../shared/widgets/paginator.dart';
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
@@ -14,8 +15,6 @@ const _activityStatusOptions = [
   'Inactive',
   'No Activity',
 ];
-
-const _businessStatusOptions = ['All Business Statuses', 'Approved', 'Warning'];
 
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
 
@@ -38,7 +37,9 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   String _selectedType = 'All Types';
 
   int _currentPage = 0;
-  static const int _pageSize = 10;
+  int _pageSize = 10;
+
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   final _searchCtrl = TextEditingController();
 
@@ -170,7 +171,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _PageHeader(onRefresh: _load),
+                _PageHeader(onRefresh: _load, totalAccommodations: _pagedRows.length),
                 const SizedBox(height: 20),
                 if (_isLoading)
                   _LoadingState()
@@ -209,11 +210,16 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                   const SizedBox(height: 14),
                   _ComplianceTable(rows: _pagedRows),
                   const SizedBox(height: 12),
-                  _Paginator(
+                  Paginator(
                     currentPage: _currentPage,
                     totalPages: _totalPages,
                     totalItems: _filtered.length,
                     pageSize: _pageSize,
+                    pageSizeOptions: _pageSizeOptions,
+                    onPageSizeChanged: (size) => setState(() {
+                      _pageSize = size;
+                      _currentPage = 0;
+                    }),
                     onPageChanged: (p) => setState(() => _currentPage = p),
                   ),
                 ],
@@ -229,29 +235,33 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.onRefresh});
+  const _PageHeader({
+    required this.onRefresh,
+    required this.totalAccommodations
+    });
 
   final VoidCallback onRefresh;
+  final int totalAccommodations;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Expanded(
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Compliance Tracker',
-                style: TextStyle(
+                'Compliance Tracker ($totalAccommodations)',
+                style: const TextStyle(
                   color: AppColors.textWhite,
                   fontSize: 22,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              SizedBox(height: 4),
-              Text(
+              const SizedBox(height: 4),
+              const Text(
                 'Monitor guest recording activity of registered establishments',
                 style: TextStyle(color: AppColors.textGray, fontSize: 13),
               ),
@@ -969,185 +979,5 @@ class _ActivityBadge extends StatelessWidget {
         icon: Icons.remove_circle_outline_rounded,
       ),
     };
-  }
-}
-
-// ─── Business Status Badge ────────────────────────────────────────────────────
-
-class _BusinessStatusBadge extends StatelessWidget {
-  const _BusinessStatusBadge({required this.status});
-
-  final BusinessStatusLevel status;
-
-  @override
-  Widget build(BuildContext context) {
-    return switch (status) {
-      BusinessStatusLevel.warning => const _StatusChip(
-        color: AppColors.accentOrange,
-        label: 'Warning',
-        icon: Icons.warning_amber_rounded,
-      ),
-      BusinessStatusLevel.approved => const _StatusChip(
-        color: AppColors.accentGreen,
-        label: 'Approved',
-        icon: Icons.verified_outlined,
-      ),
-    };
-  }
-}
-
-// ─── Paginator ────────────────────────────────────────────────────────────────
-
-class _Paginator extends StatelessWidget {
-  const _Paginator({
-    required this.currentPage,
-    required this.totalPages,
-    required this.totalItems,
-    required this.pageSize,
-    required this.onPageChanged,
-  });
-
-  final int currentPage;
-  final int totalPages;
-  final int totalItems;
-  final int pageSize;
-  final ValueChanged<int> onPageChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final start = totalItems == 0 ? 0 : currentPage * pageSize + 1;
-    final end = ((currentPage + 1) * pageSize).clamp(0, totalItems);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          '$start–$end of $totalItems',
-          style: const TextStyle(color: AppColors.textGray, fontSize: 12),
-        ),
-        Row(
-          children: [
-            _PageBtn(
-              icon: Icons.chevron_left_rounded,
-              enabled: currentPage > 0,
-              onTap: () => onPageChanged(currentPage - 1),
-            ),
-            const SizedBox(width: 4),
-            for (int i = 0; i < totalPages; i++) ...[
-              if (_showPageNumber(i, currentPage, totalPages))
-                _PageNumber(
-                  page: i,
-                  isActive: i == currentPage,
-                  onTap: () => onPageChanged(i),
-                )
-              else if (_showEllipsis(i, currentPage, totalPages))
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    '…',
-                    style: TextStyle(color: AppColors.textSubtle, fontSize: 13),
-                  ),
-                ),
-            ],
-            const SizedBox(width: 4),
-            _PageBtn(
-              icon: Icons.chevron_right_rounded,
-              enabled: currentPage < totalPages - 1,
-              onTap: () => onPageChanged(currentPage + 1),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  // Show page number button: always show first, last, current, and ±1 neighbors
-  static bool _showPageNumber(int i, int current, int total) {
-    return i == 0 || i == total - 1 || (i - current).abs() <= 1;
-  }
-
-  // Show ellipsis only at the gap positions (not consecutive with a shown number)
-  static bool _showEllipsis(int i, int current, int total) {
-    if (i == 1 && current > 2) return true;
-    if (i == total - 2 && current < total - 3) return true;
-    return false;
-  }
-}
-
-class _PageBtn extends StatelessWidget {
-  const _PageBtn({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: enabled ? AppColors.textGray : AppColors.textSubtle,
-        ),
-      ),
-    );
-  }
-}
-
-class _PageNumber extends StatelessWidget {
-  const _PageNumber({
-    required this.page,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final int page;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 30,
-        height: 30,
-        margin: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.accentGreen.withOpacity(0.15)
-              : AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(
-            color: isActive
-                ? AppColors.accentGreen.withOpacity(0.5)
-                : AppColors.cardBorder,
-          ),
-        ),
-        child: Center(
-          child: Text(
-            '${page + 1}',
-            style: TextStyle(
-              color: isActive ? AppColors.accentGreen : AppColors.textGray,
-              fontSize: 12,
-              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
+import '../../shared/widgets/paginator.dart';
 import '../widgets/edit_guest_dialog.dart';
 import '../../../api/business_guest_record_api.dart';
 
@@ -123,6 +124,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
   bool _showFilters = false;
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   // Advanced filter values
   DateTime? _checkInFrom;
@@ -148,6 +151,8 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     'Tricycle',
     'Others',
   ];
+
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   @override
   void initState() {
@@ -317,6 +322,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
       _selectedTransport = null;
       _searchQuery = '';
       _searchCtrl.clear();
+      _currentPage = 0;
     });
   }
 
@@ -358,6 +364,18 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     }).toList();
   }
 
+  int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
+
+  int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
+
+  List<GuestRecord> get _pagedRows {
+    final start = _clampedPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filtered.length);
+    return _filtered.sublist(start, end);
+  }
+
+  void _resetPage() => _currentPage = 0;
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -380,7 +398,10 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
               children: [
                 _PageHeader(
                   activeFilter: _activeFilter,
-                  onFilterChanged: (f) => setState(() => _activeFilter = f),
+                  onFilterChanged: (f) => setState(() {
+                    _activeFilter = f;
+                    _resetPage();
+                  }),
                   showFilters: _showFilters,
                   onFilterToggle: () =>
                       setState(() => _showFilters = !_showFilters),
@@ -390,7 +411,10 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                 const SizedBox(height: 16),
                 _SearchBar(
                   controller: _searchCtrl,
-                  onChanged: (v) => setState(() => _searchQuery = v),
+                  onChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _resetPage();
+                  }),
                 ),
                 const SizedBox(height: 14),
                 if (_showFilters) ...[
@@ -403,10 +427,14 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                     transportOptions: _transportOptions,
                     onCheckInFromTap: () => _pickDate(context, true),
                     onCheckOutToTap: () => _pickDate(context, false),
-                    onPurposeChanged: (v) =>
-                        setState(() => _selectedPurpose = v),
-                    onTransportChanged: (v) =>
-                        setState(() => _selectedTransport = v),
+                    onPurposeChanged: (v) => setState(() {
+                      _selectedPurpose = v;
+                      _resetPage();
+                    }),
+                    onTransportChanged: (v) => setState(() {
+                      _selectedTransport = v;
+                      _resetPage();
+                    }),
                     onClearAll: _clearAllFilters,
                     isNarrow: isNarrow,
                   ),
@@ -424,11 +452,31 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                 else if (_loadError != null)
                   _ErrorBanner(message: _loadError!, onRetry: _loadRecords)
                 else
-                  _GuestTable(
-                    records: _filtered,
-                    isNarrow: isNarrow,
-                    onEdit: _onEdit,
-                    onRestore: _onRestore,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _GuestTable(
+                        records: _pagedRows,
+                        isNarrow: isNarrow,
+                        onEdit: _onEdit,
+                        onRestore: _onRestore,
+                      ),
+                      const SizedBox(height: 12),
+                      Paginator(
+                        currentPage: _clampedPage,
+                        totalPages: _totalPages,
+                        totalItems: _filtered.length,
+                        pageSize: _pageSize,
+                        pageSizeOptions: _pageSizeOptions,
+                        onPageSizeChanged: (size) => setState(() {
+                          _pageSize = size;
+                          _currentPage = 0;
+                        }),
+                        onPageChanged: (page) => setState(() {
+                          _currentPage = page;
+                        }),
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -1047,7 +1095,7 @@ class _SearchBar extends StatelessWidget {
 
 // ─── Guest Table ──────────────────────────────────────────────────────────────
 
-class _GuestTable extends StatefulWidget {
+class _GuestTable extends StatelessWidget {
   const _GuestTable({
     required this.records,
     required this.isNarrow,
@@ -1061,46 +1109,7 @@ class _GuestTable extends StatefulWidget {
   final ValueChanged<GuestRecord> onRestore;
 
   @override
-  State<_GuestTable> createState() => _GuestTableState();
-}
-
-class _GuestTableState extends State<_GuestTable> {
-  int _currentPage = 1;
-  int _pageSize = 10;
-
-  List<GuestRecord> get _records => widget.records;
-
-  int get _totalPages {
-    if (_records.isEmpty) return 1;
-    return (_records.length / _pageSize).ceil();
-  }
-
-  void _prev() => setState(() {
-    if (_currentPage > 1) _currentPage--;
-  });
-  void _next() => setState(() {
-    if (_currentPage < _totalPages) _currentPage++;
-  });
-
-  void _setPageSize(int size) => setState(() {
-    _pageSize = size;
-    _currentPage = 1;
-  });
-
-  @override
-  void didUpdateWidget(covariant _GuestTable oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final total = _totalPages;
-    if (_currentPage > total) setState(() => _currentPage = total);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final isNarrow = widget.isNarrow;
-
-    final start = (_currentPage - 1) * _pageSize;
-    final pageRecords = _records.skip(start).take(_pageSize).toList();
-
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
@@ -1113,7 +1122,7 @@ class _GuestTableState extends State<_GuestTable> {
             _TableHeader(),
             const Divider(color: AppColors.cardBorder, height: 1),
           ],
-          if (_records.isEmpty)
+          if (records.isEmpty)
             const Padding(
               padding: EdgeInsets.all(40),
               child: Center(
@@ -1124,188 +1133,27 @@ class _GuestTableState extends State<_GuestTable> {
               ),
             )
           else
-            ...pageRecords.map((r) {
-              final isLast = r == pageRecords.last;
+            ...records.map((r) {
+              final isLast = r == records.last;
               return Column(
                 children: [
                   if (isNarrow)
                     _RecordCard(
                       record: r,
-                      onEdit: widget.onEdit,
-                      onRestore: widget.onRestore,
+                      onEdit: onEdit,
+                      onRestore: onRestore,
                     )
                   else
                     _RecordRow(
                       record: r,
-                      onEdit: widget.onEdit,
-                      onRestore: widget.onRestore,
+                      onEdit: onEdit,
+                      onRestore: onRestore,
                     ),
                   if (!isLast)
                     const Divider(color: AppColors.cardBorder, height: 1),
                 ],
               );
             }),
-
-          if (_records.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final narrowControls = constraints.maxWidth < 420 || isNarrow;
-                  return narrowControls
-                      ? Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _SmallIconBtn(
-                                  icon: Icons.chevron_left,
-                                  onTap: _prev,
-                                  enabled: _currentPage > 1,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Page $_currentPage of $_totalPages',
-                                  style: const TextStyle(
-                                    color: AppColors.textGray,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                _SmallIconBtn(
-                                  icon: Icons.chevron_right,
-                                  onTap: _next,
-                                  enabled: _currentPage < _totalPages,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            _CompactPageSizeDropdown(
-                              value: _pageSize,
-                              onChanged: _setPageSize,
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            _SmallIconBtn(
-                              icon: Icons.chevron_left,
-                              onTap: _prev,
-                              enabled: _currentPage > 1,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Page $_currentPage of $_totalPages',
-                              style: const TextStyle(
-                                color: AppColors.textGray,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Spacer(),
-                            _CompactPageSizeDropdown(
-                              value: _pageSize,
-                              onChanged: _setPageSize,
-                            ),
-                            const SizedBox(width: 8),
-                            _SmallIconBtn(
-                              icon: Icons.chevron_right,
-                              onTap: _next,
-                              enabled: _currentPage < _totalPages,
-                            ),
-                          ],
-                        );
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SmallIconBtn extends StatelessWidget {
-  const _SmallIconBtn({
-    required this.icon,
-    required this.onTap,
-    this.enabled = true,
-  });
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool enabled;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: Container(
-        height: 30,
-        width: 34,
-        decoration: BoxDecoration(
-          color: enabled ? AppColors.primaryCyan : AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: enabled ? Colors.white : AppColors.textGray,
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactPageSizeDropdown extends StatelessWidget {
-  const _CompactPageSizeDropdown({
-    required this.value,
-    required this.onChanged,
-  });
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    const options = [5, 10, 20, 50];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.cardBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Show',
-            style: TextStyle(color: AppColors.textGray, fontSize: 12),
-          ),
-          const SizedBox(width: 8),
-          DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: value,
-              isDense: true,
-              items: options
-                  .map(
-                    (o) => DropdownMenuItem<int>(
-                      value: o,
-                      child: Text('$o', style: const TextStyle(fontSize: 13)),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (v) {
-                if (v != null) onChanged(v);
-              },
-              dropdownColor: AppColors.cardBackground,
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
-              iconEnabledColor: AppColors.textGray,
-            ),
-          ),
-          const SizedBox(width: 6),
-          const Text(
-            'per page',
-            style: TextStyle(color: AppColors.textGray, fontSize: 12),
-          ),
         ],
       ),
     );

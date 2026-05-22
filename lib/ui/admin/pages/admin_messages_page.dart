@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../api/messages_api.dart';
 import '../../../core/services/session_service.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../../shared/widgets/paginator.dart';
 import '../widgets/compose_message_modal.dart';
 import '../widgets/message_view_dialog.dart';
 
@@ -26,6 +27,8 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   String _searchQuery   = '';
   String _selectedType  = 'All Types';
   String _selectedScope = 'All'; // 'All' | 'Broadcast' | 'Targeted'
+  int _currentPage = 0;
+  int _pageSize = 10;
 
   final _searchCtrl = TextEditingController();
 
@@ -42,6 +45,7 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   ];
 
   static const _scopeOptions = ['All', 'Broadcast', 'Targeted'];
+  static const List<int> _pageSizeOptions = [10, 20, 30];
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -106,6 +110,18 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
     }).toList();
   }
 
+  int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
+
+  int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
+
+  List<Message> get _pagedRows {
+    final start = _clampedPage * _pageSize;
+    final end = (start + _pageSize).clamp(0, _filtered.length);
+    return _filtered.sublist(start, end);
+  }
+
+  void _resetPage() => _currentPage = 0;
+
   // ── Compose ────────────────────────────────────────────────────────────────
 
   Future<void> _openCompose() async {
@@ -148,11 +164,20 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
                 const SizedBox(height: 16),
                 _FilterRow(
                   searchCtrl:      _searchCtrl,
-                  onSearchChanged: (v) => setState(() => _searchQuery = v),
+                  onSearchChanged: (v) => setState(() {
+                    _searchQuery = v;
+                    _resetPage();
+                  }),
                   selectedType:    _selectedType,
-                  onTypeChanged:   (v) => setState(() => _selectedType = v!),
+                  onTypeChanged:   (v) => setState(() {
+                    _selectedType = v!;
+                    _resetPage();
+                  }),
                   selectedScope:   _selectedScope,
-                  onScopeChanged:  (v) => setState(() => _selectedScope = v!),
+                  onScopeChanged:  (v) => setState(() {
+                    _selectedScope = v!;
+                    _resetPage();
+                  }),
                   typeOptions:     _typeOptions,
                   scopeOptions:    _scopeOptions,
                 ),
@@ -162,10 +187,30 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
                 else if (_error != null)
                   _ErrorState(message: _error!, onRetry: _loadMessages)
                 else
-                  _MessagesTable(
-                    rows:      _filtered,
-                    api:       _api,
-                    onRefresh: _loadMessages,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _MessagesTable(
+                        rows:      _pagedRows,
+                        api:       _api,
+                        onRefresh: _loadMessages,
+                      ),
+                      const SizedBox(height: 12),
+                      Paginator(
+                        currentPage: _clampedPage,
+                        totalPages: _totalPages,
+                        totalItems: _filtered.length,
+                        pageSize: _pageSize,
+                        pageSizeOptions: _pageSizeOptions,
+                        onPageSizeChanged: (size) => setState(() {
+                          _pageSize = size;
+                          _currentPage = 0;
+                        }),
+                        onPageChanged: (page) => setState(() {
+                          _currentPage = page;
+                        }),
+                      ),
+                    ],
                   ),
               ],
             ),
