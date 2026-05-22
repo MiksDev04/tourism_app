@@ -1,5 +1,7 @@
 // lib/ui/admin/models/accommodation_models.dart
 
+import 'package:tourism_app/core/enums/business_enums.dart';
+
 enum AccommodationStatus { approved, pending, rejected, warning }
 
 class Accommodation {
@@ -7,7 +9,8 @@ class Accommodation {
     required this.id,
     required this.profileId,
     required this.name,
-    required this.type,
+    required this.businessType,
+    required this.businessLines,
     required this.owner,
     required this.email,
     required this.contact,
@@ -32,7 +35,8 @@ class Accommodation {
   final String id;
   final String profileId;
   final String name;
-  final String type;
+  final BusinessType businessType;
+  final List<BusinessLine> businessLines;
   final String owner;
   final String? email;
   final String contact;
@@ -67,15 +71,70 @@ class Accommodation {
     }
   }
 
+  static BusinessType _parseBusinessType(String value) {
+    switch (value) {
+      case 'corporation':
+        return BusinessType.corporation;
+      case 'partnership':
+        return BusinessType.partnership;
+      default:
+        return BusinessType.soleProprietorship;
+    }
+  }
+
+  static BusinessLine _parseBusinessLine(String value) {
+    switch (value) {
+      case 'hotel':
+        return BusinessLine.hotel;
+      case 'resort':
+        return BusinessLine.resort;
+      case 'motel':
+        return BusinessLine.motel;
+      case 'pension_inn':
+        return BusinessLine.pensionInn;
+      case 'youth_hostel':
+        return BusinessLine.youthHostel;
+      case 'apartment':
+        return BusinessLine.apartment;
+      default:
+        return BusinessLine.others;
+    }
+  }
+
+  static String _combineOwnerName(Map<String, dynamic> map) {
+    final ownerParts = <String>[
+      map['owner_first_name'] as String? ?? '',
+      map['owner_middle_name'] as String? ?? '',
+      map['owner_last_name'] as String? ?? '',
+    ].where((part) => part.trim().isNotEmpty).toList();
+
+    if (ownerParts.isNotEmpty) {
+      return ownerParts.join(' ').trim();
+    }
+
+    final profile = map['profiles'] as Map<String, dynamic>?;
+    final profileName = profile?['full_name'] as String?;
+    if (profileName != null && profileName.trim().isNotEmpty) {
+      return profileName.trim();
+    }
+
+    return '—';
+  }
+
   factory Accommodation.fromMap(Map<String, dynamic> map) {
     final profile = map['profiles'] as Map<String, dynamic>?;
+    final rawLines = map['business_line'];
+    final businessLines = rawLines is List
+        ? rawLines.whereType<String>().map(_parseBusinessLine).toList()
+        : const <BusinessLine>[];
 
     return Accommodation(
       id: map['id'] as String,
       profileId: map['profile_id'] as String,
       name: map['business_name'] as String,
-      type: map['business_type'] as String,
-      owner: map['owner_name'] as String? ?? '—',
+      businessType: _parseBusinessType(map['business_type'] as String),
+      businessLines: businessLines,
+      owner: _combineOwnerName(map),
       email: profile?['email'] as String? ?? '—', // We'll fetch this on demand in the details modal
       contact: profile?['phone'] as String? ?? '—',
       rooms: map['total_rooms'] as int,
@@ -105,7 +164,8 @@ class Accommodation {
       id: id,
       profileId: profileId,
       name: name,
-      type: type,
+      businessType: businessType,
+      businessLines: businessLines,
       owner: owner,
       email: email,
       contact: contact,
@@ -127,4 +187,7 @@ class Accommodation {
       createdAt: createdAt,
     );
   }
+
+  String get businessLineLabel =>
+      businessLines.isEmpty ? '—' : businessLines.map((line) => line.label).join(', ');
 }

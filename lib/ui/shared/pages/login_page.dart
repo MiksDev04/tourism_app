@@ -122,7 +122,7 @@ class _LoginCard extends StatefulWidget {
 }
 
 class _LoginCardState extends State<_LoginCard> {
-  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
@@ -132,17 +132,17 @@ class _LoginCardState extends State<_LoginCard> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSignIn() async {
-    final email = _emailController.text.trim();
+    final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Please enter your email and password.');
+    if (username.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your username and password.');
       return;
     }
 
@@ -151,7 +151,7 @@ class _LoginCardState extends State<_LoginCard> {
       _errorMessage = null;
     });
 
-    final result = await _api.login(email: email, password: password);
+    final result = await _api.login(username: username, password: password);
 
     if (!mounted) return;
     setState(() => _isLoading = false);
@@ -196,12 +196,13 @@ class _LoginCardState extends State<_LoginCard> {
             ),
           ),
           const SizedBox(height: 24),
-          const _FieldLabel(label: 'Email Address'),
+          const _FieldLabel(label: 'Username'),
           const SizedBox(height: 8),
           _InputField(
-            controller: _emailController,
-            hintText: 'Enter email address',
-            keyboardType: TextInputType.emailAddress,
+            controller: _usernameController,
+            hintText: 'Enter username',
+            keyboardType: TextInputType.text,
+            prefixIcon: Icons.person_outline_rounded,
           ),
           const SizedBox(height: 18),
           const _FieldLabel(label: 'Password'),
@@ -281,11 +282,13 @@ class _InputField extends StatelessWidget {
     required this.controller,
     required this.hintText,
     this.keyboardType = TextInputType.text,
+    this.prefixIcon,
   });
 
   final TextEditingController controller;
   final String hintText;
   final TextInputType keyboardType;
+  final IconData? prefixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -296,6 +299,9 @@ class _InputField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(color: AppColors.textSubtle),
+        prefixIcon: prefixIcon != null
+            ? Icon(prefixIcon, color: AppColors.textSubtle, size: 20)
+            : null,
         filled: true,
         fillColor: AppColors.inputBackground,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -338,6 +344,11 @@ class _PasswordField extends StatelessWidget {
         fillColor: AppColors.inputBackground,
         hintText: 'Enter password',
         hintStyle: const TextStyle(color: AppColors.textSubtle),
+        prefixIcon: const Icon(
+          Icons.lock_outline_rounded,
+          color: AppColors.textSubtle,
+          size: 20,
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -392,12 +403,18 @@ class _SignInButton extends StatelessWidget {
           icon: const Icon(Icons.login_rounded, size: 18, color: Colors.white),
           label: const Text(
             'Sign In',
-            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
         ),
       ),

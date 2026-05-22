@@ -11,6 +11,7 @@ class BusinessDetails {
   const BusinessDetails({
     required this.name,
     required this.type,
+    required this.businessLine,
     required this.rooms,
     required this.status,
     required this.owner,
@@ -31,6 +32,7 @@ class BusinessDetails {
 
   final String name;
   final String type;
+  final String businessLine;
   final int rooms;
   final AccommodationStatus status;
   final String owner;
@@ -260,7 +262,7 @@ class _BusinessIdentity extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${details.type} • ${details.rooms} Rooms',
+                '${details.type} • ${details.businessLine} • ${details.rooms} Rooms',
                 style: const TextStyle(
                   color: AppColors.textGray,
                   fontSize: 12.5,
@@ -291,6 +293,8 @@ class _DetailsGrid extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _DetailField(label: 'Owner', value: details.owner),
+              const SizedBox(height: 12),
+              _DetailField(label: 'Business Line', value: details.businessLine),
               const SizedBox(height: 12),
               _DetailField(
                 label: 'Registration #',

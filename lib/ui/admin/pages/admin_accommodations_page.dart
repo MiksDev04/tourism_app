@@ -3,6 +3,7 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
+import 'package:tourism_app/core/enums/business_enums.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
@@ -488,6 +489,7 @@ class _TableHeader extends StatelessWidget {
         children: [
           Expanded(flex: 4, child: _HeaderCell('Business Name')),
           Expanded(flex: 2, child: _HeaderCell('Type')),
+          Expanded(flex: 3, child: _HeaderCell('Business Line')),
           Expanded(flex: 3, child: _HeaderCell('Owner')),
           Expanded(flex: 3, child: _HeaderCell('Contact')),
           Expanded(flex: 1, child: _HeaderCell('Rooms')),
@@ -567,7 +569,14 @@ class _TableRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              item.type,
+              item.businessType.label,
+              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              item.businessLineLabel,
               style: const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ),
@@ -693,7 +702,9 @@ class _AccommodationCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          _CardDetail(label: 'Type', value: item.type),
+          _CardDetail(label: 'Type', value: item.businessType.label),
+          const SizedBox(height: 6),
+          _CardDetail(label: 'Business Line', value: item.businessLineLabel),
           const SizedBox(height: 6),
           _CardDetail(label: 'Owner', value: item.owner),
           const SizedBox(height: 6),
@@ -1037,7 +1048,8 @@ class _ActionButtons extends StatelessWidget {
               context,
               BusinessDetails(
                 name: item.name,
-                type: item.type,
+                type: item.businessType.label,
+                businessLine: item.businessLineLabel,
                 rooms: item.rooms,
                 status: item.status,
                 owner: item.owner,

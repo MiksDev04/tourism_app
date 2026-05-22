@@ -21,7 +21,7 @@ class LoginApi {
   final _supabase = Supabase.instance.client;
 
   Future<LoginResult> login({
-    required String email,
+    required String username,
     required String password,
   }) async {
     // ── 1. Check internet ─────────────────────────────────────────────────
@@ -38,8 +38,28 @@ class LoginApi {
       );
     }
 
-    // ── 2. Authenticate ───────────────────────────────────────────────────
     try {
+      // ── 2. Resolve username → email directly from profiles ────────────
+      // ── 2. Resolve username → email via RPC ───────────────────────────
+      final email =
+          await _supabase.rpc(
+                'get_email_by_username',
+                params: {'p_username': username.trim().toLowerCase()},
+              )
+              as String?;
+
+      if (email == null || email.isEmpty) {
+        return LoginResult.err('No account found with that username.');
+      }
+
+      // ignore: unnecessary_null_comparison
+      if (email == null || email.isEmpty) {
+        return LoginResult.err(
+          'Account has no email linked. Please contact support.',
+        );
+      }
+
+      // ── 3. Authenticate with resolved email ───────────────────────────
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -51,7 +71,7 @@ class LoginApi {
 
       final userId = response.user!.id;
 
-      // ── 3. Fetch profile (full row) ────────────────────────────────────
+      // ── 4. Fetch full profile ──────────────────────────────────────────
       final profileData = await _supabase
           .from('profiles')
           .select('full_name, phone, role, email')
@@ -71,7 +91,7 @@ class LoginApi {
 
       final role = roleStr == 'admin' ? Role.admin : Role.business;
 
-      // ── 4. Business: check approval + fetch business row ───────────────
+      // ── 5. Business: check approval + fetch business row ───────────────
       String? businessId;
       String? businessName;
       String? businessType;
@@ -81,7 +101,9 @@ class LoginApi {
       if (role == Role.business) {
         final businessData = await _supabase
             .from('businesses')
-            .select('id, business_name, business_type, owner_name, status')
+            .select(
+              'id, business_name, business_type, status, owner_first_name, owner_last_name',
+            )
             .eq('profile_id', userId)
             .maybeSingle();
 
@@ -107,28 +129,31 @@ class LoginApi {
           );
         }
 
-        businessId   = businessData['id']            as String?;
+        businessId = businessData['id'] as String?;
         businessName = businessData['business_name'] as String?;
         businessType = businessData['business_type'] as String?;
-        ownerName    = businessData['owner_name']    as String?;
+
+        // Combine first + last name since schema has no single owner_name column
+        final firstName = businessData['owner_first_name'] as String? ?? '';
+        final lastName = businessData['owner_last_name'] as String? ?? '';
+        ownerName = '$firstName $lastName'.trim();
       }
 
-      // ── 5. Persist session locally ─────────────────────────────────────
+      // ── 6. Persist session locally ─────────────────────────────────────
       final session = SessionData(
-        userId:       userId,
-        fullName:     profileData['full_name'] as String? ?? '',
-        email:        profileData['email']     as String? ?? email,
-        phone:        profileData['phone']     as String? ?? '',
-        role:         roleStr,
-        businessId:   businessId,
+        userId: userId,
+        fullName: profileData['full_name'] as String? ?? '',
+        email: profileData['email'] as String? ?? email,
+        phone: profileData['phone'] as String? ?? '',
+        role: roleStr,
+        businessId: businessId,
         businessName: businessName,
         businessType: businessType,
-        ownerName:    ownerName,
-        status:       status,
+        ownerName: ownerName,
+        status: status,
       );
 
       await SessionService.instance.save(session);
-      // Also warm the in-memory cache so widgets can use it immediately
       await SessionService.instance.loadAndCache();
 
       return LoginResult.ok(role);
@@ -143,7 +168,7 @@ class LoginApi {
   String _friendlyAuthError(String message) {
     final m = message.toLowerCase();
     if (m.contains('invalid') || m.contains('credentials')) {
-      return 'Incorrect email or password.';
+      return 'Incorrect username or password.';
     }
     if (m.contains('email not confirmed')) {
       return 'Please confirm your email before signing in.';
@@ -155,7 +180,7 @@ class LoginApi {
   }
 
   Future<void> logout() async {
-    await SessionService.instance.clear(); // wipe local storage
+    await SessionService.instance.clear();
     await _supabase.auth.signOut();
   }
 }

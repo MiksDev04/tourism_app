@@ -17,12 +17,16 @@ class RegisterApi {
 
   Future<RegisterResult> register({
     required String fullName,
+    required String username,
     required String email,
     required String password,
     required String phoneNumber,
     required String businessName,
     required BusinessType businessType,
-    required String ownerName,
+    required List<String> businessLine,
+    required String ownerFirstName,
+    required String ownerMiddleName,
+    required String ownerLastName,
     required int totalRooms,
     required String permitNumber,
     required String registrationNumber,
@@ -38,10 +42,13 @@ class RegisterApi {
       // ── 1. Validate inputs before any network call ─────────────────────
       final validationError = _validate(
         fullName: fullName,
+        username: username,
         email: email,
         phoneNumber: phoneNumber,
         businessName: businessName,
-        ownerName: ownerName,
+        ownerFirstName: ownerFirstName,
+        ownerLastName: ownerLastName,
+        businessLine: businessLine,
         totalRooms: totalRooms,
         permitNumber: permitNumber,
         registrationNumber: registrationNumber,
@@ -52,6 +59,18 @@ class RegisterApi {
         region: region,
       );
       if (validationError != null) return RegisterResult.err(validationError);
+
+      final normalizedUsername = username.trim().toLowerCase();
+
+      final usernameLookup = await _supabase
+          .from('profiles')
+          .select('id')
+          .eq('username', normalizedUsername)
+          .maybeSingle();
+
+      if (usernameLookup != null) {
+        return const RegisterResult.err('Username is already taken.');
+      }
 
       // ── 2. Sign up via Supabase Auth ───────────────────────────────────
       final authResponse = await _supabase.auth.signUp(
@@ -92,6 +111,7 @@ class RegisterApi {
       await _supabase.from('profiles').upsert({
         'id': authUser.id,
         'full_name': fullName,
+        'username': normalizedUsername,
         'email': email,
         'phone': phoneNumber,
         'role': 'business',
@@ -103,8 +123,13 @@ class RegisterApi {
         'id': businessId,
         'profile_id': authUser.id,
         'business_name': businessName,
-        'business_type': businessType.name,
-        'owner_name': ownerName,
+        'business_type': _businessTypeDbValue(businessType),
+        'owner_first_name': ownerFirstName,
+        'owner_middle_name': ownerMiddleName.trim().isEmpty
+            ? null
+            : ownerMiddleName,
+        'owner_last_name': ownerLastName,
+        'business_line': businessLine,
         'total_rooms': totalRooms,
         'permit_number': permitNumber,
         'registration_number': registrationNumber,
@@ -123,7 +148,25 @@ class RegisterApi {
     } on AuthException catch (e) {
       return RegisterResult.err(_friendlyAuthError(e.message));
     } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('username') &&
+          (message.contains('duplicate') ||
+              message.contains('unique') ||
+              message.contains('already exists'))) {
+        return const RegisterResult.err('Username is already taken.');
+      }
       return RegisterResult.err('An unexpected error occurred: $e');
+    }
+  }
+
+  String _businessTypeDbValue(BusinessType businessType) {
+    switch (businessType) {
+      case BusinessType.corporation:
+        return 'corporation';
+      case BusinessType.partnership:
+        return 'partnership';
+      case BusinessType.soleProprietorship:
+        return 'sole_proprietorship';
     }
   }
 
@@ -155,10 +198,13 @@ class RegisterApi {
 
   String? _validate({
     required String fullName,
+    required String username,
     required String email,
     required String phoneNumber,
     required String businessName,
-    required String ownerName,
+    required String ownerFirstName,
+    required String ownerLastName,
+    required List<String> businessLine,
     required int totalRooms,
     required String permitNumber,
     required String registrationNumber,
@@ -168,15 +214,34 @@ class RegisterApi {
     required String province,
     required String region,
   }) {
+    final usernameRe = RegExp(r'^[a-zA-Z0-9_]{3,20}$');
     final emailRe = RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
     final phoneRe = RegExp(r'^(09|\+639)\d{9}$');
+    const allowedBusinessLines = {
+      'hotel',
+      'resort',
+      'motel',
+      'pension_inn',
+      'youth_hostel',
+      'apartment',
+      'others',
+    };
     final strippedPhone = phoneNumber.replaceAll(RegExp(r'[-\s]'), '');
 
     if (fullName.trim().isEmpty) return 'Full name is required.';
+    if (username.trim().isEmpty) return 'Username is required.';
+    if (!usernameRe.hasMatch(username.trim())) {
+      return 'Username must be 3-20 characters using letters, numbers, or underscores.';
+    }
     if (!emailRe.hasMatch(email.trim())) return 'Enter a valid email address.';
     if (!phoneRe.hasMatch(strippedPhone)) return 'Invalid phone number format.';
     if (businessName.trim().isEmpty) return 'Business name is required.';
-    if (ownerName.trim().isEmpty) return 'Owner name is required.';
+    if (businessLine.isEmpty) return 'Select at least one business line.';
+    if (businessLine.any((line) => !allowedBusinessLines.contains(line))) {
+      return 'Invalid business line selected.';
+    }
+    if (ownerFirstName.trim().isEmpty) return 'Owner first name is required.';
+    if (ownerLastName.trim().isEmpty) return 'Owner last name is required.';
     if (totalRooms <= 0) return 'Total rooms must be at least 1.';
     if (permitNumber.trim().isEmpty) return 'Permit number is required.';
     if (registrationNumber.trim().isEmpty) {
@@ -184,7 +249,8 @@ class RegisterApi {
     }
     if (street.trim().isEmpty) return 'Street is required.';
     if (barangay.trim().isEmpty) return 'Barangay is required.';
-    if (cityMunicipality.trim().isEmpty) return 'City / Municipality is required.';
+    if (cityMunicipality.trim().isEmpty)
+      return 'City / Municipality is required.';
     if (province.trim().isEmpty) return 'Province is required.';
     if (region.trim().isEmpty) return 'Region is required.';
     return null;
@@ -194,6 +260,10 @@ class RegisterApi {
 
   String _friendlyAuthError(String message) {
     final m = message.toLowerCase();
+    if (m.contains('username') &&
+        (m.contains('duplicate') || m.contains('already exists'))) {
+      return 'Username is already taken.';
+    }
     if (m.contains('already registered') ||
         m.contains('already been registered')) {
       return 'An account with this email already exists.';

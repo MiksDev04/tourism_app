@@ -7,8 +7,6 @@ import 'package:tourism_app/core/enums/business_enums.dart';
 import 'package:tourism_app/router/app_router.dart';
 import 'package:tourism_app/core/constants/app_colors.dart';
 
-
-
 class RegisterPage extends StatelessWidget {
   const RegisterPage({super.key});
 
@@ -30,11 +28,21 @@ class RegisterColors {
 class _V {
   _V._();
 
+  static final _usernameRe = RegExp(r'^[a-zA-Z0-9_]{3,20}$');
   static final _emailRe = RegExp(r'^[\w.+\-]+@[\w\-]+\.[a-zA-Z]{2,}$');
   static final _phoneRe = RegExp(r'^(09|\+639)\d{9}$');
 
   static String? fullName(String v) =>
       v.trim().isEmpty ? 'Full name is required' : null;
+
+  static String? username(String v) {
+    final value = v.trim();
+    if (value.isEmpty) return 'Username is required';
+    if (!_usernameRe.hasMatch(value)) {
+      return 'Use 3-20 letters, numbers, or underscores';
+    }
+    return null;
+  }
 
   static String? email(String v) {
     v = v.trim();
@@ -67,8 +75,28 @@ class _V {
   static String? businessName(String v) =>
       v.trim().isEmpty ? 'Business name is required' : null;
 
-  static String? ownerName(String v) =>
-      v.trim().isEmpty ? 'Owner name is required' : null;
+  static String? businessLine(List<String> values) {
+    if (values.isEmpty) return 'Select at least one business line';
+    final allowed = <String>{
+      'hotel',
+      'resort',
+      'motel',
+      'pension_inn',
+      'youth_hostel',
+      'apartment',
+      'others',
+    };
+    if (values.any((value) => !allowed.contains(value))) {
+      return 'Invalid business line selected';
+    }
+    return null;
+  }
+
+  static String? ownerFirstName(String v) =>
+      v.trim().isEmpty ? 'First name is required' : null;
+
+  static String? ownerLastName(String v) =>
+      v.trim().isEmpty ? 'Last name is required' : null;
 
   static String? totalRooms(String v) {
     final n = int.tryParse(v.trim());
@@ -83,23 +111,46 @@ class _V {
   static String? registrationNumber(String v) =>
       v.trim().isEmpty ? 'Registration number is required' : null;
 
-    static String? street(String v) =>
+  static String? street(String v) =>
       v.trim().isEmpty ? 'Street is required' : null;
 
-    static String? barangay(String v) =>
+  static String? barangay(String v) =>
       v.trim().isEmpty ? 'Barangay is required' : null;
 
-    static String? cityMunicipality(String v) =>
+  static String? cityMunicipality(String v) =>
       v.trim().isEmpty ? 'City / Municipality is required' : null;
 
-    static String? province(String v) =>
+  static String? province(String v) =>
       v.trim().isEmpty ? 'Province is required' : null;
 
-    static String? region(String v) =>
+  static String? region(String v) =>
       v.trim().isEmpty ? 'Region is required' : null;
+
   static String? file(File? f) =>
       f == null ? 'Please upload the required file' : null;
 }
+
+// ─── Business Line display helpers ───────────────────────────────────────────
+
+const _businessLineItems = [
+  'hotel',
+  'resort',
+  'motel',
+  'pension_inn',
+  'youth_hostel',
+  'apartment',
+  'others',
+];
+
+const _businessLineLabels = {
+  'hotel': 'Hotel',
+  'resort': 'Resort',
+  'motel': 'Motel',
+  'pension_inn': 'Pension Inn',
+  'youth_hostel': 'Youth Hostel',
+  'apartment': 'Apartment',
+  'others': 'Others',
+};
 
 // ─── Register Screen ──────────────────────────────────────────────────────────
 
@@ -123,6 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // Step 1
   final _fullNameCtrl = TextEditingController();
+  final _usernameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -130,7 +182,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // Step 2
   final _businessNameCtrl = TextEditingController();
-  final _ownerNameCtrl = TextEditingController();
+  final _ownerFirstNameCtrl = TextEditingController();
+  final _ownerMiddleNameCtrl = TextEditingController();
+  final _ownerLastNameCtrl = TextEditingController();
   final _totalRoomsCtrl = TextEditingController();
   final _permitNumberCtrl = TextEditingController();
   final _registrationCtrl = TextEditingController();
@@ -139,7 +193,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _cityCtrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
   final _regionCtrl = TextEditingController();
-  String _businessType = 'Hotel';
+
+  // Business type: sole_proprietorship | corporation | partnership
+  String _businessType = 'Sole Proprietorship';
+
+  // Business line: DB stores as array, users can choose one or more
+  List<String> _businessLine = ['hotel'];
 
   File? _permitFile;
   File? _validIdFile;
@@ -153,7 +212,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void initState() {
     super.initState();
     _checkConnectivity();
-    // Re-check every 3 seconds so the overlay auto-dismisses when reconnected
     _connectivityTimer = Timer.periodic(
       const Duration(seconds: 3),
       (_) => _checkConnectivity(),
@@ -165,12 +223,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _connectivityTimer?.cancel();
     for (final c in [
       _fullNameCtrl,
+      _usernameCtrl,
       _emailCtrl,
       _phoneCtrl,
       _passwordCtrl,
       _confirmPassCtrl,
       _businessNameCtrl,
-      _ownerNameCtrl,
+      _ownerFirstNameCtrl,
+      _ownerMiddleNameCtrl,
+      _ownerLastNameCtrl,
       _totalRoomsCtrl,
       _permitNumberCtrl,
       _registrationCtrl,
@@ -211,6 +272,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool get _step1Valid =>
       _V.fullName(_fullNameCtrl.text) == null &&
+      _V.username(_usernameCtrl.text) == null &&
       _V.email(_emailCtrl.text) == null &&
       _V.phone(_phoneCtrl.text) == null &&
       _V.password(_passwordCtrl.text) == null &&
@@ -227,16 +289,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _goBack() => setState(() {
-    _step = 1;
-    _showErrors = false;
-    _errorMessage = null;
-  });
+        _step = 1;
+        _showErrors = false;
+        _errorMessage = null;
+      });
 
   // ── Step 2 ─────────────────────────────────────────────────────────────────
 
   bool get _step2Valid =>
       _V.businessName(_businessNameCtrl.text) == null &&
-      _V.ownerName(_ownerNameCtrl.text) == null &&
+      _V.ownerFirstName(_ownerFirstNameCtrl.text) == null &&
+      _V.ownerLastName(_ownerLastNameCtrl.text) == null &&
+      _V.businessLine(_businessLine) == null &&
       _V.totalRooms(_totalRoomsCtrl.text) == null &&
       _V.permitNumber(_permitNumberCtrl.text) == null &&
       _V.registrationNumber(_registrationCtrl.text) == null &&
@@ -279,12 +343,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final result = await _api.register(
       fullName: _fullNameCtrl.text.trim(),
+      username: _usernameCtrl.text.trim(),
       email: _emailCtrl.text.trim(),
       password: _passwordCtrl.text,
       phoneNumber: _phoneCtrl.text.trim(),
       businessName: _businessNameCtrl.text.trim(),
       businessType: _mapBusinessType(_businessType),
-      ownerName: _ownerNameCtrl.text.trim(),
+      businessLine: _businessLine,
+      ownerFirstName: _ownerFirstNameCtrl.text.trim(),
+      ownerMiddleName: _ownerMiddleNameCtrl.text.trim(),
+      ownerLastName: _ownerLastNameCtrl.text.trim(),
       totalRooms: int.parse(_totalRoomsCtrl.text.trim()),
       permitNumber: _permitNumberCtrl.text.trim(),
       registrationNumber: _registrationCtrl.text.trim(),
@@ -314,17 +382,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   BusinessType _mapBusinessType(String type) {
-    switch (type.toLowerCase()) {
-      case 'resort':
-        return BusinessType.resort;
-      case 'inn':
-        return BusinessType.inn;
-      case 'pension house':
-      case 'other':
-        return BusinessType.other;
-      case 'hotel':
+    switch (type) {
+      case 'Corporation':
+        return BusinessType.corporation;
+      case 'Partnership':
+        return BusinessType.partnership;
+      case 'Sole Proprietorship':
       default:
-        return BusinessType.hotel;
+        return BusinessType.soleProprietorship;
     }
   }
 
@@ -332,7 +397,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show a plain spinner on the very first connectivity check
     if (_checkingConnection) {
       return Container(
         decoration: const BoxDecoration(
@@ -350,10 +414,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     return Stack(
       children: [
-        // ── The actual page (always rendered) ─────────────────────────────
         _buildPage(),
-
-        // ── Offline blocking overlay ───────────────────────────────────────
         if (!_isOnline) _buildOfflineOverlay(),
       ],
     );
@@ -388,17 +449,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           showErrors: _showErrors,
                           isLoading: _isLoading,
                           errorMessage: _errorMessage,
+                          // Step 1
                           fullNameCtrl: _fullNameCtrl,
+                          usernameCtrl: _usernameCtrl,
                           emailCtrl: _emailCtrl,
                           phoneCtrl: _phoneCtrl,
                           passwordCtrl: _passwordCtrl,
                           confirmPassCtrl: _confirmPassCtrl,
                           onNext: _goNext,
+                          // Step 2
                           businessNameCtrl: _businessNameCtrl,
                           businessType: _businessType,
                           onBusinessTypeChanged: (v) =>
                               setState(() => _businessType = v!),
-                          ownerNameCtrl: _ownerNameCtrl,
+                          businessLine: _businessLine,
+                          onBusinessLineChanged: (v) =>
+                              setState(() => _businessLine = v),
+                          ownerFirstNameCtrl: _ownerFirstNameCtrl,
+                          ownerMiddleNameCtrl: _ownerMiddleNameCtrl,
+                          ownerLastNameCtrl: _ownerLastNameCtrl,
                           totalRoomsCtrl: _totalRoomsCtrl,
                           permitNumberCtrl: _permitNumberCtrl,
                           registrationCtrl: _registrationCtrl,
@@ -569,16 +638,23 @@ class _FormCard extends StatelessWidget {
     required this.showErrors,
     required this.isLoading,
     this.errorMessage,
+    // Step 1
     required this.fullNameCtrl,
+    required this.usernameCtrl,
     required this.emailCtrl,
     required this.phoneCtrl,
     required this.passwordCtrl,
     required this.confirmPassCtrl,
     required this.onNext,
+    // Step 2
     required this.businessNameCtrl,
     required this.businessType,
     required this.onBusinessTypeChanged,
-    required this.ownerNameCtrl,
+    required this.businessLine,
+    required this.onBusinessLineChanged,
+    required this.ownerFirstNameCtrl,
+    required this.ownerMiddleNameCtrl,
+    required this.ownerLastNameCtrl,
     required this.totalRoomsCtrl,
     required this.permitNumberCtrl,
     required this.registrationCtrl,
@@ -599,16 +675,25 @@ class _FormCard extends StatelessWidget {
   final bool showErrors;
   final bool isLoading;
   final String? errorMessage;
+
+  // Step 1
   final TextEditingController fullNameCtrl;
+  final TextEditingController usernameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController passwordCtrl;
   final TextEditingController confirmPassCtrl;
   final VoidCallback onNext;
+
+  // Step 2
   final TextEditingController businessNameCtrl;
   final String businessType;
   final ValueChanged<String?> onBusinessTypeChanged;
-  final TextEditingController ownerNameCtrl;
+  final List<String> businessLine;
+  final ValueChanged<List<String>> onBusinessLineChanged;
+  final TextEditingController ownerFirstNameCtrl;
+  final TextEditingController ownerMiddleNameCtrl;
+  final TextEditingController ownerLastNameCtrl;
   final TextEditingController totalRoomsCtrl;
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
@@ -648,6 +733,7 @@ class _FormCard extends StatelessWidget {
           if (step == 1)
             _Step1Form(
               fullNameCtrl: fullNameCtrl,
+              usernameCtrl: usernameCtrl,
               emailCtrl: emailCtrl,
               phoneCtrl: phoneCtrl,
               passwordCtrl: passwordCtrl,
@@ -663,7 +749,11 @@ class _FormCard extends StatelessWidget {
               businessNameCtrl: businessNameCtrl,
               businessType: businessType,
               onBusinessTypeChanged: onBusinessTypeChanged,
-              ownerNameCtrl: ownerNameCtrl,
+              businessLine: businessLine,
+              onBusinessLineChanged: onBusinessLineChanged,
+              ownerFirstNameCtrl: ownerFirstNameCtrl,
+              ownerMiddleNameCtrl: ownerMiddleNameCtrl,
+              ownerLastNameCtrl: ownerLastNameCtrl,
               totalRoomsCtrl: totalRoomsCtrl,
               permitNumberCtrl: permitNumberCtrl,
               registrationCtrl: registrationCtrl,
@@ -727,9 +817,8 @@ class _StepIndicator extends StatelessWidget {
           child: Container(
             height: 1,
             margin: const EdgeInsets.symmetric(horizontal: 10),
-            color: currentStep > 1
-                ? AppColors.primaryCyan
-                : AppColors.cardBorder,
+            color:
+                currentStep > 1 ? AppColors.primaryCyan : AppColors.cardBorder,
           ),
         ),
         _StepBadge(
@@ -758,12 +847,10 @@ class _StepBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = (isActive || isComplete)
-        ? AppColors.primaryCyan
-        : AppColors.cardBorder;
-    final textColor = (isActive || isComplete)
-        ? AppColors.textWhite
-        : AppColors.textSubtle;
+    final borderColor =
+        (isActive || isComplete) ? AppColors.primaryCyan : AppColors.cardBorder;
+    final textColor =
+        (isActive || isComplete) ? AppColors.textWhite : AppColors.textSubtle;
 
     return Row(
       children: [
@@ -776,11 +863,7 @@ class _StepBadge extends StatelessWidget {
           ),
           child: Center(
             child: isComplete
-                ? const Icon(
-                    Icons.check,
-                    color: AppColors.primaryCyan,
-                    size: 16,
-                  )
+                ? const Icon(Icons.check, color: AppColors.primaryCyan, size: 16)
                 : Text(
                     '$number',
                     style: TextStyle(
@@ -810,6 +893,7 @@ class _StepBadge extends StatelessWidget {
 class _Step1Form extends StatefulWidget {
   const _Step1Form({
     required this.fullNameCtrl,
+    required this.usernameCtrl,
     required this.emailCtrl,
     required this.phoneCtrl,
     required this.passwordCtrl,
@@ -819,6 +903,7 @@ class _Step1Form extends StatefulWidget {
   });
 
   final TextEditingController fullNameCtrl;
+  final TextEditingController usernameCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController phoneCtrl;
   final TextEditingController passwordCtrl;
@@ -849,10 +934,21 @@ class _Step1FormState extends State<_Step1Form> {
           child: _Input(
             controller: widget.fullNameCtrl,
             hint: 'Maria Santos',
-            hasError:
-                _show('fullName') &&
+            hasError: _show('fullName') &&
                 _V.fullName(widget.fullNameCtrl.text) != null,
             onChanged: (_) => _touch('fullName'),
+          ),
+        ),
+        const SizedBox(height: 16),
+        _LabeledField(
+          label: 'Username',
+          error: _show('username') ? _V.username(widget.usernameCtrl.text) : null,
+          child: _Input(
+            controller: widget.usernameCtrl,
+            hint: 'yourname or your_name',
+            hasError: _show('username') &&
+                _V.username(widget.usernameCtrl.text) != null,
+            onChanged: (_) => _touch('username'),
           ),
         ),
         const SizedBox(height: 16),
@@ -863,7 +959,8 @@ class _Step1FormState extends State<_Step1Form> {
             controller: widget.emailCtrl,
             hint: 'email@example.com',
             keyboardType: TextInputType.emailAddress,
-            hasError: _show('email') && _V.email(widget.emailCtrl.text) != null,
+            hasError:
+                _show('email') && _V.email(widget.emailCtrl.text) != null,
             onChanged: (_) => _touch('email'),
           ),
         ),
@@ -875,7 +972,8 @@ class _Step1FormState extends State<_Step1Form> {
             controller: widget.phoneCtrl,
             hint: '09XX-XXX-XXXX',
             keyboardType: TextInputType.phone,
-            hasError: _show('phone') && _V.phone(widget.phoneCtrl.text) != null,
+            hasError:
+                _show('phone') && _V.phone(widget.phoneCtrl.text) != null,
             onChanged: (_) => _touch('phone'),
           ),
         ),
@@ -893,8 +991,7 @@ class _Step1FormState extends State<_Step1Form> {
                   controller: widget.passwordCtrl,
                   hint: 'Min 6 characters',
                   obscure: true,
-                  hasError:
-                      _show('password') &&
+                  hasError: _show('password') &&
                       _V.password(widget.passwordCtrl.text) != null,
                   onChanged: (_) => _touch('password'),
                 ),
@@ -914,8 +1011,7 @@ class _Step1FormState extends State<_Step1Form> {
                   controller: widget.confirmPassCtrl,
                   hint: 'Repeat password',
                   obscure: true,
-                  hasError:
-                      _show('confirmPass') &&
+                  hasError: _show('confirmPass') &&
                       _V.confirmPassword(
                             widget.confirmPassCtrl.text,
                             widget.passwordCtrl.text,
@@ -947,7 +1043,11 @@ class _Step2Form extends StatefulWidget {
     required this.businessNameCtrl,
     required this.businessType,
     required this.onBusinessTypeChanged,
-    required this.ownerNameCtrl,
+    required this.businessLine,
+    required this.onBusinessLineChanged,
+    required this.ownerFirstNameCtrl,
+    required this.ownerMiddleNameCtrl,
+    required this.ownerLastNameCtrl,
     required this.totalRoomsCtrl,
     required this.permitNumberCtrl,
     required this.registrationCtrl,
@@ -970,7 +1070,11 @@ class _Step2Form extends StatefulWidget {
   final TextEditingController businessNameCtrl;
   final String businessType;
   final ValueChanged<String?> onBusinessTypeChanged;
-  final TextEditingController ownerNameCtrl;
+  final List<String> businessLine;
+  final ValueChanged<List<String>> onBusinessLineChanged;
+  final TextEditingController ownerFirstNameCtrl;
+  final TextEditingController ownerMiddleNameCtrl;
+  final TextEditingController ownerLastNameCtrl;
   final TextEditingController totalRoomsCtrl;
   final TextEditingController permitNumberCtrl;
   final TextEditingController registrationCtrl;
@@ -1001,6 +1105,7 @@ class _Step2FormState extends State<_Step2Form> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Business Name + Business Type ─────────────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1013,8 +1118,7 @@ class _Step2FormState extends State<_Step2Form> {
                 child: _Input(
                   controller: widget.businessNameCtrl,
                   hint: 'Hotel / Resort Name',
-                  hasError:
-                      _show('businessName') &&
+                  hasError: _show('businessName') &&
                       _V.businessName(widget.businessNameCtrl.text) != null,
                   onChanged: (_) => _touch('businessName'),
                 ),
@@ -1027,11 +1131,9 @@ class _Step2FormState extends State<_Step2Form> {
                 child: _DropdownField(
                   value: widget.businessType,
                   items: const [
-                    'Hotel',
-                    'Resort',
-                    'Inn',
-                    'Pension House',
-                    'Other',
+                    'Sole Proprietorship',
+                    'Corporation',
+                    'Partnership',
                   ],
                   onChanged: widget.onBusinessTypeChanged,
                 ),
@@ -1040,22 +1142,75 @@ class _Step2FormState extends State<_Step2Form> {
           ],
         ),
         const SizedBox(height: 16),
+
+        // ── Business Line ─────────────────────────────────────────────────
+        _LabeledField(
+          label: 'Business Line',
+          error: _show('businessLine') ? _V.businessLine(widget.businessLine) : null,
+          child: _BusinessLineSelector(
+            selected: widget.businessLine,
+            items: _businessLineItems,
+            displayLabels: _businessLineLabels,
+            showError: _show('businessLine') &&
+                _V.businessLine(widget.businessLine) != null,
+            onChanged: (values) {
+              widget.onBusinessLineChanged(values);
+              _touch('businessLine');
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── Owner First Name + Last Name ───────────────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _LabeledField(
-                label: 'Owner Name',
-                error: _show('ownerName')
-                    ? _V.ownerName(widget.ownerNameCtrl.text)
+                label: 'Owner First Name',
+                error: _show('ownerFirstName')
+                    ? _V.ownerFirstName(widget.ownerFirstNameCtrl.text)
                     : null,
                 child: _Input(
-                  controller: widget.ownerNameCtrl,
-                  hint: 'Full name of owner',
-                  hasError:
-                      _show('ownerName') &&
-                      _V.ownerName(widget.ownerNameCtrl.text) != null,
-                  onChanged: (_) => _touch('ownerName'),
+                  controller: widget.ownerFirstNameCtrl,
+                  hint: 'First name',
+                  hasError: _show('ownerFirstName') &&
+                      _V.ownerFirstName(widget.ownerFirstNameCtrl.text) != null,
+                  onChanged: (_) => _touch('ownerFirstName'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _LabeledField(
+                label: 'Owner Last Name',
+                error: _show('ownerLastName')
+                    ? _V.ownerLastName(widget.ownerLastNameCtrl.text)
+                    : null,
+                child: _Input(
+                  controller: widget.ownerLastNameCtrl,
+                  hint: 'Last name',
+                  hasError: _show('ownerLastName') &&
+                      _V.ownerLastName(widget.ownerLastNameCtrl.text) != null,
+                  onChanged: (_) => _touch('ownerLastName'),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // ── Owner Middle Name + Total Rooms ────────────────────────────────
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _LabeledField(
+                label: 'Middle Name (Optional)',
+                child: _Input(
+                  controller: widget.ownerMiddleNameCtrl,
+                  hint: 'Middle name',
+                  onChanged: (_) {},
                 ),
               ),
             ),
@@ -1070,8 +1225,7 @@ class _Step2FormState extends State<_Step2Form> {
                   controller: widget.totalRoomsCtrl,
                   hint: 'e.g. 30',
                   keyboardType: TextInputType.number,
-                  hasError:
-                      _show('totalRooms') &&
+                  hasError: _show('totalRooms') &&
                       _V.totalRooms(widget.totalRoomsCtrl.text) != null,
                   onChanged: (_) => _touch('totalRooms'),
                 ),
@@ -1080,6 +1234,8 @@ class _Step2FormState extends State<_Step2Form> {
           ],
         ),
         const SizedBox(height: 16),
+
+        // ── Permit Number + Registration Number ───────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1092,8 +1248,7 @@ class _Step2FormState extends State<_Step2Form> {
                 child: _Input(
                   controller: widget.permitNumberCtrl,
                   hint: 'SP-HTL-2024-XXX',
-                  hasError:
-                      _show('permitNumber') &&
+                  hasError: _show('permitNumber') &&
                       _V.permitNumber(widget.permitNumberCtrl.text) != null,
                   onChanged: (_) => _touch('permitNumber'),
                 ),
@@ -1109,8 +1264,7 @@ class _Step2FormState extends State<_Step2Form> {
                 child: _Input(
                   controller: widget.registrationCtrl,
                   hint: 'BIR-2024-XXXXX',
-                  hasError:
-                      _show('registration') &&
+                  hasError: _show('registration') &&
                       _V.registrationNumber(widget.registrationCtrl.text) !=
                           null,
                   onChanged: (_) => _touch('registration'),
@@ -1120,28 +1274,36 @@ class _Step2FormState extends State<_Step2Form> {
           ],
         ),
         const SizedBox(height: 16),
+
+        // ── Street ────────────────────────────────────────────────────────
         _LabeledField(
           label: 'Street',
           error: _show('street') ? _V.street(widget.streetCtrl.text) : null,
           child: _Input(
             controller: widget.streetCtrl,
             hint: 'House number, street',
-            hasError: _show('street') && _V.street(widget.streetCtrl.text) != null,
+            hasError:
+                _show('street') && _V.street(widget.streetCtrl.text) != null,
             onChanged: (_) => _touch('street'),
           ),
         ),
         const SizedBox(height: 12),
+
+        // ── Barangay + City ───────────────────────────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _LabeledField(
                 label: 'Barangay',
-                error: _show('barangay') ? _V.barangay(widget.barangayCtrl.text) : null,
+                error: _show('barangay')
+                    ? _V.barangay(widget.barangayCtrl.text)
+                    : null,
                 child: _Input(
                   controller: widget.barangayCtrl,
                   hint: 'Barangay',
-                  hasError: _show('barangay') && _V.barangay(widget.barangayCtrl.text) != null,
+                  hasError: _show('barangay') &&
+                      _V.barangay(widget.barangayCtrl.text) != null,
                   onChanged: (_) => _touch('barangay'),
                 ),
               ),
@@ -1150,11 +1312,14 @@ class _Step2FormState extends State<_Step2Form> {
             Expanded(
               child: _LabeledField(
                 label: 'City / Municipality',
-                error: _show('city') ? _V.cityMunicipality(widget.cityCtrl.text) : null,
+                error: _show('city')
+                    ? _V.cityMunicipality(widget.cityCtrl.text)
+                    : null,
                 child: _Input(
                   controller: widget.cityCtrl,
                   hint: 'City / Municipality',
-                  hasError: _show('city') && _V.cityMunicipality(widget.cityCtrl.text) != null,
+                  hasError: _show('city') &&
+                      _V.cityMunicipality(widget.cityCtrl.text) != null,
                   onChanged: (_) => _touch('city'),
                 ),
               ),
@@ -1162,17 +1327,22 @@ class _Step2FormState extends State<_Step2Form> {
           ],
         ),
         const SizedBox(height: 12),
+
+        // ── Province + Region ─────────────────────────────────────────────
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
               child: _LabeledField(
                 label: 'Province',
-                error: _show('province') ? _V.province(widget.provinceCtrl.text) : null,
+                error: _show('province')
+                    ? _V.province(widget.provinceCtrl.text)
+                    : null,
                 child: _Input(
                   controller: widget.provinceCtrl,
                   hint: 'Province',
-                  hasError: _show('province') && _V.province(widget.provinceCtrl.text) != null,
+                  hasError: _show('province') &&
+                      _V.province(widget.provinceCtrl.text) != null,
                   onChanged: (_) => _touch('province'),
                 ),
               ),
@@ -1181,11 +1351,14 @@ class _Step2FormState extends State<_Step2Form> {
             Expanded(
               child: _LabeledField(
                 label: 'Region',
-                error: _show('region') ? _V.region(widget.regionCtrl.text) : null,
+                error: _show('region')
+                    ? _V.region(widget.regionCtrl.text)
+                    : null,
                 child: _Input(
                   controller: widget.regionCtrl,
                   hint: 'Region',
-                  hasError: _show('region') && _V.region(widget.regionCtrl.text) != null,
+                  hasError: _show('region') &&
+                      _V.region(widget.regionCtrl.text) != null,
                   onChanged: (_) => _touch('region'),
                 ),
               ),
@@ -1193,7 +1366,8 @@ class _Step2FormState extends State<_Step2Form> {
           ],
         ),
         const SizedBox(height: 16),
-        
+
+        // ── File Uploads ──────────────────────────────────────────────────
         _LabeledField(
           label: 'Business Permit',
           error: widget.showErrors ? _V.file(widget.permitFile) : null,
@@ -1216,31 +1390,27 @@ class _Step2FormState extends State<_Step2Form> {
           ),
         ),
         const SizedBox(height: 16),
+
+        // ── Error Banner ──────────────────────────────────────────────────
         if (widget.errorMessage != null) ...[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: RegisterColors.textRed.withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: RegisterColors.textRed.withOpacity(0.4),
-              ),
+              border:
+                  Border.all(color: RegisterColors.textRed.withOpacity(0.4)),
             ),
             child: Row(
               children: [
-                const Icon(
-                  Icons.error_outline,
-                  color: RegisterColors.textRed,
-                  size: 16,
-                ),
+                const Icon(Icons.error_outline,
+                    color: RegisterColors.textRed, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     widget.errorMessage!,
                     style: const TextStyle(
-                      color: RegisterColors.textRed,
-                      fontSize: 12.5,
-                    ),
+                        color: RegisterColors.textRed, fontSize: 12.5),
                   ),
                 ),
               ],
@@ -1248,6 +1418,8 @@ class _Step2FormState extends State<_Step2Form> {
           ),
           const SizedBox(height: 16),
         ],
+
+        // ── Back + Submit ─────────────────────────────────────────────────
         Row(
           children: [
             _BackButton(onPressed: widget.isLoading ? () {} : widget.onBack),
@@ -1286,9 +1458,8 @@ class _FilePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError
-        ? RegisterColors.textRed
-        : AppColors.inputBorder;
+    final borderColor =
+        hasError ? RegisterColors.textRed : AppColors.inputBorder;
     return GestureDetector(
       onTap: onPick,
       child: Container(
@@ -1310,9 +1481,8 @@ class _FilePicker extends StatelessWidget {
               child: Text(
                 file != null ? _fileName : label,
                 style: TextStyle(
-                  color: file != null
-                      ? AppColors.textWhite
-                      : AppColors.textSubtle,
+                  color:
+                      file != null ? AppColors.textWhite : AppColors.textSubtle,
                   fontSize: 13,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1350,7 +1520,8 @@ class _LoadingButton extends StatelessWidget {
         child: SizedBox(
           width: 20,
           height: 20,
-          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+          child:
+              CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
         ),
       ),
     );
@@ -1358,7 +1529,8 @@ class _LoadingButton extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child, this.error});
+  const _LabeledField(
+      {required this.label, required this.child, this.error});
 
   final String label;
   final Widget child;
@@ -1384,9 +1556,7 @@ class _LabeledField extends StatelessWidget {
           Text(
             error!,
             style: const TextStyle(
-              color: RegisterColors.textRed,
-              fontSize: 11.5,
-            ),
+                color: RegisterColors.textRed, fontSize: 11.5),
           ),
         ],
       ],
@@ -1413,9 +1583,8 @@ class _Input extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = hasError
-        ? RegisterColors.textRed
-        : AppColors.inputBorder;
+    final borderColor =
+        hasError ? RegisterColors.textRed : AppColors.inputBorder;
     return TextField(
       controller: controller,
       obscureText: obscure,
@@ -1424,7 +1593,8 @@ class _Input extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+        hintStyle:
+            const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
         filled: true,
         fillColor: AppColors.inputBackground,
         isDense: true,
@@ -1442,10 +1612,8 @@ class _Input extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(
-            color: AppColors.primaryCyan,
-            width: 1.5,
-          ),
+          borderSide:
+              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
         ),
       ),
     );
@@ -1480,10 +1648,77 @@ class _DropdownField extends StatelessWidget {
           iconEnabledColor: AppColors.textGray,
           style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
           items: items
-              .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+              .map(
+                (e) => DropdownMenuItem(
+                  value: e,
+                  child: Text(e),
+                ),
+              )
               .toList(),
           onChanged: onChanged,
         ),
+      ),
+    );
+  }
+}
+
+class _BusinessLineSelector extends StatelessWidget {
+  const _BusinessLineSelector({
+    required this.selected,
+    required this.items,
+    required this.displayLabels,
+    required this.onChanged,
+    required this.showError,
+  });
+
+  final List<String> selected;
+  final List<String> items;
+  final Map<String, String> displayLabels;
+  final ValueChanged<List<String>> onChanged;
+  final bool showError;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = showError ? RegisterColors.textRed : AppColors.inputBorder;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: items.map((item) {
+          final isSelected = selected.contains(item);
+          return FilterChip(
+            selected: isSelected,
+            onSelected: (_) {
+              final next = List<String>.from(selected);
+              if (isSelected) {
+                next.remove(item);
+              } else {
+                next.add(item);
+              }
+              onChanged(next);
+            },
+            label: Text(displayLabels[item] ?? item),
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : AppColors.textWhite,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            selectedColor: AppColors.primaryBlue,
+            checkmarkColor: Colors.white,
+            backgroundColor: AppColors.cardBackground,
+            side: BorderSide(
+              color: isSelected ? AppColors.primaryBlue : AppColors.cardBorder,
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1533,9 +1768,8 @@ class _GradientButtonState extends State<_GradientButton> {
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primaryBlue.withOpacity(
-                        _hovered ? 0.5 : 0.3,
-                      ),
+                      color: AppColors.primaryBlue
+                          .withOpacity(_hovered ? 0.5 : 0.3),
                       blurRadius: _hovered ? 20 : 14,
                       offset: const Offset(0, 4),
                     ),
@@ -1674,9 +1908,8 @@ class _HoverButtonState extends State<_HoverButton> {
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.primaryBlue.withOpacity(
-                      _hovered ? 0.55 : 0.3,
-                    ),
+                    color: AppColors.primaryBlue
+                        .withOpacity(_hovered ? 0.55 : 0.3),
                     blurRadius: _hovered ? 22 : 14,
                     offset: const Offset(0, 4),
                   ),
