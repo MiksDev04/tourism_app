@@ -12,6 +12,63 @@ import '../../shared/widgets/paginator.dart';
 
 enum _Filter { all, compliance, announcement, general }
 
+// ─── Letter Preview Helper ────────────────────────────────────────────────────
+
+/// Extracts a meaningful preview from the frozen letter by skipping the
+/// standard header block (letterhead, date, salutation lines) and returning
+/// the first non-empty body line(s).
+String _letterPreview(String content) {
+  // Skip lines that are pure header / boilerplate. We look for the first
+  // line that comes after the salutation ("Dear ...") or after a blank
+  // line following a known header keyword. Fallback: just return the raw
+  // content (which is already trimmed by maxLines overflow in the card).
+  final lines = content.split('\n');
+
+  // Common header sentinel words — skip everything up to and including them.
+  const headerSentinels = {
+    'REPUBLIC OF THE PHILIPPINES',
+    'CITY OF SAN PABLO',
+    'OFFICE OF TOURISM',
+    'COMPLIANCE NOTICE',
+    'ANNOUNCEMENT',
+    'GENERAL NOTICE',
+  };
+
+  bool pastHeader = false;
+  final preview = StringBuffer();
+
+  for (final raw in lines) {
+    final line = raw.trim();
+
+    if (!pastHeader) {
+      // Treat the "Dear …," salutation as the end of the header block.
+      if (line.startsWith('Dear ')) {
+        pastHeader = true;
+      }
+      continue;
+    }
+
+    // Skip blank separator lines immediately after the salutation.
+    if (line.isEmpty && preview.isEmpty) continue;
+
+    // Stop accumulating once we hit the closing block.
+    if (line.startsWith('This notice is duly issued') ||
+        line.startsWith('Respectfully') ||
+        line.startsWith('---')) {
+      break;
+    }
+
+    if (preview.isNotEmpty) preview.write(' ');
+    preview.write(line);
+
+    // Two sentences is plenty for a card preview.
+    if (preview.length > 180) break;
+  }
+
+  final result = preview.toString().trim();
+  return result.isNotEmpty ? result : content;
+}
+
 // ─── Business Messages Page ───────────────────────────────────────────────────
 
 class BusinessMessagesPage extends StatefulWidget {
@@ -28,7 +85,6 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   int _currentPage = 0;
   int _pageSize = 10;
 
-  // InboxMessage (not Message) — includes per-recipient read state
   List<InboxMessage> _messages = [];
 
   /// Optimistic local read tracking for this session.
@@ -91,7 +147,6 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
 
   // ── Computed ──────────────────────────────────────────────────────────────
 
-  /// True if the message has been read — either from the DB or optimistically.
   bool _isRead(InboxMessage msg) =>
       msg.isRead || _locallyRead.contains(msg.recipientId);
 
@@ -121,10 +176,8 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   Future<void> _openMessage(InboxMessage msg) async {
-    // Optimistic update — mark read immediately in the UI.
     if (!_isRead(msg)) {
       setState(() => _locallyRead.add(msg.recipientId));
-      // Fire-and-forget on the recipient row (message_recipients.id).
       _api.markAsRead(msg.recipientId).catchError((_) {});
     }
 
@@ -183,15 +236,16 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
       children: [
         Column(
           children: _pagedRows.map((msg) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _MessageCard(
-            message:  msg,
-            isRead:   _isRead(msg),
-            isNarrow: isNarrow,
-            onTap:    () => _openMessage(msg),
-          ),
-        );
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _MessageCard(
+                message:  msg,
+                preview:  _letterPreview(msg.content),  // extracted body snippet
+                isRead:   _isRead(msg),
+                isNarrow: isNarrow,
+                onTap:    () => _openMessage(msg),
+              ),
+            );
           }).toList(),
         ),
         const SizedBox(height: 12),
@@ -357,12 +411,14 @@ class _FilterChip extends StatelessWidget {
 class _MessageCard extends StatelessWidget {
   const _MessageCard({
     required this.message,
+    required this.preview,
     required this.isRead,
     required this.isNarrow,
     required this.onTap,
   });
 
   final InboxMessage message;
+  final String       preview;   // extracted body snippet, not the raw letter
   final bool         isRead;
   final bool         isNarrow;
   final VoidCallback onTap;
@@ -386,8 +442,8 @@ class _MessageCard extends StatelessWidget {
           ),
         ),
         child: isNarrow
-            ? _NarrowLayout(message: message, isUnread: isUnread)
-            : _WideLayout(message: message, isUnread: isUnread),
+            ? _NarrowLayout(message: message, preview: preview, isUnread: isUnread)
+            : _WideLayout(message: message, preview: preview, isUnread: isUnread),
       ),
     );
   }
@@ -396,8 +452,13 @@ class _MessageCard extends StatelessWidget {
 // ─── Wide Layout ──────────────────────────────────────────────────────────────
 
 class _WideLayout extends StatelessWidget {
-  const _WideLayout({required this.message, required this.isUnread});
+  const _WideLayout({
+    required this.message,
+    required this.preview,
+    required this.isUnread,
+  });
   final InboxMessage message;
+  final String       preview;
   final bool         isUnread;
 
   @override
@@ -449,7 +510,7 @@ class _WideLayout extends StatelessWidget {
               ),
               const SizedBox(height: 5),
               Text(
-                message.content,
+                preview,
                 style: const TextStyle(
                   color:    AppColors.textGray,
                   fontSize: 12.5,
@@ -469,8 +530,7 @@ class _WideLayout extends StatelessWidget {
           children: [
             _TypeBadge(type: message.messageType),
             const SizedBox(height: 4),
-            if (message.isBroadcast)
-              const _BroadcastTag(),
+            if (message.isBroadcast) const _BroadcastTag(),
             const SizedBox(height: 4),
             Text(
               _formatDate(message.sentAt),
@@ -489,8 +549,13 @@ class _WideLayout extends StatelessWidget {
 // ─── Narrow Layout ────────────────────────────────────────────────────────────
 
 class _NarrowLayout extends StatelessWidget {
-  const _NarrowLayout({required this.message, required this.isUnread});
+  const _NarrowLayout({
+    required this.message,
+    required this.preview,
+    required this.isUnread,
+  });
   final InboxMessage message;
+  final String       preview;
   final bool         isUnread;
 
   @override
@@ -553,7 +618,7 @@ class _NarrowLayout extends StatelessWidget {
 
         // Body preview
         Text(
-          message.content,
+          preview,
           style: const TextStyle(
             color:    AppColors.textGray,
             fontSize: 12.5,

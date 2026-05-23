@@ -495,12 +495,14 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         hasError = true;
       }
 
-      // Duplicate detection.
+      // Duplicate detection — include nationality so Philippine rows can
+      // coexist when they differ only by nationality.
       if (row.country.isNotEmpty &&
           row.sex.isNotEmpty &&
           row.ageGroup.isNotEmpty) {
-        final key =
-            '${row.country}|${row.region}|${row.isOverseas}|${row.sex}|${row.ageGroup}';
+        final key = row.country == 'Philippines' && !row.isOverseas
+            ? '${row.country}|${row.nationality}|${row.region}|${row.sex}|${row.ageGroup}'
+            : '${row.country}|${row.region}|${row.isOverseas}|${row.sex}|${row.ageGroup}';
         if (!seen.add(key)) {
           rowErrors[i]['country'] = 'Duplicate row — merge counts instead';
           hasError = true;
@@ -1403,8 +1405,7 @@ class _DemoEntryRow extends StatelessWidget {
   final VoidCallback? onRemove;
 
   // Region is only active for Philippine residents — not OFW.
-  bool get _regionEnabled =>
-      entry.country == 'Philippines' && !entry.isOverseas;
+  // `_regionEnabled` removed because it was unused; use inline checks where needed.
 
   @override
   Widget build(BuildContext context) {
@@ -1516,26 +1517,36 @@ class _DemoEntryRow extends StatelessWidget {
             // Nationality + Region — hidden when OFW
             if (entry.country == 'Philippines' && !entry.isOverseas) ...[
               const SizedBox(height: 8),
-              _CompactDropWithError(
-                errorText: rowErrors['nationality'],
-                child: _CompactDrop(
-                  hint: 'Nationality',
-                  value: entry.nationality.isEmpty ? null : entry.nationality,
-                  items: nationalityOptions,
-                  onChanged: (v) =>
-                      onChanged(entry.copyWith(nationality: v ?? '')),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _CompactDropWithError(
-                errorText: rowErrors['region'],
-                child: _CompactDrop(
-                  hint: 'Region',
-                  value: entry.region != 'N/A' ? entry.region : null,
-                  items: phRegions,
-                  onChanged: (v) =>
-                      onChanged(entry.copyWith(region: v ?? 'N/A')),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: _CompactDropWithError(
+                      errorText: rowErrors['nationality'],
+                      child: _CompactDrop(
+                        hint: 'Nationality',
+                        value: entry.nationality.isEmpty ? null : entry.nationality,
+                        items: nationalityOptions,
+                        onChanged: (v) =>
+                            onChanged(entry.copyWith(nationality: v ?? '')),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: _CompactDropWithError(
+                      errorText: rowErrors['region'],
+                      child: _CompactDrop(
+                        hint: 'Region',
+                        value: entry.region != 'N/A' ? entry.region : null,
+                        items: phRegions,
+                        onChanged: (v) =>
+                            onChanged(entry.copyWith(region: v ?? 'N/A')),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
 
@@ -1597,23 +1608,39 @@ class _DemoEntryRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
-            width: 50,
+            width: 112,
             height: _kFieldHeight,
             child: Tooltip(
-              message: 'Overseas Filipino',
-              child: Checkbox(
-                value: entry.isOverseas,
-                onChanged: (v) => onChanged(
-                  entry.copyWith(
-                    isOverseas: v ?? false,
-                    nationality: '', // reset when toggling
-                    region: 'N/A', // reset when toggling
+              message: 'Filipino guest living overseas',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Checkbox(
+                    value: entry.isOverseas,
+                    onChanged: (v) => onChanged(
+                      entry.copyWith(
+                        isOverseas: v ?? false,
+                        nationality: '', // reset when toggling
+                        region: 'N/A', // reset when toggling
+                      ),
+                    ),
+                    activeColor: const Color(0xFF3B82F6),
+                    side: const BorderSide(color: AppColors.textGray, width: 1.4),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                ),
-                activeColor: const Color(0xFF3B82F6),
-                side: const BorderSide(color: AppColors.textGray, width: 1.4),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(width: 4),
+                  const Flexible(
+                    child: Text(
+                      'Overseas Fil.',
+                      style: TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2071,7 +2098,13 @@ class _CompactDrop extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: effectiveValue,
-          hint: Text(hint, style: TextStyle(color: hintColor, fontSize: 12.5)),
+          hint: Text(
+            hint,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: hintColor, fontSize: 12.5),
+          ),
           style: TextStyle(color: textColor, fontSize: 12.5),
           dropdownColor: _kDropBg,
           icon: Icon(
@@ -2088,6 +2121,9 @@ class _CompactDrop extends StatelessWidget {
                   value: e,
                   child: Text(
                     e,
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: textColor, fontSize: 12.5),
                   ),
                 ),

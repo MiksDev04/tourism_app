@@ -949,7 +949,7 @@ class _sexDonut extends StatelessWidget {
     final total = dist.total;
     final maleP = total == 0 ? 0 : ((dist.maleRatio * 100).round());
     final femaleP = total == 0 ? 0 : ((dist.femaleRatio * 100).round());
-    final otherP = total == 0 ? 0 : (100 - maleP - femaleP);
+    // otherP removed: not used
 
     final segments = [
       _Segment(
@@ -1307,7 +1307,7 @@ class _ComparisonBarChart extends StatefulWidget {
 class _ComparisonBarChartState extends State<_ComparisonBarChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  int _hoveredBar = -1; // encodes month*2 + yearIndex
+  // _hoveredBar removed: not used
   bool _hoveredIsYear2 = false;
   int _hoveredMonth = -1;
 

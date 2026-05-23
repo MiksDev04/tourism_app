@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/services/session_service.dart';
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 enum MessageType {
@@ -29,6 +33,103 @@ enum RecipientStatus {
   archived;
 
   String get dbValue => name;
+}
+
+/// Builds the official tourism-office letter format used by compose message
+/// and by automated accommodation decisions.
+String buildOfficialMessageLetter({
+  required String recipient,
+  required String subject,
+  required String messageContent,
+  required String senderFullName,
+  required String senderEmail,
+  required String senderPhone,
+  required MessageType messageType,
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final dateStr = '${months[current.month - 1]} ${current.day}, ${current.year}';
+  final typeLabel = switch (messageType) {
+    MessageType.compliance => 'COMPLIANCE NOTICE',
+    MessageType.announcement => 'ANNOUNCEMENT',
+    MessageType.general => 'GENERAL NOTICE',
+  };
+  final ref = 'MSG-${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}';
+
+  return '''REPUBLIC OF THE PHILIPPINES
+CITY OF SAN PABLO
+OFFICE OF TOURISM
+
+$dateStr
+
+To: $recipient
+Re: ${subject.isEmpty ? '(no subject)' : subject}
+
+$typeLabel
+
+Dear Establishment Representative,
+
+${messageContent.isEmpty ? '(no content)' : messageContent}
+
+This notice is duly issued by the San Pablo City Tourism Office and is valid even without a handwritten signature, being an official electronic communication of the office.
+
+For questions and concerns, please contact us at $senderEmail or call us at $senderPhone, or visit our office at the San Pablo City Hall.
+
+Respectfully,
+
+$senderFullName
+Tourism Officer
+San Pablo City Tourism Office
+
+---
+This is an official communication from the San Pablo City Tourism Office.
+Reference No.: $ref''';
+}
+
+/// Shared unread-count cache for business navigation badges.
+class MessageBadgeController {
+  MessageBadgeController._();
+
+  static final MessageBadgeController instance = MessageBadgeController._();
+
+  final ValueNotifier<int> unreadCount = ValueNotifier<int>(0);
+  bool _isRefreshing = false;
+
+  Future<void> refresh() async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    try {
+      final session = SessionService.instance.current ??
+          await SessionService.instance.loadAndCache();
+      final businessId = session?.businessId;
+
+      if (businessId == null) {
+        unreadCount.value = 0;
+        return;
+      }
+
+      final count = await MessagesApi().fetchUnreadCount(businessId);
+      unreadCount.value = count;
+    } catch (_) {
+      unreadCount.value = 0;
+    } finally {
+      _isRefreshing = false;
+    }
+  }
 }
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -433,6 +534,8 @@ class MessagesApi {
         })
         .eq('id', recipientId)
         .eq('is_read', false); // no-op if already read
+
+    unawaited(MessageBadgeController.instance.refresh());
   }
 
   /// Archives a recipient row so it no longer appears in the default inbox.
@@ -441,5 +544,7 @@ class MessagesApi {
         .from('message_recipients')
         .update({'status': RecipientStatus.archived.dbValue})
         .eq('id', recipientId);
+
+    unawaited(MessageBadgeController.instance.refresh());
   }
 }

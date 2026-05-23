@@ -1121,7 +1121,7 @@ class _DesktopDemoRow extends StatelessWidget {
       children: [
         // ── Overseas toggle (always first, always visible) ─────────────────
         Tooltip(
-          message: 'Guest travelling from overseas with no fixed country',
+          message: 'Filipino guest living overseas',
           child: SizedBox(
             height: _kFieldHeight,
             child: Row(
@@ -1144,7 +1144,7 @@ class _DesktopDemoRow extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                 ),
                 const Text(
-                  'Overseas',
+                    'Overseas Fil.',
                   style: TextStyle(
                     color: AppColors.textGray,
                     fontSize: 11.5,
@@ -1358,7 +1358,7 @@ class _MobileDemoRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 const Text(
-                  'Overseas Guest',
+                  'Overseas Fil.',
                   style: TextStyle(color: AppColors.textGray, fontSize: 12),
                 ),
                 const Spacer(),

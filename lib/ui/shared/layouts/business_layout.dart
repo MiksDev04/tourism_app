@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../api/messages_api.dart';
 import '../widgets/business_sidebar.dart';
 import '../widgets/business_header.dart';
 import '../../../router/app_router.dart';
@@ -90,7 +93,7 @@ class BusinessLayout extends StatelessWidget {
 
 // ─── Business Bottom Nav Bar (Mobile) ────────────────────────────────────────
 
-class BusinessBottomNavBar extends StatelessWidget {
+class BusinessBottomNavBar extends StatefulWidget {
   const BusinessBottomNavBar({
     super.key,
     required this.selectedIndex,
@@ -100,7 +103,18 @@ class BusinessBottomNavBar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
 
-  static const _navItems = [
+  @override
+  State<BusinessBottomNavBar> createState() => _BusinessBottomNavBarState();
+}
+
+class _BusinessBottomNavBarState extends State<BusinessBottomNavBar> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(MessageBadgeController.instance.refresh());
+  }
+
+  List<BizNavItem> _navItems(int unreadCount) => [
     BizNavItem(
       icon: Icons.dashboard_rounded,
       label: 'Dashboard',
@@ -123,34 +137,39 @@ class BusinessBottomNavBar extends StatelessWidget {
       icon: Icons.chat_bubble_outline_rounded,
       label: 'Messages',
       index: 4,
-      badge: 1,
+      badge: unreadCount > 0 ? unreadCount : null,
       route: AppRoutes.businessMessages,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.sidebarBg,
-        border: Border(top: BorderSide(color: AppColors.cardBorder)),
-      ),
-      child: SafeArea(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _navItems.map((item) {
-            final isSelected = selectedIndex == item.index;
-            return _BottomNavTile(
-              item: item,
-              isSelected: isSelected,
-              onTap: () {
-                onItemSelected(item.index);
-                Navigator.pushReplacementNamed(context, item.route);
-              },
-            );
-          }).toList(),
-        ),
-      ),
+    return ValueListenableBuilder<int>(
+      valueListenable: MessageBadgeController.instance.unreadCount,
+      builder: (context, unreadCount, _) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.sidebarBg,
+            border: Border(top: BorderSide(color: AppColors.cardBorder)),
+          ),
+          child: SafeArea(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: _navItems(unreadCount).map((item) {
+                final isSelected = widget.selectedIndex == item.index;
+                return _BottomNavTile(
+                  item: item,
+                  isSelected: isSelected,
+                  onTap: () {
+                    widget.onItemSelected(item.index);
+                    Navigator.pushReplacementNamed(context, item.route);
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -2,6 +2,8 @@
 
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
 import '../../../core/constants/app_colors.dart';
@@ -9,6 +11,8 @@ import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
 import '../widgets/business_details_modal.dart';
 import '../models/accommodation_models.dart';
+import '../../../api/messages_api.dart';
+import '../../../core/services/session_service.dart';
 import '../../../api/admin_accommodation_api.dart';
 
 class _FilterTab {
@@ -37,6 +41,7 @@ class AdminAccommodationsPage extends StatefulWidget {
 
 class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   final _api = AdminAccommodationApi();
+  final _messagesApi = MessagesApi();
 
   int _selectedTab = 0;
   String _searchQuery = '';
@@ -49,11 +54,28 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   List<Accommodation> _accommodations = [];
   bool _isLoading = true;
   String? _error;
+  String? _senderId;
+  String? _senderName;
+  String? _senderEmail;
+  String? _senderPhone;
 
   @override
   void initState() {
     super.initState();
+    _loadSession();
     _loadAccommodations();
+  }
+
+  Future<void> _loadSession() async {
+    final session = SessionService.instance.current ??
+        await SessionService.instance.loadAndCache();
+    if (!mounted) return;
+    setState(() {
+      _senderId = session?.userId;
+      _senderName = session?.fullName;
+      _senderEmail = session?.email;
+      _senderPhone = session?.phone;
+    });
   }
 
   Future<void> _loadAccommodations() async {
@@ -127,6 +149,8 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
         }
       });
 
+      await _sendDecisionLetter(item, newStatus, remarks: remarks);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${item.name} has been ${newStatus.name}.'),
@@ -142,6 +166,75 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
           content: Text(result.error ?? 'Something went wrong.'),
           backgroundColor: const Color(0xFFFF4D6A),
           duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  Future<void> _sendDecisionLetter(
+    Accommodation item,
+    AccommodationStatus newStatus, {
+    String? remarks,
+  }) async {
+    if (newStatus != AccommodationStatus.approved) {
+      return;
+    }
+
+    final senderId = _senderId;
+    final senderName = _senderName;
+    final senderEmail = _senderEmail;
+    final senderPhone = _senderPhone;
+
+    if (senderId == null ||
+        senderName == null ||
+        senderEmail == null ||
+        senderPhone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Accommodation was updated, but the decision letter could not be sent because the admin session is missing.'),
+          backgroundColor: Color(0xFFFFA000),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    final subject = 'Accommodation Application Approved';
+    final remarksText = remarks?.trim();
+    final remarksSection = remarksText?.isNotEmpty == true
+      ? '\n\nRemarks: $remarksText'
+      : '';
+    final body = '''We’re pleased to let you know your accommodation application has been approved.$remarksSection''';
+
+    final messageType = MessageType.announcement;
+
+    try {
+      final letter = buildOfficialMessageLetter(
+        recipient: item.name,
+        subject: subject,
+        messageContent: body,
+        senderFullName: senderName,
+        senderEmail: senderEmail,
+        senderPhone: senderPhone,
+        messageType: messageType,
+      );
+
+      await _messagesApi.sendToSelected(
+        senderId: senderId,
+        businessIds: [item.id],
+        messageType: messageType,
+        subject: subject,
+        content: letter,
+      );
+
+      unawaited(MessageBadgeController.instance.refresh());
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Accommodation was updated, but the decision letter failed to send: $e'),
+          backgroundColor: const Color(0xFFFFA000),
+          duration: const Duration(seconds: 4),
         ),
       );
     }

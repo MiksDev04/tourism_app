@@ -15,6 +15,13 @@ String _displayCountry(GuestBreakdownEntry b) {
   return b.country ?? 'Unspecified';
 }
 
+String _displayNationality(GuestBreakdownEntry b) {
+  if (b.isOverseas) {
+    return '—';
+  }
+  return b.nationality ?? '—';
+}
+
 String _derivedCategoryLabel(GuestBreakdownEntry b) {
   if (b.isOverseas) return 'Overseas Fil.';
   if (b.country == 'Others') return 'Unspecified';
@@ -33,6 +40,33 @@ Color _derivedCategoryColor(GuestBreakdownEntry b) {
   }
   if (b.country != null) return const Color(0xFFF59E0B);
   return AppColors.textGray;
+}
+
+Map<String, int> _residenceSummary(List<GuestBreakdownEntry> breakdowns) {
+  final summary = <String, int>{};
+
+  for (final breakdown in breakdowns) {
+    final label = _derivedCategoryLabel(breakdown);
+    summary[label] = (summary[label] ?? 0) + breakdown.count;
+  }
+
+  final ordered = <String, int>{};
+  for (final label in const [
+    'PH Resident',
+    'Foreign',
+    'Overseas Fil.',
+    'Unspecified',
+  ]) {
+    if (summary.containsKey(label)) {
+      ordered[label] = summary[label]!;
+    }
+  }
+
+  for (final entry in summary.entries) {
+    ordered.putIfAbsent(entry.key, () => entry.value);
+  }
+
+  return ordered;
 }
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -1622,6 +1656,11 @@ class _RecordDetailModal extends StatelessWidget {
                       _BreakdownTable(breakdowns: demo.breakdowns),
                       const SizedBox(height: 20),
 
+                      const _ModalSectionLabel('Residence'),
+                      const SizedBox(height: 10),
+                      _StatGrid(entries: _residenceSummary(demo.breakdowns)),
+                      const SizedBox(height: 20),
+
                       const _ModalSectionLabel('Age Groups'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.ageGroups),
@@ -1833,6 +1872,10 @@ class _BreakdownTable extends StatelessWidget {
                       runSpacing: 6,
                       children: [
                         _BreakdownInfoChip(
+                          label: 'Nationality',
+                          value: _displayNationality(b),
+                        ),
+                        _BreakdownInfoChip(
                           label: 'Region',
                           value: b.philippinesRegion ?? '—',
                         ),
@@ -1848,7 +1891,7 @@ class _BreakdownTable extends StatelessWidget {
           );
         }
 
-        // Wide: table layout — Country | Region | OFW | Residence | Sex | Age | Count
+        // Wide: table layout — Country | Nationality | Region | Residence | Sex | Age | Count
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -1861,18 +1904,20 @@ class _BreakdownTable extends StatelessWidget {
                 inside: BorderSide(color: AppColors.cardBorder, width: 0.5),
               ),
               columnWidths: const {
-                0: FlexColumnWidth(2.0), // Country
-                1: FlexColumnWidth(1.8), // Region
-                2: FlexColumnWidth(1.6), // Residence Category
-                3: FlexColumnWidth(1.0), // Sex
-                4: FlexColumnWidth(1.3), // Age Group
-                5: FlexColumnWidth(0.7), // Count
+                0: FlexColumnWidth(1), // Country
+                1: FlexColumnWidth(1), // Nationality
+                2: FlexColumnWidth(1), // Region
+                3: FlexColumnWidth(1), // Residence Category
+                4: FlexColumnWidth(1), // Sex
+                5: FlexColumnWidth(1), // Age Group
+                6: FlexColumnWidth(1), // Count
               },
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: AppColors.inputBackground),
                   children: const [
                     _TCell('Country', isHeader: true),
+                    _TCell('Nationality', isHeader: true),
                     _TCell('Region', isHeader: true),
                     _TCell('Residence', isHeader: true),
                     _TCell('Sex', isHeader: true),
@@ -1884,6 +1929,7 @@ class _BreakdownTable extends StatelessWidget {
                   (b) => TableRow(
                     children: [
                       _TCell(_displayCountry(b)),
+                      _TCell(_displayNationality(b)),
                       _TCell(b.philippinesRegion ?? '—'),
                       _TCellBadge(
                         label: _derivedCategoryLabel(b),

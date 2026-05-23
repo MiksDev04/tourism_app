@@ -18,13 +18,13 @@ class MessageViewData {
     this.messageId,
   });
 
-  final String  subject;
-  final String  recipient;
-  final String  date;
+  final String subject;
+  final String recipient;
+  final String date;
 
   /// e.g. 'COMPLIANCE NOTICE' | 'ANNOUNCEMENT' | 'GENERAL NOTICE'
-  final String  messageType;
-  final String  messageContent;
+  final String messageType;
+  final String messageContent;
 
   /// `messages.id` — supply this to enable the delivery report tab.
   final String? messageId;
@@ -39,63 +39,18 @@ Future<void> showMessageViewDialog(
 ) {
   return showDialog(
     context: context,
-    barrierColor:       Colors.black.withOpacity(0.65),
+    barrierColor: Colors.black.withOpacity(0.65),
     barrierDismissible: true,
     builder: (_) => MessageViewDialog(api: api, data: data),
   );
 }
 
-// ─── Letter Builder ───────────────────────────────────────────────────────────
-
-String _buildLetter(MessageViewData d) {
-  final now = DateTime.now();
-  const months = [
-    'January', 'February', 'March',     'April',   'May',      'June',
-    'July',    'August',   'September', 'October', 'November', 'December',
-  ];
-  final dateStr = '${months[now.month - 1]} ${now.day}, ${now.year}';
-  final ref     = 'MSG-${DateTime.now().millisecondsSinceEpoch.toString().substring(4)}';
-
-  return '''REPUBLIC OF THE PHILIPPINES
-CITY OF SAN PABLO
-OFFICE OF TOURISM
-
-$dateStr
-
-To: ${d.recipient}
-Re: ${d.subject}
-
-${d.messageType}
-
-Dear Establishment Representative,
-
-${d.messageContent}
-
-This notice is duly issued by the San Pablo City Tourism Office and is valid even without a handwritten signature, being an official electronic communication of the office.
-
-For questions and concerns, please contact us at admin@sanpablo.gov.ph or visit our office at the San Pablo City Hall.
-
-Respectfully,
-
-MARIA SANTOS
-Tourism Officer
-San Pablo City Tourism Office
-
----
-This is an official communication from the San Pablo City Tourism Office.
-Reference No.: $ref''';
-}
-
 // ─── Main Dialog Widget ───────────────────────────────────────────────────────
 
 class MessageViewDialog extends StatefulWidget {
-  const MessageViewDialog({
-    super.key,
-    required this.api,
-    required this.data,
-  });
+  const MessageViewDialog({super.key, required this.api, required this.data});
 
-  final MessagesApi    api;
+  final MessagesApi api;
   final MessageViewData data;
 
   @override
@@ -105,14 +60,14 @@ class MessageViewDialog extends StatefulWidget {
 class _MessageViewDialogState extends State<MessageViewDialog>
     with SingleTickerProviderStateMixin {
   // ── Animation ──────────────────────────────────────────────────────────────
-  late AnimationController  _animCtrl;
-  late Animation<double>    _fadeAnim;
-  late Animation<Offset>    _slideAnim;
+  late AnimationController _animCtrl;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
 
   // ── Delivery report (loaded only when messageId is supplied) ───────────────
   List<DeliveryReceipt>? _deliveryReport;
-  bool                   _loadingReport = false;
-  String?                _reportError;
+  bool _loadingReport = false;
+  String? _reportError;
 
   // ── Tab (letter | report) ──────────────────────────────────────────────────
   bool _showReport = false;
@@ -124,13 +79,13 @@ class _MessageViewDialogState extends State<MessageViewDialog>
     super.initState();
 
     _animCtrl = AnimationController(
-      vsync:    this,
+      vsync: this,
       duration: const Duration(milliseconds: 260),
     );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(
       begin: const Offset(0, 0.05),
-      end:   Offset.zero,
+      end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
 
     _animCtrl.forward();
@@ -148,13 +103,16 @@ class _MessageViewDialogState extends State<MessageViewDialog>
     if (widget.data.messageId == null) return;
     setState(() {
       _loadingReport = true;
-      _reportError   = null;
+      _reportError = null;
     });
     try {
-      final report = await widget.api.fetchDeliveryReport(widget.data.messageId!);
+      final report = await widget.api.fetchDeliveryReport(
+        widget.data.messageId!,
+      );
       if (mounted) setState(() => _deliveryReport = report);
     } catch (e) {
-      if (mounted) setState(() => _reportError = 'Failed to load delivery report.');
+      if (mounted)
+        setState(() => _reportError = 'Failed to load delivery report.');
     } finally {
       if (mounted) setState(() => _loadingReport = false);
     }
@@ -175,7 +133,7 @@ class _MessageViewDialogState extends State<MessageViewDialog>
       onTap: () => Navigator.of(context).pop(),
       child: Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding:    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
         child: GestureDetector(
           onTap: () {},
           child: FadeTransition(
@@ -187,14 +145,14 @@ class _MessageViewDialogState extends State<MessageViewDialog>
                   constraints: const BoxConstraints(maxWidth: 580),
                   child: Container(
                     decoration: BoxDecoration(
-                      color:        AppColors.cardBackground,
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(16),
-                      border:       Border.all(color: AppColors.cardBorder),
+                      border: Border.all(color: AppColors.cardBorder),
                       boxShadow: [
                         BoxShadow(
-                          color:     Colors.black.withOpacity(0.55),
+                          color: Colors.black.withOpacity(0.55),
                           blurRadius: 48,
-                          offset:    const Offset(0, 18),
+                          offset: const Offset(0, 18),
                         ),
                       ],
                     ),
@@ -203,10 +161,11 @@ class _MessageViewDialogState extends State<MessageViewDialog>
                       children: [
                         // ── Header ─────────────────────────────────────────
                         _Header(
-                          data:        widget.data,
-                          hasReport:   _hasReport,
-                          showReport:  _showReport,
-                          onShowLetter: () => setState(() => _showReport = false),
+                          data: widget.data,
+                          hasReport: _hasReport,
+                          showReport: _showReport,
+                          onShowLetter: () =>
+                              setState(() => _showReport = false),
                           onShowReport: _switchToReport,
                         ),
                         const Divider(color: AppColors.cardBorder, height: 1),
@@ -217,15 +176,15 @@ class _MessageViewDialogState extends State<MessageViewDialog>
                             duration: const Duration(milliseconds: 200),
                             child: _showReport
                                 ? _DeliveryReportBody(
-                                    key:         const ValueKey('report'),
-                                    receipts:    _deliveryReport,
-                                    loading:     _loadingReport,
-                                    error:       _reportError,
-                                    onRetry:     _loadDeliveryReport,
+                                    key: const ValueKey('report'),
+                                    receipts: _deliveryReport,
+                                    loading: _loadingReport,
+                                    error: _reportError,
+                                    onRetry: _loadDeliveryReport,
                                   )
                                 : _LetterBody(
-                                    key:  const ValueKey('letter'),
-                                    text: _buildLetter(widget.data),
+                                    key: const ValueKey('letter'),
+                                    text: widget.data.messageContent,
                                   ),
                           ),
                         ),
@@ -254,10 +213,10 @@ class _Header extends StatelessWidget {
   });
 
   final MessageViewData data;
-  final bool            hasReport;
-  final bool            showReport;
-  final VoidCallback    onShowLetter;
-  final VoidCallback    onShowReport;
+  final bool hasReport;
+  final bool showReport;
+  final VoidCallback onShowLetter;
+  final VoidCallback onShowReport;
 
   @override
   Widget build(BuildContext context) {
@@ -274,9 +233,9 @@ class _Header extends StatelessWidget {
                 Text(
                   data.subject,
                   style: const TextStyle(
-                    color:       AppColors.textWhite,
-                    fontSize:    16,
-                    fontWeight:  FontWeight.w700,
+                    color: AppColors.textWhite,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                     letterSpacing: -0.3,
                   ),
                 ),
@@ -284,7 +243,7 @@ class _Header extends StatelessWidget {
                 Text(
                   'To: ${data.recipient} • ${data.date}',
                   style: const TextStyle(
-                    color:    AppColors.textGray,
+                    color: AppColors.textGray,
                     fontSize: 12.5,
                   ),
                 ),
@@ -295,16 +254,12 @@ class _Header extends StatelessWidget {
 
           // ── Tab toggle (only when a messageId is available) ───────────────
           if (hasReport) ...[
-            _TabPill(
-              label:    'Letter',
-              active:   !showReport,
-              onTap:    onShowLetter,
-            ),
+            _TabPill(label: 'Letter', active: !showReport, onTap: onShowLetter),
             const SizedBox(width: 6),
             _TabPill(
-              label:    'Delivery',
-              active:   showReport,
-              onTap:    onShowReport,
+              label: 'Delivery',
+              active: showReport,
+              onTap: onShowReport,
             ),
             const SizedBox(width: 10),
           ],
@@ -313,17 +268,17 @@ class _Header extends StatelessWidget {
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Container(
-              width:  28,
+              width: 28,
               height: 28,
               decoration: BoxDecoration(
-                color:        AppColors.cardBackground,
+                color: AppColors.cardBackground,
                 borderRadius: BorderRadius.circular(8),
-                border:       Border.all(color: AppColors.cardBorder),
+                border: Border.all(color: AppColors.cardBorder),
               ),
               child: const Icon(
                 Icons.close_rounded,
                 color: AppColors.textGray,
-                size:  16,
+                size: 16,
               ),
             ),
           ),
@@ -340,8 +295,8 @@ class _TabPill extends StatelessWidget {
     required this.onTap,
   });
 
-  final String       label;
-  final bool         active;
+  final String label;
+  final bool active;
   final VoidCallback onTap;
 
   @override
@@ -357,17 +312,17 @@ class _TabPill extends StatelessWidget {
                   colors: [AppColors.gradientStart, AppColors.gradientEnd],
                 )
               : null,
-          color:        active ? null : AppColors.cardBackground,
+          color: active ? null : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(20),
-          border:       Border.all(
+          border: Border.all(
             color: active ? Colors.transparent : AppColors.cardBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color:      active ? Colors.white : AppColors.textGray,
-            fontSize:   12,
+            color: active ? Colors.white : AppColors.textGray,
+            fontSize: 12,
             fontWeight: active ? FontWeight.w600 : FontWeight.w400,
           ),
         ),
@@ -388,19 +343,19 @@ class _LetterBody extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Container(
-        width:   double.infinity,
+        width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color:        AppColors.cardBackground,
+          color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(10),
-          border:       Border.all(color: AppColors.cardBorder),
+          border: Border.all(color: AppColors.cardBorder),
         ),
         child: Text(
           text,
           style: const TextStyle(
-            color:    AppColors.textWhite,
+            color: AppColors.textWhite,
             fontSize: 13,
-            height:   1.75,
+            height: 1.75,
           ),
         ),
       ),
@@ -420,9 +375,9 @@ class _DeliveryReportBody extends StatelessWidget {
   });
 
   final List<DeliveryReceipt>? receipts;
-  final bool                   loading;
-  final String?                error;
-  final VoidCallback           onRetry;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -432,7 +387,7 @@ class _DeliveryReportBody extends StatelessWidget {
         child: Center(
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color:       AppColors.textGray,
+            color: AppColors.textGray,
           ),
         ),
       );
@@ -444,13 +399,15 @@ class _DeliveryReportBody extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.warning_amber_rounded,
-                color: Colors.redAccent, size: 24),
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.redAccent,
+              size: 24,
+            ),
             const SizedBox(height: 10),
             Text(
               error!,
-              style: const TextStyle(
-                  color: AppColors.textGray, fontSize: 13),
+              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 14),
@@ -458,17 +415,19 @@ class _DeliveryReportBody extends StatelessWidget {
               onTap: onRetry,
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 18, vertical: 8),
+                  horizontal: 18,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color:        AppColors.cardBackground,
+                  color: AppColors.cardBackground,
                   borderRadius: BorderRadius.circular(8),
-                  border:       Border.all(color: AppColors.cardBorder),
+                  border: Border.all(color: AppColors.cardBorder),
                 ),
                 child: const Text(
                   'Retry',
                   style: TextStyle(
-                    color:      AppColors.textWhite,
-                    fontSize:   13,
+                    color: AppColors.textWhite,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -494,8 +453,8 @@ class _DeliveryReportBody extends StatelessWidget {
     }
 
     // ── Summary row ────────────────────────────────────────────────────────
-    final readCount    = list.where((r) => r.isRead).length;
-    final unreadCount  = list.length - readCount;
+    final readCount = list.where((r) => r.isRead).length;
+    final unreadCount = list.length - readCount;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -508,13 +467,13 @@ class _DeliveryReportBody extends StatelessWidget {
               _SummaryChip(
                 label: '$readCount Read',
                 color: const Color(0xFF22C55E),
-                icon:  Icons.done_all_rounded,
+                icon: Icons.done_all_rounded,
               ),
               const SizedBox(width: 8),
               _SummaryChip(
                 label: '$unreadCount Unread',
                 color: AppColors.textGray,
-                icon:  Icons.mark_email_unread_outlined,
+                icon: Icons.mark_email_unread_outlined,
               ),
             ],
           ),
@@ -524,9 +483,9 @@ class _DeliveryReportBody extends StatelessWidget {
         // Receipt list
         Flexible(
           child: ListView.separated(
-            shrinkWrap:  true,
-            padding:     const EdgeInsets.symmetric(vertical: 4),
-            itemCount:   list.length,
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            itemCount: list.length,
             separatorBuilder: (_, __) =>
                 const Divider(color: AppColors.cardBorder, height: 1),
             itemBuilder: (_, i) => _ReceiptRow(receipt: list[i]),
@@ -544,8 +503,8 @@ class _SummaryChip extends StatelessWidget {
     required this.icon,
   });
 
-  final String  label;
-  final Color   color;
+  final String label;
+  final Color color;
   final IconData icon;
 
   @override
@@ -553,11 +512,9 @@ class _SummaryChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        // ignore: deprecated_member_use
-        color:        color.withOpacity(0.12),
+        color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
-        // ignore: deprecated_member_use
-        border:       Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -567,8 +524,8 @@ class _SummaryChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color:      color,
-              fontSize:   12,
+              color: color,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -586,8 +543,18 @@ class _ReceiptRow extends StatelessWidget {
   String _fmtOpt(DateTime? dt) {
     if (dt == null) return '—';
     const m = [
-      'Jan','Feb','Mar','Apr','May','Jun',
-      'Jul','Aug','Sep','Oct','Nov','Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${m[dt.month - 1]} ${dt.day}, ${dt.year}';
   }
@@ -595,9 +562,7 @@ class _ReceiptRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isRead = receipt.isRead;
-    final color  = isRead
-        ? const Color(0xFF22C55E)
-        : AppColors.textGray;
+    final color = isRead ? const Color(0xFF22C55E) : AppColors.textGray;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -607,7 +572,7 @@ class _ReceiptRow extends StatelessWidget {
           Icon(
             isRead ? Icons.done_all_rounded : Icons.radio_button_unchecked,
             color: color,
-            size:  16,
+            size: 16,
           ),
           const SizedBox(width: 10),
 
@@ -619,8 +584,8 @@ class _ReceiptRow extends StatelessWidget {
                 Text(
                   receipt.businessName,
                   style: const TextStyle(
-                    color:      AppColors.textWhite,
-                    fontSize:   13.5,
+                    color: AppColors.textWhite,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -628,10 +593,7 @@ class _ReceiptRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     receipt.businessStatus,
-                    style: const TextStyle(
-                      color:    Colors.orange,
-                      fontSize: 11,
-                    ),
+                    style: const TextStyle(color: Colors.orange, fontSize: 11),
                   ),
                 ],
               ],
@@ -641,10 +603,7 @@ class _ReceiptRow extends StatelessWidget {
           // Read-at timestamp
           Text(
             isRead ? 'Read ${_fmtOpt(receipt.readAt)}' : 'Unread',
-            style: TextStyle(
-              color:    color,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: color, fontSize: 12),
           ),
         ],
       ),

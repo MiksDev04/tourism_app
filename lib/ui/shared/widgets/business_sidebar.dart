@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/session_service.dart';
+import '../../../api/messages_api.dart';
 import '../../../router/app_router.dart';
 
 // ─── Nav Item Model ───────────────────────────────────────────────────────────
@@ -23,7 +26,7 @@ class BizNavItem {
 
 // ─── Business Sidebar ─────────────────────────────────────────────────────────
 
-class BusinessSidebar extends StatelessWidget {
+class BusinessSidebar extends StatefulWidget {
   const BusinessSidebar({
     super.key,
     required this.selectedIndex,
@@ -33,7 +36,18 @@ class BusinessSidebar extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemSelected;
 
-  static const _navItems = [
+  @override
+  State<BusinessSidebar> createState() => _BusinessSidebarState();
+}
+
+class _BusinessSidebarState extends State<BusinessSidebar> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(MessageBadgeController.instance.refresh());
+  }
+
+  List<BizNavItem> _navItems(int unreadCount) => [
     BizNavItem(
       icon: Icons.dashboard_rounded,
       label: 'Dashboard',
@@ -62,46 +76,52 @@ class BusinessSidebar extends StatelessWidget {
       icon: Icons.chat_bubble_outline_rounded,
       label: 'Messages',
       index: 4,
-      badge: 1,
+      badge: unreadCount > 0 ? unreadCount : null,
       route: AppRoutes.businessMessages,
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 210,
-      decoration: const BoxDecoration(
-        color: AppColors.sidebarBg,
-        border: Border(right: BorderSide(color: AppColors.cardBorder)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SidebarBrand(),
-          const SizedBox(height: 12),
-          _BusinessBadge(),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              children: _navItems
-                  .map(
-                    (item) => _NavTile(
-                      item: item,
-                      isSelected: selectedIndex == item.index,
-                      onTap: () {
-                        onItemSelected(item.index);
-                        Navigator.pushReplacementNamed(context, item.route);
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
+    return ValueListenableBuilder<int>(
+      valueListenable: MessageBadgeController.instance.unreadCount,
+      builder: (context, unreadCount, _) {
+        return Container(
+          width: 210,
+          decoration: const BoxDecoration(
+            color: AppColors.sidebarBg,
+            border: Border(right: BorderSide(color: AppColors.cardBorder)),
           ),
-          _SidebarFooter(),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SidebarBrand(),
+              const SizedBox(height: 12),
+              _BusinessBadge(),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  children: _navItems(unreadCount)
+                      .map(
+                        (item) => _NavTile(
+                          item: item,
+                          isSelected: widget.selectedIndex == item.index,
+                          onTap: () {
+                            widget.onItemSelected(item.index);
+                            Navigator.pushReplacementNamed(context, item.route);
+                          },
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              _SidebarFooter(),
+            ],
+          ),
+        );
+      },
     );
   }
 }

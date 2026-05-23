@@ -12,70 +12,16 @@ Future<void> showMessageViewDialog(
   BuildContext context,
   InboxMessage msg,
 ) async {
-  // Recipient name is already known — it's the business that owns this inbox.
-  // The sender name comes from the joined profiles relation.
-  final letter = _buildLetter(msg);
-
   showDialog(
     context: context,
     barrierColor:       Colors.black.withOpacity(0.55),
     barrierDismissible: true,
     builder: (_) => _MessageViewDialog(
-      letter:  letter,
+      letter:  msg.content,   // frozen letter exactly as stored in DB
       subject: msg.subject,
       type:    msg.messageType,
     ),
   );
-}
-
-// ─── Letter Builder ───────────────────────────────────────────────────────────
-
-String _sectionLabel(MessageType type) => switch (type) {
-      MessageType.compliance   => 'COMPLIANCE NOTICE',
-      MessageType.announcement => 'ANNOUNCEMENT',
-      MessageType.general      => 'GENERAL NOTICE',
-    };
-
-String _buildLetter(InboxMessage msg) {
-  final dateStr = _formatDate(msg.sentAt);
-
-  // For broadcast messages the recipient is "All Registered Accommodations";
-  // for targeted messages it's the specific business — we don't have the name
-  // here but isBroadcast=false is enough context.
-  final recipient = msg.isBroadcast
-      ? 'All Registered Accommodations'
-      : 'Your Establishment';
-
-  final senderName = (msg.senderName ?? 'Tourism Office').toUpperCase();
-
-  return '''REPUBLIC OF THE PHILIPPINES
-CITY OF SAN PABLO
-OFFICE OF TOURISM
-
-$dateStr
-
-To: $recipient
-Re: ${msg.subject}
-
-${_sectionLabel(msg.messageType)}
-
-Dear Establishment Representative,
-
-${msg.content}
-
-This notice is duly issued by the San Pablo City Tourism Office and is valid even without a handwritten signature, being an official electronic communication of the office.
-
-For questions and concerns, please contact us at admin@sanpablo.gov.ph or visit our office at the San Pablo City Hall.
-
-Respectfully,
-
-$senderName
-Tourism Officer
-San Pablo City Tourism Office
-
----
-This is an official communication from the San Pablo City Tourism Office.
-Reference No.: ${msg.messageId}''';
 }
 
 // ─── Dialog ───────────────────────────────────────────────────────────────────

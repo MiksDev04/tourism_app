@@ -79,7 +79,7 @@ class SessionData {
       ownerFirstName,
       ownerMiddleName,
       ownerLastName,
-    ].where((part) => part != null && part!.trim().isNotEmpty).cast<String>();
+    ].where((part) => part != null && part.trim().isNotEmpty).cast<String>();
 
     return parts.join(' ').trim();
   }
