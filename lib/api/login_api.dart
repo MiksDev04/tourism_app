@@ -74,7 +74,7 @@ class LoginApi {
       // ── 4. Fetch full profile ──────────────────────────────────────────
       final profileData = await _supabase
           .from('profiles')
-          .select('full_name, phone, role, email')
+          .select('full_name, phone, role, email, username')
           .eq('id', userId)
           .maybeSingle();
 
@@ -94,15 +94,30 @@ class LoginApi {
       // ── 5. Business: check approval + fetch business row ───────────────
       String? businessId;
       String? businessName;
+      String? permitNumber;
+      String? registrationNumber;
+      String? street;
+      int? totalRooms;
+      String? permitFileUrl;
+      String? validIdUrl;
       String? businessType;
-      String? ownerName;
       String? status;
+      String? remarks;
+      String? region;
+      String? cityMunicipality;
+      String? province;
+      String? barangay;
+      String? tradename;
+      List<String>? businessLine;
+      String? ownerFirstName;
+      String? ownerLastName;
+      String? ownerMiddleName;
 
       if (role == Role.business) {
         final businessData = await _supabase
             .from('businesses')
             .select(
-              'id, business_name, business_type, status, owner_first_name, owner_last_name',
+              'id, business_name, permit_number, registration_number, street, total_rooms, permit_file_url, valid_id_url, status, remarks, region, city_municipality, province, barangay, tradename, business_line, owner_first_name, owner_last_name, owner_middle_name, business_type',
             )
             .eq('profile_id', userId)
             .maybeSingle();
@@ -131,26 +146,55 @@ class LoginApi {
 
         businessId = businessData['id'] as String?;
         businessName = businessData['business_name'] as String?;
+        permitNumber = businessData['permit_number'] as String?;
+        registrationNumber = businessData['registration_number'] as String?;
+        street = businessData['street'] as String?;
+        totalRooms = businessData['total_rooms'] as int?;
+        permitFileUrl = businessData['permit_file_url'] as String?;
+        validIdUrl = businessData['valid_id_url'] as String?;
         businessType = businessData['business_type'] as String?;
-
-        // Combine first + last name since schema has no single owner_name column
-        final firstName = businessData['owner_first_name'] as String? ?? '';
-        final lastName = businessData['owner_last_name'] as String? ?? '';
-        ownerName = '$firstName $lastName'.trim();
+        remarks = businessData['remarks'] as String?;
+        region = businessData['region'] as String?;
+        cityMunicipality = businessData['city_municipality'] as String?;
+        province = businessData['province'] as String?;
+        barangay = businessData['barangay'] as String?;
+        tradename = businessData['tradename'] as String?;
+        businessLine = (businessData['business_line'] as List<dynamic>?)
+            ?.map((value) => value.toString())
+            .toList();
+        ownerFirstName = businessData['owner_first_name'] as String?;
+        ownerLastName = businessData['owner_last_name'] as String?;
+        ownerMiddleName = businessData['owner_middle_name'] as String?;
       }
 
       // ── 6. Persist session locally ─────────────────────────────────────
       final session = SessionData(
         userId: userId,
         fullName: profileData['full_name'] as String? ?? '',
+        username: profileData['username'] as String?,
         email: profileData['email'] as String? ?? email,
         phone: profileData['phone'] as String? ?? '',
         role: roleStr,
         businessId: businessId,
         businessName: businessName,
+        permitNumber: permitNumber,
+        registrationNumber: registrationNumber,
+        street: street,
+        totalRooms: totalRooms,
+        permitFileUrl: permitFileUrl,
+        validIdUrl: validIdUrl,
         businessType: businessType,
-        ownerName: ownerName,
         status: status,
+        remarks: remarks,
+        region: region,
+        cityMunicipality: cityMunicipality,
+        province: province,
+        barangay: barangay,
+        tradename: tradename,
+        businessLine: businessLine,
+        ownerFirstName: ownerFirstName,
+        ownerLastName: ownerLastName,
+        ownerMiddleName: ownerMiddleName,
       );
 
       await SessionService.instance.save(session);

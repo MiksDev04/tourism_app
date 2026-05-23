@@ -21,14 +21,12 @@ class BusinessLayout extends StatelessWidget {
     required this.selectedIndex,
     required this.onNavSelected,
     required this.child,
-    this.hasNotification = true,
   });
 
   final String title;
   final int selectedIndex;
   final ValueChanged<int> onNavSelected;
   final Widget child;
-  final bool hasNotification;
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +50,6 @@ class BusinessLayout extends StatelessWidget {
             children: [
               BusinessHeader(
                 title: title,
-                hasNotification: hasNotification,
               ),
               Expanded(
                 child: Container(
@@ -74,7 +71,6 @@ class BusinessLayout extends StatelessWidget {
         children: [
           BusinessHeader(
             title: title,
-            hasNotification: hasNotification,
           ),
           Expanded(
             child: Container(

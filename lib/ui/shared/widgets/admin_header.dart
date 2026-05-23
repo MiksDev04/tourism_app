@@ -39,8 +39,6 @@ class AdminHeader extends StatelessWidget implements PreferredSizeWidget {
           // REPLACE the right-side Row with:
           Row(
             children: [
-              _NotificationBell(),
-              const SizedBox(width: 4),
               Container(width: 1, height: 24, color: AppColors.cardBorder),
               const SizedBox(width: 12),
               _ProfileButton(displayName: displayName, initials: initials),
@@ -52,38 +50,6 @@ class AdminHeader extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-// ─── Notification Bell ────────────────────────────────────────────────────────
-
-class _NotificationBell extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.notifications_outlined,
-            color: AppColors.textGray,
-            size: 22,
-          ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: AppColors.primaryCyan,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class _ProfileButton extends StatefulWidget {
   const _ProfileButton({

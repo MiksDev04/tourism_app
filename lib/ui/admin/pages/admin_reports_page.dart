@@ -1320,7 +1320,7 @@ class _FilterSection extends StatelessWidget {
             crossAxisCount: cols,
             crossAxisSpacing: 14,
             mainAxisSpacing: 14,
-            childAspectRatio: 4.2,
+            mainAxisExtent: 58,
             children: [
               _FilterDropdown(
                 label: 'Month',
@@ -1359,7 +1359,6 @@ class _FilterDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           label,
@@ -1369,47 +1368,46 @@ class _FilterDropdown extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        const SizedBox(height: 5),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: AppColors.backgroundDark,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.cardBorder),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                isDense: true,
-                icon: const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textGray,
-                  size: 20,
-                ),
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 13,
-                ),
-                dropdownColor: AppColors.cardBackground,
-                items: items
-                    .map(
-                      (item) => DropdownMenuItem(
-                        value: item,
-                        child: Text(
-                          item,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textWhite,
-                            fontSize: 13,
-                          ),
+        const SizedBox(height: 4),
+        Container(
+          height: 34,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: AppColors.backgroundDark,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.cardBorder),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              isExpanded: true,
+              isDense: true,
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: AppColors.textGray,
+                size: 20,
+              ),
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 13,
+              ),
+              dropdownColor: AppColors.cardBackground,
+              items: items
+                  .map(
+                    (item) => DropdownMenuItem(
+                      value: item,
+                      child: Text(
+                        item,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13,
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: onChanged,
-              ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: onChanged,
             ),
           ),
         ),

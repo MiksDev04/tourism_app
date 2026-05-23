@@ -8,14 +8,9 @@ import '../../../router/app_router.dart';
 /// Drop-in replacement — no longer needs displayName / businessName / initials
 /// passed in. It reads them directly from [SessionService].
 class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
-  const BusinessHeader({
-    super.key,
-    required this.title,
-    this.hasNotification = true,
-  });
+  const BusinessHeader({super.key, required this.title});
 
   final String title;
-  final bool hasNotification;
 
   @override
   Size get preferredSize => const Size.fromHeight(56);
@@ -44,12 +39,10 @@ class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
           ),
           Row(
             children: [
-              _NotificationBell(hasNotification: hasNotification),
-              const SizedBox(width: 4),
               Container(width: 1, height: 24, color: AppColors.cardBorder),
               const SizedBox(width: 12),
               _ProfileButton(
-                displayName: session?.displayName ?? '—',
+                displayName: session?.fullName ?? '—',
                 businessName: session?.businessName ?? '—',
                 initials: session?.initials ?? '?',
               ),
@@ -57,44 +50,6 @@ class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ─── Notification Bell ────────────────────────────────────────────────────────
-
-class _NotificationBell extends StatelessWidget {
-  const _NotificationBell({required this.hasNotification});
-
-  final bool hasNotification;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(
-            Icons.notifications_outlined,
-            color: AppColors.textGray,
-            size: 22,
-          ),
-        ),
-        if (hasNotification)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: AppColors.accentPurple,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

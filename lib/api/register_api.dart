@@ -22,6 +22,7 @@ class RegisterApi {
     required String password,
     required String phoneNumber,
     required String businessName,
+    required String tradeName,
     required BusinessType businessType,
     required List<String> businessLine,
     required String ownerFirstName,
@@ -123,6 +124,7 @@ class RegisterApi {
         'id': businessId,
         'profile_id': authUser.id,
         'business_name': businessName,
+        'tradename': tradeName.trim().isEmpty ? null : tradeName.trim(),
         'business_type': _businessTypeDbValue(businessType),
         'owner_first_name': ownerFirstName,
         'owner_middle_name': ownerMiddleName.trim().isEmpty

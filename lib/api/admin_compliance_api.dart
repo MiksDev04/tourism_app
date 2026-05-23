@@ -12,7 +12,7 @@ class BusinessActivityRecord {
   const BusinessActivityRecord({
     required this.id,
     required this.businessName,
-    required this.businessType,
+    required this.businessLine,
     required this.businessStatus,
     required this.totalRecords,
     required this.totalGuests,
@@ -22,7 +22,7 @@ class BusinessActivityRecord {
 
   final String id;
   final String businessName;
-  final String businessType;
+  final List<String> businessLine;
   final BusinessStatusLevel businessStatus;
   final int totalRecords;
   final int totalGuests;
@@ -33,7 +33,9 @@ class BusinessActivityRecord {
     return BusinessActivityRecord(
       id: json['id'] as String,
       businessName: json['business_name'] as String,
-      businessType: json['business_type'] as String,
+      businessLine: (json['business_line'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList(),
       businessStatus: _parseBusinessStatus(json['business_status'] as String),
       totalRecords: (json['total_records'] as num).toInt(),
       totalGuests: (json['total_guests'] as num).toInt(),
@@ -50,6 +52,7 @@ class BusinessActivityRecord {
         return BusinessStatusLevel.warning;
       case 'suspended':
         return BusinessStatusLevel.suspended;
+      case 'approved':
       case 'active':
       default:
         return BusinessStatusLevel.approved;
@@ -79,11 +82,41 @@ class BusinessActivityRecord {
   /// Returns true when business_status is 'suspended'.
   bool get isSuspended => businessStatus == BusinessStatusLevel.suspended;
 
+  String get businessLineLabel {
+    if (businessLine.isEmpty) return '—';
+
+    return businessLine
+        .map(_formatBusinessLine)
+        .where((value) => value.isNotEmpty)
+        .join(', ');
+  }
+
+  static String _formatBusinessLine(String raw) {
+    switch (raw) {
+      case 'hotel':
+        return 'Hotel';
+      case 'resort':
+        return 'Resort';
+      case 'motel':
+        return 'Motel';
+      case 'pension_inn':
+        return 'Pension Inn';
+      case 'youth_hostel':
+        return 'Youth Hostel';
+      case 'apartment':
+        return 'Apartment';
+      case 'others':
+        return 'Others';
+      default:
+        return raw;
+    }
+  }
+
   BusinessActivityRecord copyWith({BusinessStatusLevel? businessStatus}) {
     return BusinessActivityRecord(
       id: id,
       businessName: businessName,
-      businessType: businessType,
+      businessLine: businessLine,
       businessStatus: businessStatus ?? this.businessStatus,
       totalRecords: totalRecords,
       totalGuests: totalGuests,
@@ -111,20 +144,20 @@ class AdminComplianceApi {
         .toList();
   }
 
-  /// Updates the [business_status] of an accommodation by [id].
+  /// Updates the [status] of a business by [id].
   static Future<void> updateBusinessStatus(
     String id,
     BusinessStatusLevel status,
   ) async {
     final String statusStr = switch (status) {
-      BusinessStatusLevel.approved => 'active',
+      BusinessStatusLevel.approved => 'approved',
       BusinessStatusLevel.warning => 'warning',
       BusinessStatusLevel.suspended => 'suspended',
     };
 
     await _supabase
-        .from('accommodations')
-        .update({'business_status': statusStr})
+        .from('businesses')
+        .update({'status': statusStr})
         .eq('id', id);
   }
 }

@@ -18,7 +18,7 @@ const _activityStatusOptions = [
 
 const _businessStatusOptions = [
   'All Business Statuses',
-  'Active',
+  'Approved',
   'Warning',
   'Suspended',
 ];
@@ -41,7 +41,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   String _searchQuery = '';
   String _selectedActivityStatus = 'All Statuses';
   String _selectedBusinessStatus = 'All Business Statuses';
-  String _selectedType = 'All Types';
+  String _selectedBusinessLine = 'All Types';
 
   int _currentPage = 0;
   int _pageSize = 10;
@@ -88,7 +88,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
 
   // ── Derived type options (dynamic from data) ───────────────────────────────
   List<String> get _typeOptions {
-    final types = _allRecords.map((r) => r.businessType).toSet().toList()
+    final types = _allRecords.expand((r) => r.businessLine).toSet().toList()
       ..sort();
     return ['All Types', ...types];
   }
@@ -118,12 +118,14 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
         return false;
       }
 
-      if (_selectedType != 'All Types' && r.businessType != _selectedType) {
+      if (_selectedBusinessLine != 'All Types' &&
+          !r.businessLine.contains(_selectedBusinessLine)) {
         return false;
       }
 
       if (_selectedBusinessStatus != 'All Business Statuses') {
         final want = switch (_selectedBusinessStatus) {
+          'Approved' => BusinessStatusLevel.approved,
           'Warning' => BusinessStatusLevel.warning,
           'Suspended' => BusinessStatusLevel.suspended,
           _ => BusinessStatusLevel.approved,
@@ -185,8 +187,9 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       setState(() {
         final idx = _allRecords.indexWhere((r) => r.id == record.id);
         if (idx != -1) {
-          _allRecords[idx] =
-              _allRecords[idx].copyWith(businessStatus: record.businessStatus);
+          _allRecords[idx] = _allRecords[idx].copyWith(
+            businessStatus: record.businessStatus,
+          );
         }
       });
       if (mounted) {
@@ -247,10 +250,10 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                       _selectedBusinessStatus = v!;
                       _resetPage();
                     }),
-                    selectedType: _selectedType,
+                    selectedType: _selectedBusinessLine,
                     typeOptions: _typeOptions,
                     onTypeChanged: (v) => setState(() {
-                      _selectedType = v!;
+                      _selectedBusinessLine = v!;
                       _resetPage();
                     }),
                   ),
@@ -312,7 +315,7 @@ class _PageHeader extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Monitor guest recording activity of registered establishments',
+                'Monitor guest recording activity of registered businesses',
                 style: TextStyle(color: AppColors.textGray, fontSize: 13),
               ),
             ],
@@ -686,14 +689,11 @@ class _DropdownFilter extends StatelessWidget {
 // ─── Compliance Table ─────────────────────────────────────────────────────────
 
 class _ComplianceTable extends StatelessWidget {
-  const _ComplianceTable({
-    required this.rows,
-    required this.onStatusChange,
-  });
+  const _ComplianceTable({required this.rows, required this.onStatusChange});
 
   final List<BusinessActivityRecord> rows;
   final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
-      onStatusChange;
+  onStatusChange;
 
   @override
   Widget build(BuildContext context) {
@@ -755,7 +755,7 @@ class _TableHeader extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(flex: 3, child: _HeaderCell('Business')),
-                Expanded(flex: 2, child: _HeaderCell('Type')),
+                Expanded(flex: 2, child: _HeaderCell('Business Line')),
                 Expanded(flex: 2, child: _HeaderCell('Business Status')),
                 Expanded(flex: 3, child: _HeaderCell('Activity Status')),
                 Expanded(flex: 2, child: _HeaderCell('Records')),
@@ -791,14 +791,11 @@ class _HeaderCell extends StatelessWidget {
 // ─── Compliance Row ───────────────────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
-  const _ComplianceRow({
-    required this.record,
-    required this.onStatusChange,
-  });
+  const _ComplianceRow({required this.record, required this.onStatusChange});
 
   final BusinessActivityRecord record;
   final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
-      onStatusChange;
+  onStatusChange;
 
   String _formatLastActivity(DateTime? dt) {
     if (dt == null) return '—';
@@ -860,7 +857,7 @@ class _ComplianceRow extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            record.businessType,
+                            record.businessLineLabel,
                             style: const TextStyle(
                               color: AppColors.textGray,
                               fontSize: 11,
@@ -936,7 +933,7 @@ class _ComplianceRow extends StatelessWidget {
                 Expanded(
                   flex: 2,
                   child: Text(
-                    record.businessType,
+                    record.businessLineLabel,
                     style: const TextStyle(
                       color: AppColors.textGray,
                       fontSize: 12.5,
@@ -1038,10 +1035,7 @@ class _ActionButton extends StatelessWidget {
 // ─── Status Change Dialog ─────────────────────────────────────────────────────
 
 class _StatusChangeDialog extends StatefulWidget {
-  const _StatusChangeDialog({
-    required this.record,
-    required this.onConfirm,
-  });
+  const _StatusChangeDialog({required this.record, required this.onConfirm});
 
   final BusinessActivityRecord record;
   final Future<void> Function(BusinessStatusLevel) onConfirm;
@@ -1133,8 +1127,9 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _isSaving ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded, size: 18),
                     color: AppColors.textGray,
                     padding: EdgeInsets.zero,
@@ -1207,15 +1202,14 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
               ),
               const SizedBox(height: 10),
               _StatusOption(
-                label: 'Active',
+                label: 'Approved',
                 description: 'Business is in good standing.',
                 icon: Icons.check_circle_outline_rounded,
                 color: AppColors.accentGreen,
                 isSelected: _selected == BusinessStatusLevel.approved,
                 isEnabled: true,
-                onTap: () => setState(
-                  () => _selected = BusinessStatusLevel.approved,
-                ),
+                onTap: () =>
+                    setState(() => _selected = BusinessStatusLevel.approved),
               ),
               const SizedBox(height: 8),
               _StatusOption(
@@ -1252,8 +1246,9 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed:
-                          _isSaving ? null : () => Navigator.of(context).pop(),
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textGray,
                         side: BorderSide(color: AppColors.cardBorder),
