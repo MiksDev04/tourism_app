@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
@@ -236,11 +235,11 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
           .from('reports')
           .download(filePath);
 
-      // Get local directory (works on all platforms)
-      final Directory? downloadsDir = await getApplicationDocumentsDirectory();
+      // Save the file to the user's Downloads folder.
+      final Directory? downloadsDir = await getDownloadsDirectory();
       if (downloadsDir == null) {
         if (mounted) {
-          _showError('Could not access storage folder.');
+          _showError('Could not access the Downloads folder.');
         }
         return;
       }
@@ -252,17 +251,9 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
       // Write file to local storage
       await localFile.writeAsBytes(fileData);
-
-      // Open the file
-      final result = await OpenFile.open(localFile.path);
-
       if (!mounted) return;
 
-      if (result.type == ResultType.done) {
-        _showSuccess('File opened: $fileName');
-      } else {
-        _showSuccess('File downloaded to: ${localFile.path}');
-      }
+      _showSuccess('File saved to Downloads: $fileName');
     } catch (e) {
       if (mounted) {
         _showError('Error downloading file: $e');

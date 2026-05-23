@@ -9,30 +9,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 enum BusinessLine {
   hotel,
   resort,
-  restaurant,
-  cafe,
-  pensionHouse,
-  inn,
-  other;
+  motel,
+  pensionInn,
+  youthHostel,
+  others;
 
   String get dbValue => switch (this) {
-    BusinessLine.pensionHouse => 'pension_house',
+    BusinessLine.youthHostel => 'pensionHouse',
     _ => name,
   };
 
   String get label => switch (this) {
     BusinessLine.hotel        => 'Hotel',
     BusinessLine.resort       => 'Resort',
-    BusinessLine.restaurant   => 'Restaurant',
-    BusinessLine.cafe         => 'Café',
-    BusinessLine.pensionHouse => 'Pension House',
-    BusinessLine.inn          => 'Inn',
-    BusinessLine.other        => 'Other',
+    BusinessLine.motel   => 'Motel',
+    BusinessLine.pensionInn         => 'Pension Inn',
+    BusinessLine.youthHostel => 'Youth Hostel',
+    BusinessLine.others        => 'Others',
   };
 
   static BusinessLine fromDb(String v) => BusinessLine.values.firstWhere(
     (e) => e.dbValue == v,
-    orElse: () => BusinessLine.other,
+    orElse: () => BusinessLine.others,
   );
 }
 
@@ -177,6 +175,8 @@ class BusinessProfileApi {
         'username':  username.trim(),
         'phone':     phone.trim(),
       }).eq('id', _uid);
+      await _client.auth.refreshSession();
+
     } on PostgrestException catch (e) {
       throw ProfileApiException(_pgMsg(e));
     }
@@ -235,6 +235,8 @@ class BusinessProfileApi {
         'permit_number':       _nul(permitNumber),
         'registration_number': _nul(registrationNumber),
       }).eq('id', businessId);
+      await _client.auth.refreshSession();
+
     } on PostgrestException catch (e) {
       throw ProfileApiException(_pgMsg(e));
     }
@@ -370,6 +372,7 @@ class BusinessProfileApi {
 
     try {
       await _client.from('profiles').update({'email': trimmed}).eq('id', _uid);
+
     } on PostgrestException catch (e) {
       throw ProfileApiException(_pgMsg(e));
     }

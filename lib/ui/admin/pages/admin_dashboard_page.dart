@@ -621,7 +621,7 @@ class _NationalitiesDonut extends StatelessWidget {
   Widget build(BuildContext context) {
     if (nationalities.isEmpty) {
       return _DonutCard(
-        title: 'Top 5 Nationalities',
+        title: 'Top 5 Countries',
         emptyHint: 'No data for this period',
         segments: List.generate(
           5,
@@ -652,7 +652,7 @@ class _NationalitiesDonut extends StatelessWidget {
         .toList();
 
     return _DonutCard(
-      title: 'Top 5 Nationalities',
+      title: 'Top 5 Countries',
       segments: segments,
       legend: legend,
     );

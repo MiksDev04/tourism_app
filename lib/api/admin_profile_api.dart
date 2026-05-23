@@ -99,6 +99,7 @@ class AdminProfileApi {
             'phone': phone.trim(),
           })
           .eq('id', _uid);
+      await _client.auth.refreshSession();
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
     }

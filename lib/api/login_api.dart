@@ -137,6 +137,13 @@ class LoginApi {
           );
         }
 
+        if (status == 'suspended') {
+          return LoginResult.err(
+            'Your account is suspended because of violations. '
+            'Please go to tourism office for more information.',
+          );
+        }
+
         if (status == 'rejected') {
           return LoginResult.err(
             'Your account application was not approved. '

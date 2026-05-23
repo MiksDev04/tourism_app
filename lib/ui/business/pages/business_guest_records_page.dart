@@ -22,39 +22,43 @@ String _displayNationality(GuestBreakdownEntry b) {
   return b.nationality ?? '—';
 }
 
-String _derivedCategoryLabel(GuestBreakdownEntry b) {
-  if (b.isOverseas) return 'Overseas Fil.';
-  if (b.country == 'Others') return 'Unspecified';
-  if (b.country == 'Philippines') {
-    return 'PH Resident';
-  }
-  if (b.country != null) return 'Foreign';
-  return 'Unspecified';
+String _displayYesNo(bool value) {
+  return value ? 'Yes' : 'No';
 }
 
-Color _derivedCategoryColor(GuestBreakdownEntry b) {
-  if (b.isOverseas) return const Color(0xFF3B82F6);
-  if (b.country == 'Others') return const Color(0xFF6B7280);
-  if (b.country == 'Philippines') {
-    return const Color(0xFF10B981);
+Map<String, int> _isOverseasSummary(List<GuestBreakdownEntry> breakdowns) {
+  var yes = 0;
+  var no = 0;
+
+  for (final breakdown in breakdowns) {
+    if (breakdown.isOverseas) {
+      yes += breakdown.count;
+    } else {
+      no += breakdown.count;
+    }
   }
-  if (b.country != null) return const Color(0xFFF59E0B);
-  return AppColors.textGray;
+
+  return {
+    'Yes': yes,
+    'No': no,
+  };
 }
 
-Map<String, int> _residenceSummary(List<GuestBreakdownEntry> breakdowns) {
+Map<String, int> _countrySummary(List<GuestBreakdownEntry> breakdowns) {
   final summary = <String, int>{};
 
   for (final breakdown in breakdowns) {
-    final label = _derivedCategoryLabel(breakdown);
+    if (breakdown.isOverseas) {
+      continue;
+    }
+    final label = breakdown.country ?? 'Unspecified';
     summary[label] = (summary[label] ?? 0) + breakdown.count;
   }
 
   final ordered = <String, int>{};
   for (final label in const [
-    'PH Resident',
-    'Foreign',
-    'Overseas Fil.',
+    'Philippines',
+    'Others',
     'Unspecified',
   ]) {
     if (summary.containsKey(label)) {
@@ -1656,9 +1660,9 @@ class _RecordDetailModal extends StatelessWidget {
                       _BreakdownTable(breakdowns: demo.breakdowns),
                       const SizedBox(height: 20),
 
-                      const _ModalSectionLabel('Residence'),
+                      const _ModalSectionLabel('Is Overseas'),
                       const SizedBox(height: 10),
-                      _StatGrid(entries: _residenceSummary(demo.breakdowns)),
+                      _StatGrid(entries: _isOverseasSummary(demo.breakdowns)),
                       const SizedBox(height: 20),
 
                       const _ModalSectionLabel('Age Groups'),
@@ -1673,7 +1677,7 @@ class _RecordDetailModal extends StatelessWidget {
 
                       const _ModalSectionLabel('Country / Region'),
                       const SizedBox(height: 10),
-                      _StatGrid(entries: demo.countries),
+                      _StatGrid(entries: _countrySummary(demo.breakdowns)),
                     ],
                   ],
                 ),
@@ -1817,8 +1821,11 @@ class _BreakdownTable extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: breakdowns.map((b) {
-              final catLabel = _derivedCategoryLabel(b);
-              final catColor = _derivedCategoryColor(b);
+              final isOverseas = b.isOverseas;
+              final yesNoLabel = _displayYesNo(isOverseas);
+              final yesNoColor = isOverseas
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFF10B981);
               return Container(
                 margin: const EdgeInsets.only(bottom: 8),
                 padding: const EdgeInsets.all(12),
@@ -1842,23 +1849,23 @@ class _BreakdownTable extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // Residence category badge
+                        // Is Overseas badge
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: catColor.withOpacity(0.12),
+                            color: yesNoColor.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: catColor.withOpacity(0.35),
+                              color: yesNoColor.withOpacity(0.35),
                             ),
                           ),
                           child: Text(
-                            catLabel,
+                            yesNoLabel,
                             style: TextStyle(
-                              color: catColor,
+                              color: yesNoColor,
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
                             ),
@@ -1871,6 +1878,7 @@ class _BreakdownTable extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 6,
                       children: [
+                        _BreakdownInfoChip(label: 'Is Overseas', value: yesNoLabel),
                         _BreakdownInfoChip(
                           label: 'Nationality',
                           value: _displayNationality(b),
@@ -1891,7 +1899,7 @@ class _BreakdownTable extends StatelessWidget {
           );
         }
 
-        // Wide: table layout — Country | Nationality | Region | Residence | Sex | Age | Count
+        // Wide: table layout — Country | Nationality | Region | Is Overseas | Sex | Age | Count
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -1907,7 +1915,7 @@ class _BreakdownTable extends StatelessWidget {
                 0: FlexColumnWidth(1), // Country
                 1: FlexColumnWidth(1), // Nationality
                 2: FlexColumnWidth(1), // Region
-                3: FlexColumnWidth(1), // Residence Category
+                3: FlexColumnWidth(1), // Is Overseas
                 4: FlexColumnWidth(1), // Sex
                 5: FlexColumnWidth(1), // Age Group
                 6: FlexColumnWidth(1), // Count
@@ -1919,7 +1927,7 @@ class _BreakdownTable extends StatelessWidget {
                     _TCell('Country', isHeader: true),
                     _TCell('Nationality', isHeader: true),
                     _TCell('Region', isHeader: true),
-                    _TCell('Residence', isHeader: true),
+                    _TCell('Is Overseas', isHeader: true),
                     _TCell('Sex', isHeader: true),
                     _TCell('Age Group', isHeader: true),
                     _TCell('Count', isHeader: true),
@@ -1932,8 +1940,10 @@ class _BreakdownTable extends StatelessWidget {
                       _TCell(_displayNationality(b)),
                       _TCell(b.philippinesRegion ?? '—'),
                       _TCellBadge(
-                        label: _derivedCategoryLabel(b),
-                        color: _derivedCategoryColor(b),
+                        label: _displayYesNo(b.isOverseas),
+                        color: b.isOverseas
+                            ? const Color(0xFF3B82F6)
+                            : const Color(0xFF10B981),
                       ),
                       _TCell(b.sex),
                       _TCell(b.ageGroup),
@@ -2003,7 +2013,7 @@ class _TCell extends StatelessWidget {
   }
 }
 
-/// Coloured badge cell used for the Residence Category column.
+/// Coloured badge cell used for the Is Overseas column.
 class _TCellBadge extends StatelessWidget {
   const _TCellBadge({required this.label, required this.color});
   final String label;
