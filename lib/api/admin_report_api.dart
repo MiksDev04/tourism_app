@@ -168,7 +168,7 @@ class ReportParams {
 class _BusinessInfo {
   final String id;
   final String name;
-  final String businessType;
+  final String businessLine;
   final String region;
   final String cityMunicipality;
   final String province;
@@ -177,7 +177,7 @@ class _BusinessInfo {
   const _BusinessInfo({
     required this.id,
     required this.name,
-    required this.businessType,
+    required this.businessLine,
     required this.region,
     required this.cityMunicipality,
     required this.province,
@@ -203,7 +203,19 @@ class _MonthData {
   /// day → rooms_occupied
   final Map<int, int> roomsOccupied;
 
-  /// Total guest-nights for the month (sum of check_out – check_in).
+  /// day → guest nights occurring on that day (capped to month, accounts for
+  /// guest count per record).
+  final Map<int, int> guestNightsByDay;
+
+  /// arrival day → (stay_duration_nights × guest_count) for all records that
+  /// checked in on that day.  Used as the per-day ALS numerator.
+  // FIX (Bug 4): separate map so the ALS numerator uses the correct population.
+  final Map<int, int> guestNightsPerArrivalDay;
+
+  /// Total guest-nights for the month: sum of (nights × guestCount) over all
+  /// records whose check-in falls in this month.  Used for the monthly ALS
+  /// total column.
+  // FIX (Bug 1): includes guest count per record.
   final int guestNights;
 
   /// Populated per-sheet using business.totalRooms × daysInMonth.
@@ -215,6 +227,8 @@ class _MonthData {
     required this.residentsByDay,
     required this.sexByDay,
     required this.roomsOccupied,
+    required this.guestNightsByDay,
+    required this.guestNightsPerArrivalDay,
     required this.guestNights,
     required this.roomsAvailable,
   });
@@ -316,7 +330,7 @@ class ReportService {
     final rows = await _sb
         .from('businesses')
         .select(
-          'id, business_name, business_type, region, city_municipality, province, total_rooms',
+          'id, business_name, business_line, region, city_municipality, province, total_rooms',
         )
         .eq('status', 'approved')
         .order('business_name');
@@ -326,7 +340,7 @@ class ReportService {
           (r) => _BusinessInfo(
             id: r['id'] as String,
             name: r['business_name'] as String? ?? 'Unknown',
-            businessType: r['business_type'] as String? ?? '',
+            businessLine: _displayBusinessLine(r['business_line']),
             region: r['region'] as String? ?? '4-A',
             cityMunicipality: r['city_municipality'] as String? ?? '',
             province: r['province'] as String? ?? '',
@@ -344,6 +358,7 @@ class ReportService {
     final firstDay = DateTime(year, month, 1);
     final lastDay = DateTime(year, month + 1, 0);
 
+    // Step 1 — fetch guest records whose check-in falls within the month.
     final records = await _sb
         .from('guest_records')
         .select('id, check_in, check_out, rooms_occupied')
@@ -354,6 +369,7 @@ class ReportService {
 
     final recordIds = (records as List).map((r) => r['id'] as String).toList();
 
+    // Step 2 — fetch breakdowns for those records.
     List breakdowns = [];
     if (recordIds.isNotEmpty) {
       breakdowns = await _sb
@@ -364,6 +380,19 @@ class ReportService {
           .inFilter('guest_record_id', recordIds);
     }
 
+    // Step 3 — build total guest count per record from breakdowns.
+    //
+    // FIX (Bug 1 & 2): guest-night calculations must be weighted by the number
+    // of guests in each record, not treated as 1 per record.
+    final Map<String, int> recordGuestCount = {};
+    for (final raw in breakdowns) {
+      final b = Map<String, dynamic>.from(raw as Map);
+      final recId = b['guest_record_id']?.toString() ?? '';
+      recordGuestCount[recId] =
+          (recordGuestCount[recId] ?? 0) + _asInt(b['count']);
+    }
+
+    // Step 4 — process records to accumulate room-night and guest-night maps.
     final Map<String, int> recordDay = {};
     int totalGuestNights = 0;
 
@@ -371,6 +400,11 @@ class ReportService {
     final Map<int, Map<String, int>> residentsByDay = {};
     final Map<int, Map<String, Map<String, int>>> sexByDay = {};
     final Map<int, int> roomsOccupiedByDay = {};
+    final Map<int, int> guestNightsByDay = {};
+
+    // FIX (Bug 4): separate map keyed by check-in day so per-day ALS uses the
+    // correct denominator population (guests who ARRIVED on that day).
+    final Map<int, int> guestNightsPerArrivalDay = {};
 
     for (final r in records) {
       final checkIn = DateTime.parse(r['check_in']);
@@ -378,21 +412,40 @@ class ReportService {
       final nights = checkOut.difference(checkIn).inDays;
       final rooms = r['rooms_occupied'] as int? ?? 0;
 
+      // FIX (Bug 1): weight by guest count, not just record count.
+      final guestCount = recordGuestCount[r['id'] as String] ?? 0;
+
       recordDay[r['id']] = checkIn.day;
 
-      // Only count valid stays
       if (nights > 0) {
-        totalGuestNights += nights;
+        // FIX (Bug 1): multiply stay duration by number of guests.
+        totalGuestNights += nights * guestCount;
 
-        // Spread rooms occupied across each night of the stay
+        // FIX (Bug 4): accumulate full-stay guest-nights attributed to the
+        // check-in day (used as the ALS numerator for that arrival day).
+        guestNightsPerArrivalDay[checkIn.day] =
+            (guestNightsPerArrivalDay[checkIn.day] ?? 0) +
+            (nights * guestCount);
+
         for (int n = 0; n < nights; n++) {
-          final stayDay = checkIn.add(Duration(days: n)).day;
+          final stayDate = checkIn.add(Duration(days: n));
+
+          // FIX (Bug 3): stop spreading once the stay crosses into a different
+          // month so we never corrupt another month's per-day totals.
+          if (stayDate.year != year || stayDate.month != month) continue;
+
+          final stayDay = stayDate.day;
           roomsOccupiedByDay[stayDay] =
               (roomsOccupiedByDay[stayDay] ?? 0) + rooms;
+
+          // FIX (Bug 2): increment by guest count, not by 1.
+          guestNightsByDay[stayDay] =
+              (guestNightsByDay[stayDay] ?? 0) + guestCount;
         }
       }
     }
 
+    // Step 5 — process breakdowns for country / resident / sex counts.
     for (final raw in breakdowns) {
       final b = Map<String, dynamic>.from(raw as Map);
       final recId = b['guest_record_id']?.toString() ?? '';
@@ -440,6 +493,8 @@ class ReportService {
       residentsByDay: residentsByDay,
       sexByDay: sexByDay,
       roomsOccupied: roomsOccupiedByDay,
+      guestNightsByDay: guestNightsByDay,
+      guestNightsPerArrivalDay: guestNightsPerArrivalDay,
       guestNights: totalGuestNights,
       roomsAvailable: 0,
     );
@@ -453,6 +508,8 @@ class ReportService {
     final Map<int, Map<String, int>> residentsByDay = {};
     final Map<int, Map<String, Map<String, int>>> sexByDay = {};
     final Map<int, int> roomsOccupied = {};
+    final Map<int, int> guestNightsByDay = {};
+    final Map<int, int> guestNightsPerArrivalDay = {};
     int guestNights = 0;
 
     for (final md in list) {
@@ -486,6 +543,16 @@ class ReportService {
         roomsOccupied[day] = (roomsOccupied[day] ?? 0) + count;
       });
 
+      md.guestNightsByDay.forEach((day, count) {
+        guestNightsByDay[day] = (guestNightsByDay[day] ?? 0) + count;
+      });
+
+      // FIX (Bug 4): merge per-arrival-day guest-night totals.
+      md.guestNightsPerArrivalDay.forEach((day, count) {
+        guestNightsPerArrivalDay[day] =
+            (guestNightsPerArrivalDay[day] ?? 0) + count;
+      });
+
       guestNights += md.guestNights;
     }
 
@@ -495,6 +562,8 @@ class ReportService {
       residentsByDay: residentsByDay,
       sexByDay: sexByDay,
       roomsOccupied: roomsOccupied,
+      guestNightsByDay: guestNightsByDay,
+      guestNightsPerArrivalDay: guestNightsPerArrivalDay,
       guestNights: guestNights,
       roomsAvailable: 0,
     );
@@ -576,7 +645,7 @@ class ReportService {
       sheet,
       row++,
       0,
-      'Type of Accommodation: ${_formatBusinessType(biz.businessType)}',
+      'Type of Accommodation: ${_formatBusinessType(biz.businessLine)}',
     );
     _cell(sheet, row++, 0, 'City/Municipality: ${biz.cityMunicipality}');
     _cell(sheet, row++, 0, 'Province: ${biz.province}');
@@ -605,7 +674,7 @@ class ReportService {
       for (int d = 1; d <= 31; d++) {
         if (d <= daysInMonth) {
           final v = dayFn(d).fold<int>(0, (a, b) => a + b);
-          cells.add(v == 0 ? '' : v.toString());
+          cells.add(v.toString());
           total += v;
         } else {
           cells.add('');
@@ -632,7 +701,7 @@ class ReportService {
         final v =
             res(d, 'philippine_resident_filipino') +
             res(d, 'philippine_resident_foreign');
-        prCells.add(v == 0 ? '0' : v.toString());
+        prCells.add(v.toString());
       } else {
         prCells.add('0');
       }
@@ -675,7 +744,7 @@ class ReportService {
         for (int d = 1; d <= 31; d++) {
           if (d <= daysInMonth) {
             final v = countries.fold<int>(0, (a, c) => a + cnt(c, d));
-            subCols.add(v == 0 ? '0' : v.toString());
+            subCols.add(v.toString());
             subTotal += v;
           } else {
             subCols.add('0');
@@ -698,7 +767,7 @@ class ReportService {
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final v = countryTotal(d) + res(d, 'unspecified_guest');
-        nprCols.add(v == 0 ? '0' : v.toString());
+        nprCols.add(v.toString());
         nprTotal += v;
       } else {
         nprCols.add('0');
@@ -719,7 +788,7 @@ class ReportService {
             countryTotal(d) +
             res(d, 'unspecified_guest') +
             res(d, 'overseas_filipino');
-        gtCols.add(v == 0 ? '0' : v.toString());
+        gtCols.add(v.toString());
         gtTotal += v;
       } else {
         gtCols.add('0');
@@ -734,7 +803,7 @@ class ReportService {
       for (int d = 1; d <= 31; d++) {
         if (d <= daysInMonth) {
           final v = fn(d);
-          cols.add(v == 0 ? '0' : v.toString());
+          cols.add(v.toString());
         } else {
           cols.add('0');
         }
@@ -769,7 +838,7 @@ class ReportService {
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final v = md.roomsOccupied[d] ?? 0;
-        roomCols.add(v == 0 ? '' : v.toString());
+        roomCols.add(v.toString());
         totalRoomsOcc += v;
       } else {
         roomCols.add('');
@@ -785,16 +854,39 @@ class ReportService {
     availCols.add((biz.totalRooms * daysInMonth).toString());
     _row(sheet, row++, availCols);
 
+    // FIX (Bug 2 downstream): guestNightsByDay now holds correct per-guest
+    // counts, so this row reflects actual guest-nights per day.
     final gnCols = <String>['3. Total Guest nights'];
-    for (int d = 1; d <= 31; d++) gnCols.add('');
-    gnCols.add(md.guestNights.toString());
+    int totalGuestNightsDay = 0;
+    for (int d = 1; d <= 31; d++) {
+      if (d <= daysInMonth) {
+        final v = md.guestNightsByDay[d] ?? 0;
+        gnCols.add(v.toString());
+        totalGuestNightsDay += v;
+      } else {
+        gnCols.add('');
+      }
+    }
+    gnCols.add(totalGuestNightsDay.toString());
     _row(sheet, row++, gnCols);
 
     row++;
     _cell(sheet, row++, 0, 'Alternative Submission');
 
     final occCols = <String>['1. Average Monthly Occupancy Rate'];
-    for (int d = 1; d <= 31; d++) occCols.add('');
+    for (int d = 1; d <= 31; d++) {
+      if (d <= daysInMonth) {
+        final roomsAvailDay = biz.totalRooms;
+        final occDay = md.roomsOccupied[d] ?? 0;
+        occCols.add(
+          roomsAvailDay > 0
+              ? '${(occDay / roomsAvailDay * 100).toStringAsFixed(2)}%'
+              : '0%',
+        );
+      } else {
+        occCols.add('');
+      }
+    }
     final roomsAvail = biz.totalRooms * daysInMonth;
     occCols.add(
       roomsAvail > 0
@@ -803,8 +895,29 @@ class ReportService {
     );
     _row(sheet, row++, occCols);
 
+    // FIX (Bug 4): per-day ALS uses guestNightsPerArrivalDay[d] (total
+    // stay-nights × guest-count for guests who checked IN on day d) divided
+    // by guestArrivalsDay(d) (guests who checked in on day d).  Both
+    // quantities now refer to the same arrival-day population.
+    int guestArrivalsDay(int day) =>
+        md.residentsByDay[day]?.values.fold<int>(0, (sum, v) => sum + v) ?? 0;
+
     final alsCols = <String>['2. Average Length of Stay (in Nights)'];
-    for (int d = 1; d <= 31; d++) alsCols.add('');
+    for (int d = 1; d <= 31; d++) {
+      if (d <= daysInMonth) {
+        final arrivals = guestArrivalsDay(d);
+        final nightsForArrivals = md.guestNightsPerArrivalDay[d] ?? 0;
+        alsCols.add(
+          arrivals > 0
+              ? (nightsForArrivals / arrivals).toStringAsFixed(2)
+              : '0',
+        );
+      } else {
+        alsCols.add('');
+      }
+    }
+    // Monthly ALS total: md.guestNights is now correctly weighted by guest
+    // count (Bug 1 fix), and gtTotal is the actual number of guest arrivals.
     alsCols.add(
       gtTotal > 0 ? (md.guestNights / gtTotal).toStringAsFixed(2) : '0',
     );
@@ -815,22 +928,39 @@ class ReportService {
 
     int sex(int day, String s, String cat) => md.sexByDay[day]?[s]?[cat] ?? 0;
 
+    // Helper for a single-bucket sex row.
     void sexRow(String label, String s, String cat) {
       final cols = <String>[label];
       for (int d = 1; d <= 31; d++) {
-        if (d <= daysInMonth) {
-          final v = sex(d, s, cat);
-          cols.add(v == 0 ? '' : v.toString());
-        } else {
-          cols.add('');
-        }
+        cols.add(d <= daysInMonth ? sex(d, s, cat).toString() : '');
       }
       cols.add(sex(0, s, cat).toString());
       _row(sheet, row++, cols);
     }
 
+    // FIX (Bug 5): "a. Philippine Residents" must sum BOTH residence buckets
+    // (Filipino-nationality and foreign-nationality Philippine residents) to
+    // match the main guest table.
+    void sexRowPhilRes(String s) {
+      const label = 'a. Philippine Residents';
+      final cols = <String>[label];
+      for (int d = 1; d <= 31; d++) {
+        if (d <= daysInMonth) {
+          final v = sex(d, s, 'philippine_resident_filipino') +
+              sex(d, s, 'philippine_resident_foreign');
+          cols.add(v.toString());
+        } else {
+          cols.add('');
+        }
+      }
+      final total = sex(0, s, 'philippine_resident_filipino') +
+          sex(0, s, 'philippine_resident_foreign');
+      cols.add(total.toString());
+      _row(sheet, row++, cols);
+    }
+
     _cell(sheet, row++, 0, '1. Male');
-    sexRow('a. Philippine Residents', 'male', 'philippine_resident_filipino');
+    sexRowPhilRes('male'); // FIX (Bug 5)
     sexRow(
       'b. Non-Philippine/Foreign Residents (including unspecified)',
       'male',
@@ -848,7 +978,7 @@ class ReportService {
             sex(d, 'male', 'foreign_resident') +
             sex(d, 'male', 'unspecified_guest') +
             sex(d, 'male', 'overseas_filipino');
-        maleTotCols.add(v == 0 ? '' : v.toString());
+        maleTotCols.add(v.toString());
       } else {
         maleTotCols.add('');
       }
@@ -864,7 +994,7 @@ class ReportService {
     _row(sheet, row++, maleTotCols, bold: true);
 
     _cell(sheet, row++, 0, '2. Female');
-    sexRow('a. Philippine Residents', 'female', 'philippine_resident_filipino');
+    sexRowPhilRes('female'); // FIX (Bug 5)
     sexRow(
       'b. Non-Philippine/Foreign Residents (including unspecified)',
       'female',
@@ -882,7 +1012,7 @@ class ReportService {
             sex(d, 'female', 'foreign_resident') +
             sex(d, 'female', 'unspecified_guest') +
             sex(d, 'female', 'overseas_filipino');
-        femaleTotCols.add(v == 0 ? '' : v.toString());
+        femaleTotCols.add(v.toString());
       } else {
         femaleTotCols.add('');
       }
@@ -1043,9 +1173,12 @@ class ReportService {
     int totSex(String s, String cat) => md.sexByDay[0]?[s]?[cat] ?? 0;
 
     _cell(sheet, row++, 0, '1. Male');
+    // FIX (Bug 5): sum both Philippine-resident buckets for row "a".
     _row(sheet, row++, [
       'a. Philippine Residents',
-      totSex('male', 'philippine_resident_filipino').toString(),
+      (totSex('male', 'philippine_resident_filipino') +
+              totSex('male', 'philippine_resident_foreign'))
+          .toString(),
     ]);
     _row(sheet, row++, [
       'b. Non-Philippine/Foreign Residents (including unspecified)',
@@ -1070,9 +1203,12 @@ class ReportService {
     ], bold: true);
 
     _cell(sheet, row++, 0, '2. Female');
+    // FIX (Bug 5): sum both Philippine-resident buckets for row "a".
     _row(sheet, row++, [
       'a. Philippine Residents',
-      totSex('female', 'philippine_resident_filipino').toString(),
+      (totSex('female', 'philippine_resident_filipino') +
+              totSex('female', 'philippine_resident_foreign'))
+          .toString(),
     ]);
     _row(sheet, row++, [
       'b. Non-Philippine/Foreign Residents (including unspecified)',
@@ -1151,7 +1287,7 @@ class ReportService {
       int total = 0;
       for (int m = 1; m <= 12; m++) {
         final v = fn(m);
-        cols.add(v == 0 ? '' : v.toString());
+        cols.add(v.toString());
         total += v;
       }
       cols.add(total.toString());
@@ -1175,7 +1311,7 @@ class ReportService {
       final v =
           mRes(m, 'philippine_resident_filipino') +
           mRes(m, 'philippine_resident_foreign');
-      prCols.add(v == 0 ? '' : v.toString());
+      prCols.add(v.toString());
       prGrand += v;
     }
     prCols.add(prGrand.toString());
@@ -1211,7 +1347,7 @@ class ReportService {
                 (x) => x.region == cg.region && x.subRegion == cg.subRegion,
               )
               .fold<int>(0, (a, x) => a + mCnt(x.country, m));
-          subCols.add(v == 0 ? '' : v.toString());
+          subCols.add(v.toString());
           subGrand += v;
         }
         subCols.add(subGrand.toString());
@@ -1230,7 +1366,7 @@ class ReportService {
     int nprGrand = 0;
     for (int m = 1; m <= 12; m++) {
       final v = mCountryAll(m) + mRes(m, 'unspecified_guest');
-      nprCols.add(v == 0 ? '' : v.toString());
+      nprCols.add(v.toString());
       nprGrand += v;
     }
     nprCols.add(nprGrand.toString());
@@ -1247,7 +1383,7 @@ class ReportService {
           mCountryAll(m) +
           mRes(m, 'unspecified_guest') +
           mRes(m, 'overseas_filipino');
-      gtCols.add(v == 0 ? '' : v.toString());
+      gtCols.add(v.toString());
       gtGrand += v;
     }
     gtCols.add(gtGrand.toString());
@@ -1282,20 +1418,30 @@ class ReportService {
     row++;
     _cell(sheet, row++, 0, 'Alternative Submission');
 
-    // Occupancy rate per month — no total column (leave blank)
+    // Occupancy rate per month
     final occCols = <String>['1. Average Monthly Occupancy Rate'];
+    int totalOccupied = 0;
+    int totalAvailable = 0;
     for (int m = 1; m <= 12; m++) {
       final occ = mdFor(m).roomsOccupied.values.fold<int>(0, (a, b) => a + b);
       final avail = totalRoomsAll * DateTime(year, m + 1, 0).day;
+      totalOccupied += occ;
+      totalAvailable += avail;
       occCols.add(
         avail > 0 ? '${(occ / avail * 100).toStringAsFixed(2)}%' : '0%',
       );
     }
-    occCols.add('');
+    occCols.add(
+      totalAvailable > 0
+          ? '${(totalOccupied / totalAvailable * 100).toStringAsFixed(2)}%'
+          : '0%',
+    );
     _row(sheet, row++, occCols);
 
-    // Average Length of Stay per month — no total column
+    // Average Length of Stay per month
     final alsCols = <String>['2. Average Length of Stay (in Nights)'];
+    int totalGuestNights = 0;
+    int totalGuests = 0;
     for (int m = 1; m <= 12; m++) {
       final md = mdFor(m);
       final guests =
@@ -1304,11 +1450,17 @@ class ReportService {
           mCountryAll(m) +
           mRes(m, 'unspecified_guest') +
           mRes(m, 'overseas_filipino');
+      totalGuestNights += md.guestNights;
+      totalGuests += guests;
       alsCols.add(
         guests > 0 ? (md.guestNights / guests).toStringAsFixed(2) : '0',
       );
     }
-    alsCols.add('');
+    alsCols.add(
+      totalGuests > 0
+          ? (totalGuestNights / totalGuests).toStringAsFixed(2)
+          : '0',
+    );
     _row(sheet, row++, alsCols);
 
     row++;
@@ -1322,7 +1474,22 @@ class ReportService {
       int total = 0;
       for (int m = 1; m <= 12; m++) {
         final v = mSex(m, s, cat);
-        cols.add(v == 0 ? '' : v.toString());
+        cols.add(v.toString());
+        total += v;
+      }
+      cols.add(total.toString());
+      _row(sheet, row++, cols);
+    }
+
+    // FIX (Bug 5): per-sex "a. Philippine Residents" sums both buckets.
+    void sexRowPhilRes(String s) {
+      const label = 'a. Philippine Residents';
+      final cols = <String>[label];
+      int total = 0;
+      for (int m = 1; m <= 12; m++) {
+        final v = mSex(m, s, 'philippine_resident_filipino') +
+            mSex(m, s, 'philippine_resident_foreign');
+        cols.add(v.toString());
         total += v;
       }
       cols.add(total.toString());
@@ -1330,7 +1497,7 @@ class ReportService {
     }
 
     _cell(sheet, row++, 0, '1. Male');
-    sexRow('a. Philippine Residents', 'male', 'philippine_resident_filipino');
+    sexRowPhilRes('male'); // FIX (Bug 5)
     sexRow(
       'b. Non-Philippine/Foreign Residents (including unspecified)',
       'male',
@@ -1348,14 +1515,14 @@ class ReportService {
           mSex(m, 'male', 'foreign_resident') +
           mSex(m, 'male', 'unspecified_guest') +
           mSex(m, 'male', 'overseas_filipino');
-      maleCols.add(v == 0 ? '' : v.toString());
+      maleCols.add(v.toString());
       maleGrand += v;
     }
     maleCols.add(maleGrand.toString());
     _row(sheet, row++, maleCols, bold: true);
 
     _cell(sheet, row++, 0, '2. Female');
-    sexRow('a. Philippine Residents', 'female', 'philippine_resident_filipino');
+    sexRowPhilRes('female'); // FIX (Bug 5)
     sexRow(
       'b. Non-Philippine/Foreign Residents (including unspecified)',
       'female',
@@ -1373,7 +1540,7 @@ class ReportService {
           mSex(m, 'female', 'foreign_resident') +
           mSex(m, 'female', 'unspecified_guest') +
           mSex(m, 'female', 'overseas_filipino');
-      femaleCols.add(v == 0 ? '' : v.toString());
+      femaleCols.add(v.toString());
       femaleGrand += v;
     }
     femaleCols.add(femaleGrand.toString());
@@ -1398,6 +1565,8 @@ class ReportService {
     residentsByDay: {},
     sexByDay: {},
     roomsOccupied: {},
+    guestNightsByDay: {},
+    guestNightsPerArrivalDay: {},
     guestNights: 0,
     roomsAvailable: 0,
   );
@@ -1439,15 +1608,36 @@ class ReportService {
         return 'Hotel';
       case 'resort':
         return 'Resort';
+      case 'motel':
+        return 'Motel';
       case 'pension_inn':
         return 'Pension Inn/ Lodge';
       case 'youth_hostel':
         return 'Youth Hostel/ Dormitory';
-      case 'apartel':
-        return 'Apartel/ Rented Homes/ Apartment';
+      case 'apartment':
+        return 'Apartment';
+      case 'others':
+        return 'Others';
       default:
         return raw;
     }
+  }
+
+  String _displayBusinessLine(Object? value) {
+    if (value is List) {
+      for (final entry in value) {
+        if (entry is String && entry.trim().isNotEmpty) {
+          return _formatBusinessType(entry);
+        }
+      }
+      return '';
+    }
+
+    if (value is String) {
+      return _formatBusinessType(value);
+    }
+
+    return '';
   }
 
   String _normalizeUpper(Object? value) =>
