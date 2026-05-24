@@ -1,4 +1,9 @@
+import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tourism_app/core/database/local_database.dart';
+import 'package:tourism_app/core/services/offline_service.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 import 'package:tourism_app/ui/business/pages/business_guest_records_page.dart';
 
 // ─── Result Wrapper ───────────────────────────────────────────────────────────
@@ -21,6 +26,10 @@ class BusinessGuestRecordApi {
   // ── Fetch Business ID ─────────────────────────────────────────────────────
 
   Future<String?> fetchBusinessId() async {
+    if (!ConnectivityService.instance.isOnline) {
+      return SessionService.instance.current?.businessId;
+    }
+
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
@@ -33,7 +42,7 @@ class BusinessGuestRecordApi {
 
       return response?['id'] as String?;
     } catch (_) {
-      return null;
+      return SessionService.instance.current?.businessId;
     }
   }
 
@@ -42,149 +51,10 @@ class BusinessGuestRecordApi {
   Future<ApiResult<List<GuestRecord>>> fetchGuestRecords(
     String businessId,
   ) async {
-    try {
-      final rows = await _supabase
-          .from('guest_records')
-          .select('''
-            id,
-            check_in,
-            check_out,
-            total_guests,
-            rooms_occupied,
-            purpose_of_visit,
-            transportation_mode,
-            status,
-            guest_breakdowns (
-              is_overseas,
-              country,
-              nationality,
-              philippines_region,
-              sex,
-              age_group,
-              count
-            )
-          ''')
-          .eq('business_id', businessId)
-          .eq('is_deleted', false)
-          .order('check_in', ascending: false);
-
-      final records = (rows as List).map((row) {
-        final breakdowns = (row['guest_breakdowns'] as List?) ?? [];
-        GuestDemographics? demographics;
-
-        if (breakdowns.isNotEmpty) {
-          final ageGroups = <String, int>{};
-          final sex       = <String, int>{};
-          final countries = <String, int>{};
-
-          for (final b in breakdowns) {
-            final count      = (b['count'] as int?) ?? 0;
-            final isOverseas = (b['is_overseas'] as bool?) ?? false;
-
-            // ── Age groups ──────────────────────────────────────────────────
-            final ageGroup = b['age_group'] as String? ?? 'Unknown';
-            ageGroups[ageGroup] = (ageGroups[ageGroup] ?? 0) + count;
-
-            // ── Sex ─────────────────────────────────────────────────────────
-            final s = b['sex'] as String? ?? 'Unknown';
-            sex[s] = (sex[s] ?? 0) + count;
-
-            // ── Countries map ───────────────────────────────────────────────
-            // Overseas guests have null country — label them separately.
-            final String countryKey;
-            if (isOverseas) {
-              countryKey = 'Overseas';
-            } else {
-              final country = b['country'] as String? ?? 'Unknown';
-              final region  = b['philippines_region'] as String?;
-              countryKey = (country == 'Philippines' &&
-                      region != null &&
-                      region != 'N/A')
-                  ? 'PH – $region'
-                  : country;
-            }
-            countries[countryKey] = (countries[countryKey] ?? 0) + count;
-          }
-
-          demographics = GuestDemographics(
-            ageGroups: ageGroups,
-            sexDistribution: sex,
-            countries: countries,
-            breakdowns: breakdowns
-                .map(
-                  (b) {
-                    final isOverseas =
-                        (b['is_overseas'] as bool?) ?? false;
-
-                    return GuestBreakdownEntry(
-                      // Overseas: country / nationality / region all null
-                      country: isOverseas
-                          ? null
-                          : b['country'] as String?,
-                      nationality: (isOverseas ||
-                              (b['country'] as String?) != 'Philippines')
-                          ? null
-                          : b['nationality'] as String?,
-                      philippinesRegion: (!isOverseas &&
-                              (b['country'] as String?) == 'Philippines' &&
-                              (b['philippines_region'] as String?) != null &&
-                              (b['philippines_region'] as String?) != 'N/A')
-                          ? b['philippines_region'] as String?
-                          : null,
-                      sex:       b['sex']       as String? ?? '',
-                      ageGroup:  b['age_group'] as String? ?? '',
-                      count:     (b['count']    as int?)   ?? 0,
-                      isOverseas: isOverseas,
-                    );
-                  },
-                )
-                .toList(),
-          );
-        }
-
-        final checkIn  = row['check_in']  as String;
-        final checkOut = row['check_out'] as String;
-        final nights   = _calcNights(checkIn, checkOut);
-
-        final statusStr = row['status'] as String? ?? 'active';
-
-        return GuestRecord(
-          id:        row['id']              as String,
-          checkIn:   checkIn,
-          checkOut:  checkOut,
-          nights:    nights,
-          guests:    (row['total_guests']      as int?) ?? 0,
-          rooms:     (row['rooms_occupied']    as int?) ?? 0,
-          purpose:   row['purpose_of_visit']   as String? ?? '',
-          transport: row['transportation_mode'] as String? ?? '',
-          status:    statusStr == 'archived'
-              ? GuestRecordStatus.archived
-              : GuestRecordStatus.active,
-          demographics: demographics,
-        );
-      }).toList();
-
-      return ApiResult.success(records);
-    } on PostgrestException catch (e) {
-      return ApiResult.failure(e.message);
-    } catch (e) {
-      return ApiResult.failure('Failed to load records.');
-    }
-  }
-
-  // ── Restore an Archived Record ────────────────────────────────────────────
-
-  Future<ApiResult<void>> restoreRecord(String recordId) async {
-    try {
-      await _supabase
-          .from('guest_records')
-          .update({'status': 'active'})
-          .eq('id', recordId);
-      return const ApiResult.success(null);
-    } on PostgrestException catch (e) {
-      return ApiResult.failure(e.message);
-    } catch (_) {
-      return ApiResult.failure('Failed to restore record.');
+    if (ConnectivityService.instance.isOnline) {
+      return _fetchOnline(businessId);
+    } else {
+      return _fetchOffline(businessId);
     }
   }
 
@@ -200,58 +70,359 @@ class BusinessGuestRecordApi {
     required String transportationMode,
     required List<GuestBreakdownEntry> breakdowns,
   }) async {
-    try {
-      // 1. Update the guest record header fields.
-      await _supabase
-          .from('guest_records')
-          .update({
-            'check_in':            checkIn,
-            'check_out':           checkOut,
-            'total_guests':        totalGuests,
-            'rooms_occupied':      roomsOccupied,
-            'purpose_of_visit':    purposeOfVisit,
-            'transportation_mode': transportationMode,
-          })
-          .eq('id', recordId);
+    if (ConnectivityService.instance.isOnline) {
+      return _updateOnline(
+        recordId:           recordId,
+        checkIn:            checkIn,
+        checkOut:           checkOut,
+        totalGuests:        totalGuests,
+        roomsOccupied:      roomsOccupied,
+        purposeOfVisit:     purposeOfVisit,
+        transportationMode: transportationMode,
+        breakdowns:         breakdowns,
+      );
+    } else {
+      return _updateOffline(
+        recordId:           recordId,
+        checkIn:            checkIn,
+        checkOut:           checkOut,
+        totalGuests:        totalGuests,
+        roomsOccupied:      roomsOccupied,
+        purposeOfVisit:     purposeOfVisit,
+        transportationMode: transportationMode,
+        breakdowns:         breakdowns,
+      );
+    }
+  }
 
-      // 2. Delete ALL existing breakdowns for this record.
-      //    Using .select() forces PostgREST to actually execute the DELETE
-      //    and surface any RLS / permission denial as a thrown exception
-      //    instead of silently doing nothing.
+  // ===========================================================================
+  // SYNC — called by SyncService when connectivity is restored.
+  // Pushes pending_create and pending_update records (with breakdowns)
+  // to Supabase, then marks them synced in SQLite.
+  // ===========================================================================
+
+  /// Push all locally-created records that haven't reached Supabase yet.
+  /// SyncService should call this instead of doing raw inserts itself.
+  Future<void> syncPendingCreates() async {
+    final db = await LocalDatabase.instance.database;
+
+    final pendingRows = await db.query(
+      LocalDatabase.tableGuestRecords,
+      where: 'sync_status = ?',
+      whereArgs: [LocalDatabase.syncPendingCreate],
+    );
+
+    for (final row in pendingRows) {
+      final recordId = row['id'] as String;
+
+      try {
+        // Build the Supabase payload — exclude local-only columns.
+        final recordPayload = {
+          'id':                  recordId,
+          'business_id':         row['business_id'],
+          'check_in':            row['check_in'],
+          'check_out':           row['check_out'],
+          'total_guests':        row['total_guests'],
+          'rooms_occupied':      row['rooms_occupied'],
+          'purpose_of_visit':    row['purpose_of_visit'],
+          'transportation_mode': row['transportation_mode'],
+          'status':              row['status'] ?? 'active',
+          'is_deleted':          false,
+        };
+
+        await _supabase
+            .from('guest_records')
+            .upsert(recordPayload, onConflict: 'id');
+
+        // Push breakdowns.
+        final breakdownRows = await db.query(
+          LocalDatabase.tableGuestBreakdowns,
+          where: 'guest_record_id = ?',
+          whereArgs: [recordId],
+        );
+
+        if (breakdownRows.isNotEmpty) {
+          await _supabase
+              .from('guest_breakdowns')
+              .delete()
+              .eq('guest_record_id', recordId);
+
+          await _supabase.from('guest_breakdowns').insert(
+            breakdownRows.map((b) => _localBreakdownRowToSupabase(recordId, b)).toList(),
+          );
+        }
+
+        // Mark synced in SQLite.
+        await db.update(
+          LocalDatabase.tableGuestRecords,
+          {
+            'sync_status':      LocalDatabase.syncSynced,
+            'local_updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          where:     'id = ?',
+          whereArgs: [recordId],
+        );
+
+        debugPrint('✅ syncPendingCreates: pushed $recordId');
+      } catch (e) {
+        debugPrint('❌ syncPendingCreates: failed for $recordId — $e');
+        // Continue with the next record; this one stays pending.
+      }
+    }
+  }
+
+  /// Push all locally-edited records that haven't reached Supabase yet.
+  /// SyncService should call this instead of doing raw updates itself.
+  Future<void> syncPendingUpdates() async {
+    final db = await LocalDatabase.instance.database;
+
+    final pendingRows = await db.query(
+      LocalDatabase.tableGuestRecords,
+      where: 'sync_status = ?',
+      whereArgs: [LocalDatabase.syncPendingUpdate],
+    );
+
+    for (final row in pendingRows) {
+      final recordId      = row['id'] as String;
+      final localUpdated  = row['local_updated_at'] as String?;
+
+      try {
+        // ── Last-write-wins: compare timestamps before pushing ───────────────
+        if (localUpdated != null) {
+          final remoteRow = await _supabase
+              .from('guest_records')
+              .select('updated_at')
+              .eq('id', recordId)
+              .maybeSingle();
+
+          if (remoteRow != null) {
+            final remoteUpdated = remoteRow['updated_at'] as String?;
+            if (remoteUpdated != null) {
+              final localDt  = DateTime.tryParse(localUpdated);
+              final remoteDt = DateTime.tryParse(remoteUpdated);
+              if (localDt != null &&
+                  remoteDt != null &&
+                  remoteDt.isAfter(localDt)) {
+                // Remote is newer — discard local pending change, pull instead.
+                await db.update(
+                  LocalDatabase.tableGuestRecords,
+                  {'sync_status': LocalDatabase.syncSynced},
+                  where:     'id = ?',
+                  whereArgs: [recordId],
+                );
+                debugPrint(
+                  '⚠️ syncPendingUpdates: remote newer for $recordId — discarding local',
+                );
+                continue;
+              }
+            }
+          }
+        }
+
+        // ── Push record header ───────────────────────────────────────────────
+        await _supabase.from('guest_records').update({
+          'check_in':            row['check_in'],
+          'check_out':           row['check_out'],
+          'total_guests':        row['total_guests'],
+          'rooms_occupied':      row['rooms_occupied'],
+          'purpose_of_visit':    row['purpose_of_visit'],
+          'transportation_mode': row['transportation_mode'],
+        }).eq('id', recordId);
+
+        // ── Push breakdowns (replace) ────────────────────────────────────────
+        final breakdownRows = await db.query(
+          LocalDatabase.tableGuestBreakdowns,
+          where: 'guest_record_id = ?',
+          whereArgs: [recordId],
+        );
+
+        await _supabase
+            .from('guest_breakdowns')
+            .delete()
+            .eq('guest_record_id', recordId);
+
+        if (breakdownRows.isNotEmpty) {
+          await _supabase.from('guest_breakdowns').insert(
+            breakdownRows
+                .map((b) => _localBreakdownRowToSupabase(recordId, b))
+                .toList(),
+          );
+        }
+
+        // ── Mark synced ──────────────────────────────────────────────────────
+        await db.update(
+          LocalDatabase.tableGuestRecords,
+          {
+            'sync_status':      LocalDatabase.syncSynced,
+            'local_updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          where:     'id = ?',
+          whereArgs: [recordId],
+        );
+
+        debugPrint('✅ syncPendingUpdates: pushed $recordId');
+      } catch (e) {
+        debugPrint('❌ syncPendingUpdates: failed for $recordId — $e');
+      }
+    }
+  }
+
+  // ===========================================================================
+  // ONLINE — fetch from Supabase, then refresh local SQLite cache.
+  // ===========================================================================
+
+  Future<ApiResult<List<GuestRecord>>> _fetchOnline(String businessId) async {
+    try {
+      final rows = await _supabase
+          .from('guest_records')
+          .select('''
+            id,
+            check_in,
+            check_out,
+            total_guests,
+            rooms_occupied,
+            purpose_of_visit,
+            transportation_mode,
+            status,
+            created_at,
+            guest_breakdowns (
+              id,
+              is_overseas,
+              country,
+              nationality,
+              philippines_region,
+              sex,
+              age_group,
+              count
+            )
+          ''')
+          .eq('business_id', businessId)
+          .eq('is_deleted', false)
+          .order('check_in', ascending: false);
+
+      final records = _parseSupabaseRows(rows as List);
+
+      _refreshLocalCache(businessId, rows).catchError(
+        (e) => debugPrint('⚠️ Local cache refresh error: $e'),
+      );
+
+      return ApiResult.success(records);
+    } on PostgrestException catch (e) {
+      return ApiResult.failure(e.message);
+    } catch (e) {
+      return ApiResult.failure('Failed to load records.');
+    }
+  }
+
+  // ===========================================================================
+  // OFFLINE — read entirely from SQLite.
+  // ===========================================================================
+
+  Future<ApiResult<List<GuestRecord>>> _fetchOffline(String businessId) async {
+    try {
+      final db = await LocalDatabase.instance.database;
+
+      final rows = await db.query(
+        LocalDatabase.tableGuestRecords,
+        where:   'business_id = ? AND is_deleted = 0',
+        whereArgs: [businessId],
+        orderBy: 'check_in DESC',
+      );
+
+      final records = <GuestRecord>[];
+
+      for (final row in rows) {
+        final recordId = row['id'] as String;
+
+        final breakdownRows = await db.query(
+          LocalDatabase.tableGuestBreakdowns,
+          where:     'guest_record_id = ?',
+          whereArgs: [recordId],
+        );
+
+        final checkIn  = row['check_in']  as String;
+        final checkOut = row['check_out'] as String;
+
+        records.add(GuestRecord(
+          id:           recordId,
+          checkIn:      checkIn,
+          checkOut:     checkOut,
+          nights:       _calcNights(checkIn, checkOut),
+          guests:       (row['total_guests']       as int?) ?? 0,
+          rooms:        (row['rooms_occupied']      as int?) ?? 0,
+          purpose:      row['purpose_of_visit']     as String? ?? '',
+          transport:    row['transportation_mode']  as String? ?? '',
+          status:       (row['status'] as String?) == 'archived'
+              ? GuestRecordStatus.archived
+              : GuestRecordStatus.active,
+          demographics: _buildDemographicsFromLocal(breakdownRows),
+        ));
+      }
+
+      return ApiResult.success(records);
+    } catch (e) {
+      debugPrint('❌ fetchGuestRecords (offline) error: $e');
+      return ApiResult.failure('Failed to load local records.');
+    }
+  }
+
+  // ===========================================================================
+  // ONLINE UPDATE — Supabase first, then mirror to SQLite as synced.
+  // ===========================================================================
+
+  Future<ApiResult<void>> _updateOnline({
+    required String recordId,
+    required String checkIn,
+    required String checkOut,
+    required int totalGuests,
+    required int roomsOccupied,
+    required String purposeOfVisit,
+    required String transportationMode,
+    required List<GuestBreakdownEntry> breakdowns,
+  }) async {
+    try {
+      // 1. Update header in Supabase.
+      await _supabase.from('guest_records').update({
+        'check_in':            checkIn,
+        'check_out':           checkOut,
+        'total_guests':        totalGuests,
+        'rooms_occupied':      roomsOccupied,
+        'purpose_of_visit':    purposeOfVisit,
+        'transportation_mode': transportationMode,
+      }).eq('id', recordId);
+
+      // 2. Replace breakdowns in Supabase.
       await _supabase
           .from('guest_breakdowns')
           .delete()
-          .eq('guest_record_id', recordId)
-          .select();
+          .eq('guest_record_id', recordId);
 
-      // 3. Insert the fresh set of breakdowns only after delete is confirmed.
       if (breakdowns.isNotEmpty) {
-        final rows = breakdowns.map((b) {
-          final isOverseas = b.isOverseas;
-          final isPhilippines = !isOverseas && b.country == 'Philippines';
-
-          return {
-            'guest_record_id': recordId,
-            'is_overseas':     isOverseas,
-
-            // Overseas → country is NULL
-            'country': isOverseas ? null : b.country,
-
-            // Nationality only for domestic Philippines guests
-            // Valid values: 'Filipino' | 'Foreign' | NULL
-            'nationality': isPhilippines ? b.nationality : null,
-
-            // Region only meaningful for Philippines domestic (not overseas)
-            'philippines_region': isPhilippines ? b.philippinesRegion : null,
-
-            'sex':       _mapSex(b.sex),
-            'age_group': _mapAgeGroup(b.ageGroup),
-            'count':     b.count,
-          };
-        }).toList();
-
-        await _supabase.from('guest_breakdowns').insert(rows);
+        await _supabase.from('guest_breakdowns').insert(
+          breakdowns
+              .map((b) => _breakdownEntryToSupabase(recordId, b))
+              .toList(),
+        );
       }
+
+      // 3. Mirror to local SQLite as synced.
+      final db = await LocalDatabase.instance.database;
+      await db.update(
+        LocalDatabase.tableGuestRecords,
+        {
+          'check_in':            checkIn,
+          'check_out':           checkOut,
+          'total_guests':        totalGuests,
+          'rooms_occupied':      roomsOccupied,
+          'purpose_of_visit':    purposeOfVisit,
+          'transportation_mode': transportationMode,
+          'sync_status':         LocalDatabase.syncSynced,
+          'local_updated_at':    DateTime.now().toUtc().toIso8601String(),
+        },
+        where:     'id = ?',
+        whereArgs: [recordId],
+      );
+      await _replaceLocalBreakdowns(db, recordId, breakdowns);
 
       return const ApiResult.success(null);
     } on PostgrestException catch (e) {
@@ -261,57 +432,375 @@ class BusinessGuestRecordApi {
     }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ===========================================================================
+  // OFFLINE UPDATE — SQLite only, tagged pending_update.
+  // syncPendingUpdates() will push this when back online.
+  // ===========================================================================
+
+  Future<ApiResult<void>> _updateOffline({
+    required String recordId,
+    required String checkIn,
+    required String checkOut,
+    required int totalGuests,
+    required int roomsOccupied,
+    required String purposeOfVisit,
+    required String transportationMode,
+    required List<GuestBreakdownEntry> breakdowns,
+  }) async {
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      final db  = await LocalDatabase.instance.database;
+
+      await db.update(
+        LocalDatabase.tableGuestRecords,
+        {
+          'check_in':            checkIn,
+          'check_out':           checkOut,
+          'total_guests':        totalGuests,
+          'rooms_occupied':      roomsOccupied,
+          'purpose_of_visit':    purposeOfVisit,
+          'transportation_mode': transportationMode,
+          'sync_status':         LocalDatabase.syncPendingUpdate,
+          'local_updated_at':    now,
+        },
+        where:     'id = ?',
+        whereArgs: [recordId],
+      );
+
+      // Breakdowns are replaced immediately in SQLite so the UI stays accurate.
+      await _replaceLocalBreakdowns(db, recordId, breakdowns);
+
+      return const ApiResult.success(null);
+    } catch (e) {
+      debugPrint('❌ updateRecord (offline) error: $e');
+      return ApiResult.failure(
+        'Failed to save changes locally. Please try again.',
+      );
+    }
+  }
+
+  // ===========================================================================
+  // Local cache helpers
+  // ===========================================================================
+
+  Future<void> _refreshLocalCache(String businessId, List rows) async {
+    final db = await LocalDatabase.instance.database;
+
+    for (final row in rows) {
+      final recordId = row['id'] as String;
+
+      // Don't overwrite a record with unsent local changes.
+      final pending = await db.query(
+        LocalDatabase.tableGuestRecords,
+        columns:   ['sync_status'],
+        where:     'id = ? AND sync_status != ?',
+        whereArgs: [recordId, LocalDatabase.syncSynced],
+        limit:     1,
+      );
+      if (pending.isNotEmpty) continue;
+
+      await db.insert(
+        LocalDatabase.tableGuestRecords,
+        {
+          'id':                  recordId,
+          'business_id':         businessId,
+          'check_in':            row['check_in'],
+          'check_out':           row['check_out'],
+          'total_guests':        row['total_guests'],
+          'rooms_occupied':      row['rooms_occupied'],
+          'purpose_of_visit':    row['purpose_of_visit'],
+          'transportation_mode': row['transportation_mode'],
+          'status':              row['status'] ?? 'active',
+          'is_deleted':          0,
+          'created_at':          row['created_at'],
+          'sync_status':         LocalDatabase.syncSynced,
+          'local_updated_at':    null,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      await db.delete(
+        LocalDatabase.tableGuestBreakdowns,
+        where:     'guest_record_id = ?',
+        whereArgs: [recordId],
+      );
+
+      final bds = row['guest_breakdowns'] as List? ?? [];
+      for (final b in bds) {
+        await db.insert(
+          LocalDatabase.tableGuestBreakdowns,
+          {
+            'id':                 b['id'],
+            'guest_record_id':    recordId,
+            'country':            b['country'],
+            'philippines_region': b['philippines_region'],
+            'nationality':        b['nationality'],
+            'sex':                b['sex'],
+            'age_group':          b['age_group'],
+            'count':              b['count'],
+            'is_overseas':        (b['is_overseas'] == true) ? 1 : 0,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+    }
+  }
+
+  Future<void> _replaceLocalBreakdowns(
+  dynamic db,
+  String recordId,
+  List<GuestBreakdownEntry> breakdowns,
+) async {
+  await db.delete(
+    LocalDatabase.tableGuestBreakdowns,
+    where:     'guest_record_id = ?',
+    whereArgs: [recordId],
+  );
+
+  for (int i = 0; i < breakdowns.length; i++) {
+    final b             = breakdowns[i];
+    final isOverseas    = b.isOverseas;
+    final isPhilippines = !isOverseas && b.country == 'Philippines';
+
+    await db.insert(
+      LocalDatabase.tableGuestBreakdowns,
+      {
+        // Use index-based ID — the old composite key collided whenever
+        // two rows shared the same sex+ageGroup+count regardless of country.
+        'id':                 '${recordId}_breakdown_$i',
+        'guest_record_id':    recordId,
+        'country':            isOverseas ? null : b.country,
+        'philippines_region': isPhilippines ? b.philippinesRegion : null,
+        'nationality':        isPhilippines ? b.nationality : null,
+        'sex':                _mapSex(b.sex),
+        'age_group':          _mapAgeGroup(b.ageGroup),
+        'count':              b.count,
+        'is_overseas':        isOverseas ? 1 : 0,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+}
+
+  // ===========================================================================
+  // Converts a raw SQLite breakdown row to a Supabase-compatible map.
+  // Used by syncPendingCreates / syncPendingUpdates.
+  // ===========================================================================
+
+  Map<String, dynamic> _localBreakdownRowToSupabase(
+    String recordId,
+    Map<String, dynamic> b,
+  ) {
+    final isOverseas = (b['is_overseas'] as int?) == 1;
+    return {
+      'guest_record_id':    recordId,
+      'is_overseas':        isOverseas,
+      'country':            isOverseas ? null : b['country'],
+      'nationality':        b['nationality'],
+      'philippines_region': b['philippines_region'],
+      'sex':                b['sex'],
+      'age_group':          b['age_group'],
+      'count':              b['count'],
+    };
+  }
+
+  // ===========================================================================
+  // Parsing helpers
+  // ===========================================================================
+
+  List<GuestRecord> _parseSupabaseRows(List rows) {
+    return rows.map((row) {
+      final breakdowns = (row['guest_breakdowns'] as List?) ?? [];
+      final checkIn    = row['check_in']  as String;
+      final checkOut   = row['check_out'] as String;
+      final statusStr  = row['status']    as String? ?? 'active';
+
+      return GuestRecord(
+        id:           row['id'] as String,
+        checkIn:      checkIn,
+        checkOut:     checkOut,
+        nights:       _calcNights(checkIn, checkOut),
+        guests:       (row['total_guests']       as int?) ?? 0,
+        rooms:        (row['rooms_occupied']      as int?) ?? 0,
+        purpose:      row['purpose_of_visit']     as String? ?? '',
+        transport:    row['transportation_mode']  as String? ?? '',
+        status:       statusStr == 'archived'
+            ? GuestRecordStatus.archived
+            : GuestRecordStatus.active,
+        demographics: _buildDemographicsFromSupabase(breakdowns),
+      );
+    }).toList();
+  }
+
+  GuestDemographics? _buildDemographicsFromSupabase(List breakdowns) {
+    if (breakdowns.isEmpty) return null;
+
+    final ageGroups = <String, int>{};
+    final sex       = <String, int>{};
+    final countries = <String, int>{};
+    final entries   = <GuestBreakdownEntry>[];
+
+    for (final b in breakdowns) {
+      final count      = (b['count']       as int?)  ?? 0;
+      final isOverseas = (b['is_overseas'] as bool?) ?? false;
+      final ageGroup   = b['age_group']    as String? ?? 'Unknown';
+      final s          = b['sex']          as String? ?? 'Unknown';
+
+      ageGroups[ageGroup] = (ageGroups[ageGroup] ?? 0) + count;
+      sex[s]              = (sex[s]              ?? 0) + count;
+
+      final String countryKey;
+      if (isOverseas) {
+        countryKey = 'Overseas';
+      } else {
+        final country = b['country'] as String? ?? 'Unknown';
+        final region  = b['philippines_region'] as String?;
+        countryKey    = (country == 'Philippines' &&
+                region != null && region != 'N/A')
+            ? 'PH – $region'
+            : country;
+      }
+      countries[countryKey] = (countries[countryKey] ?? 0) + count;
+
+      entries.add(GuestBreakdownEntry(
+        country:           isOverseas ? null : b['country'] as String?,
+        nationality:       (!isOverseas && b['country'] == 'Philippines')
+            ? b['nationality'] as String?
+            : null,
+        philippinesRegion: (!isOverseas &&
+                b['country'] == 'Philippines' &&
+                (b['philippines_region'] as String?) != null &&
+                (b['philippines_region'] as String?) != 'N/A')
+            ? b['philippines_region'] as String?
+            : null,
+        sex:        b['sex']       as String? ?? '',
+        ageGroup:   b['age_group'] as String? ?? '',
+        count:      count,
+        isOverseas: isOverseas,
+      ));
+    }
+
+    return GuestDemographics(
+      ageGroups:       ageGroups,
+      sexDistribution: sex,
+      countries:       countries,
+      breakdowns:      entries,
+    );
+  }
+
+  GuestDemographics? _buildDemographicsFromLocal(
+    List<Map<String, dynamic>> rows,
+  ) {
+    if (rows.isEmpty) return null;
+
+    final ageGroups = <String, int>{};
+    final sex       = <String, int>{};
+    final countries = <String, int>{};
+    final entries   = <GuestBreakdownEntry>[];
+
+    for (final b in rows) {
+      final count      = (b['count']       as int?) ?? 0;
+      final isOverseas = (b['is_overseas'] as int?) == 1;
+      final ageGroup   = b['age_group']    as String? ?? 'Unknown';
+      final s          = b['sex']          as String? ?? 'Unknown';
+
+      ageGroups[ageGroup] = (ageGroups[ageGroup] ?? 0) + count;
+      sex[s]              = (sex[s]              ?? 0) + count;
+
+      final String countryKey;
+      if (isOverseas) {
+        countryKey = 'Overseas';
+      } else {
+        final country = b['country'] as String? ?? 'Unknown';
+        final region  = b['philippines_region'] as String?;
+        countryKey    = (country == 'Philippines' &&
+                region != null && region != 'N/A')
+            ? 'PH – $region'
+            : country;
+      }
+      countries[countryKey] = (countries[countryKey] ?? 0) + count;
+
+      entries.add(GuestBreakdownEntry(
+        country:           isOverseas ? null : b['country'] as String?,
+        nationality:       (!isOverseas && b['country'] == 'Philippines')
+            ? b['nationality'] as String?
+            : null,
+        philippinesRegion: (!isOverseas &&
+                b['country'] == 'Philippines' &&
+                (b['philippines_region'] as String?) != null &&
+                (b['philippines_region'] as String?) != 'N/A')
+            ? b['philippines_region'] as String?
+            : null,
+        sex:        b['sex']       as String? ?? '',
+        ageGroup:   b['age_group'] as String? ?? '',
+        count:      count,
+        isOverseas: isOverseas,
+      ));
+    }
+
+    return GuestDemographics(
+      ageGroups:       ageGroups,
+      sexDistribution: sex,
+      countries:       countries,
+      breakdowns:      entries,
+    );
+  }
+
+  Map<String, dynamic> _breakdownEntryToSupabase(
+    String recordId,
+    GuestBreakdownEntry b,
+  ) {
+    final isOverseas    = b.isOverseas;
+    final isPhilippines = !isOverseas && b.country == 'Philippines';
+    return {
+      'guest_record_id':    recordId,
+      'is_overseas':        isOverseas,
+      'country':            isOverseas ? null : b.country,
+      'nationality':        isPhilippines ? b.nationality : null,
+      'philippines_region': isPhilippines ? b.philippinesRegion : null,
+      'sex':                _mapSex(b.sex),
+      'age_group':          _mapAgeGroup(b.ageGroup),
+      'count':              b.count,
+    };
+  }
+
+  // ===========================================================================
+  // Value mappers
+  // ===========================================================================
 
   String _calcNights(String checkIn, String checkOut) {
     try {
       final inDate  = DateTime.parse(checkIn);
       final outDate = DateTime.parse(checkOut);
-      final n = outDate.difference(inDate).inDays;
+      final n       = outDate.difference(inDate).inDays;
       return '$n night${n == 1 ? '' : 's'}';
     } catch (_) {
       return '—';
     }
   }
 
-  /// Normalises sex values from either the edit dialog ('Male'/'Female')
-  /// or values already stored in the DB ('male'/'female').
   String _mapSex(String sex) {
     switch (sex.toLowerCase()) {
-      case 'male':
-        return 'male';
-      case 'female':
-        return 'female';
-      default:
-        return 'male';
+      case 'male':   return 'male';
+      case 'female': return 'female';
+      default:       return 'male';
     }
   }
 
-  /// Normalises age-group values from either the edit dialog (en-dash '18–25')
-  /// or values already stored in the DB (hyphen '18-25').
   String _mapAgeGroup(String ageGroup) {
     final normalised = ageGroup.trim().replaceAll('–', '-');
     switch (normalised) {
       case '0-9':
-      case '1-9':
-        return '1-9';
-      case '10-17':
-        return '10-17';
-      case '18-25':
-        return '18-25';
-      case '26-35':
-        return '26-35';
-      case '36-45':
-        return '36-45';
-      case '46-55':
-        return '46-55';
-      case '56+':
-        return '56+';
+      case '1-9':               return '1-9';
+      case '10-17':             return '10-17';
+      case '18-25':             return '18-25';
+      case '26-35':             return '26-35';
+      case '36-45':             return '36-45';
+      case '46-55':             return '46-55';
+      case '56+':               return '56+';
       case 'prefer_not_to_say':
-      case 'prefer not to say':
-        return 'prefer_not_to_say';
-      default:
-        return 'prefer_not_to_say';
+      case 'prefer not to say': return 'prefer_not_to_say';
+      default:                  return 'prefer_not_to_say';
     }
   }
 }

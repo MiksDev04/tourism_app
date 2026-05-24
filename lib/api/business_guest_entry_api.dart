@@ -1,5 +1,11 @@
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tourism_app/core/database/local_database.dart';
+import 'package:tourism_app/core/services/offline_service.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 
 class GuestEntryResult {
   final bool success;
@@ -13,13 +19,13 @@ class GuestEntryResult {
 
 class GuestBreakdownData {
   const GuestBreakdownData({
-    this.country,                 // nullable — NULL when overseas
+    this.country,
     this.philippinesRegion,
-    this.nationality,             // nullable — only set when country = 'Philippines'
+    this.nationality,
     required this.sex,
     required this.ageGroup,
     required this.count,
-    required this.isOverseas,     // replaces residenceCategory
+    required this.isOverseas,
   });
 
   final String? country;
@@ -56,8 +62,15 @@ class GuestEntryData {
 class BusinessGuestEntryApi {
   final _supabase = Supabase.instance.client;
 
-  // ── Fetch business ID for logged-in user ─────────────────────────────────
+  // ── Fetch business ID ──────────────────────────────────────────────────────
+  // Online  → ask Supabase.
+  // Offline → read from cached session (already populated at login time).
+
   Future<String?> fetchBusinessId() async {
+    if (!ConnectivityService.instance.isOnline) {
+      return SessionService.instance.current?.businessId;
+    }
+
     try {
       final userId = _supabase.auth.currentUser?.id;
       if (userId == null) return null;
@@ -71,54 +84,208 @@ class BusinessGuestEntryApi {
       return data?['id'] as String?;
     } catch (e) {
       debugPrint('❌ fetchBusinessId error: $e');
-      return null;
+      // Fall back to cached session if Supabase call fails mid-session
+      return SessionService.instance.current?.businessId;
     }
   }
 
-  // ── Save guest entry + breakdowns ─────────────────────────────────────────
+  // ── Save guest entry + breakdowns ──────────────────────────────────────────
+
   Future<GuestEntryResult> saveGuestEntry(GuestEntryData data) async {
+    if (ConnectivityService.instance.isOnline) {
+      return _saveOnline(data);
+    } else {
+      return _saveOffline(data);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ONLINE — existing Supabase flow, then mirror to SQLite as 'synced'.
+  // ---------------------------------------------------------------------------
+  Future<GuestEntryResult> _saveOnline(GuestEntryData data) async {
     try {
-      // 1. Insert guest_record
+      final checkInStr  = data.checkIn.toIso8601String().split('T').first;
+      final checkOutStr = data.checkOut.toIso8601String().split('T').first;
+
+      // 1. Insert into Supabase
       final record = await _supabase
           .from('guest_records')
           .insert({
-            'business_id': data.businessId,
-            'check_in': data.checkIn.toIso8601String().split('T').first,
-            'check_out': data.checkOut.toIso8601String().split('T').first,
-            'total_guests': data.totalGuests,
-            'rooms_occupied': data.roomsOccupied,
-            'purpose_of_visit': data.purposeOfVisit,
+            'business_id':         data.businessId,
+            'check_in':            checkInStr,
+            'check_out':           checkOutStr,
+            'total_guests':        data.totalGuests,
+            'rooms_occupied':      data.roomsOccupied,
+            'purpose_of_visit':    data.purposeOfVisit,
             'transportation_mode': data.transportationMode,
-            'status': 'active',
-            'is_deleted': false,
+            'status':              'active',
+            'is_deleted':          false,
           })
-          .select('id')
+          .select('id, created_at')
           .single();
 
       final guestRecordId = record['id'] as String;
+      final createdAt     = record['created_at'] as String?;
 
-      // 2. Insert all breakdowns
-      final breakdowns = data.breakdowns.map((b) => {
-        'guest_record_id': guestRecordId,
-        'is_overseas':        b.isOverseas,
-        'country':            b.country,           // NULL when overseas
-        'nationality':        b.nationality,        // NULL when overseas or non-PH
-        'philippines_region': b.philippinesRegion,  // NULL unless domestic PH
-        'sex':                _mapSex(b.sex),
-        'age_group':          _mapAgeGroup(b.ageGroup),
-        'count':              b.count,
-      }).toList();
+      final breakdownRows = data.breakdowns.map((b) => {
+            'guest_record_id':    guestRecordId,
+            'is_overseas':        b.isOverseas,
+            'country':            b.country,
+            'nationality':        b.nationality,
+            'philippines_region': b.philippinesRegion,
+            'sex':                _mapSex(b.sex),
+            'age_group':          _mapAgeGroup(b.ageGroup),
+            'count':              b.count,
+          }).toList();
 
-      await _supabase.from('guest_breakdowns').insert(breakdowns);
+      // 2. Insert breakdowns into Supabase
+      await _supabase.from('guest_breakdowns').insert(breakdownRows);
+
+      // 3. Mirror to local SQLite as 'synced'
+      await _upsertLocalRecord(
+        recordId:          guestRecordId,
+        businessId:        data.businessId,
+        checkIn:           checkInStr,
+        checkOut:          checkOutStr,
+        totalGuests:       data.totalGuests,
+        roomsOccupied:     data.roomsOccupied,
+        purposeOfVisit:    data.purposeOfVisit,
+        transportationMode: data.transportationMode,
+        createdAt:         createdAt,
+        syncStatus:        LocalDatabase.syncSynced,
+        localUpdatedAt:    null,
+      );
+      await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
 
       return GuestEntryResult.ok();
     } catch (e) {
-      debugPrint('❌ saveGuestEntry error: $e');
+      debugPrint('❌ saveGuestEntry (online) error: $e');
       return GuestEntryResult.err('Failed to save guest entry. Please try again.');
     }
   }
 
-  // ── Map sex string to enum value ──────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // OFFLINE — write only to SQLite, tagged as 'pending_create'.
+  // SyncService will push this to Supabase when back online.
+  // ---------------------------------------------------------------------------
+  Future<GuestEntryResult> _saveOffline(GuestEntryData data) async {
+    try {
+      final guestRecordId = _generateId();
+      final checkInStr    = data.checkIn.toIso8601String().split('T').first;
+      final checkOutStr   = data.checkOut.toIso8601String().split('T').first;
+      final now           = DateTime.now().toUtc().toIso8601String();
+
+      await _upsertLocalRecord(
+        recordId:           guestRecordId,
+        businessId:         data.businessId,
+        checkIn:            checkInStr,
+        checkOut:           checkOutStr,
+        totalGuests:        data.totalGuests,
+        roomsOccupied:      data.roomsOccupied,
+        purposeOfVisit:     data.purposeOfVisit,
+        transportationMode: data.transportationMode,
+        createdAt:          now,
+        syncStatus:         LocalDatabase.syncPendingCreate,
+        localUpdatedAt:     now,
+      );
+      await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
+
+      return GuestEntryResult.ok();
+    } catch (e) {
+      debugPrint('❌ saveGuestEntry (offline) error: $e');
+      return GuestEntryResult.err('Failed to save guest entry locally. Please try again.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // SQLite helpers
+  // ---------------------------------------------------------------------------
+
+  Future<void> _upsertLocalRecord({
+    required String recordId,
+    required String businessId,
+    required String checkIn,
+    required String checkOut,
+    required int totalGuests,
+    required int roomsOccupied,
+    required String purposeOfVisit,
+    required String transportationMode,
+    required String? createdAt,
+    required String syncStatus,
+    required String? localUpdatedAt,
+  }) async {
+    final db = await LocalDatabase.instance.database;
+    await db.insert(
+      LocalDatabase.tableGuestRecords,
+      {
+        'id':                  recordId,
+        'business_id':         businessId,
+        'check_in':            checkIn,
+        'check_out':           checkOut,
+        'total_guests':        totalGuests,
+        'rooms_occupied':      roomsOccupied,
+        'purpose_of_visit':    purposeOfVisit,
+        'transportation_mode': transportationMode,
+        'status':              'active',
+        'is_deleted':          0,
+        'created_at':          createdAt,
+        'sync_status':         syncStatus,
+        'local_updated_at':    localUpdatedAt,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> _upsertLocalBreakdowns(
+    String recordId,
+    List<GuestBreakdownData> breakdowns,
+  ) async {
+    final db = await LocalDatabase.instance.database;
+
+    // Delete old ones first (safe on first insert too — nothing to delete)
+    await db.delete(
+      LocalDatabase.tableGuestBreakdowns,
+      where: 'guest_record_id = ?',
+      whereArgs: [recordId],
+    );
+
+    for (final b in breakdowns) {
+      await db.insert(
+        LocalDatabase.tableGuestBreakdowns,
+        {
+          'id':                 _generateId(),
+          'guest_record_id':    recordId,
+          'country':            b.country,
+          'philippines_region': b.philippinesRegion,
+          'nationality':        b.nationality,
+          'sex':                _mapSex(b.sex),
+          'age_group':          _mapAgeGroup(b.ageGroup),
+          'count':              b.count,
+          'is_overseas':        b.isOverseas ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Generates a UUID v4-like string without any extra package.
+  // ---------------------------------------------------------------------------
+  String _generateId() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rand.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+        '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+        '${hex.substring(20)}';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Value mappers (unchanged from original)
+  // ---------------------------------------------------------------------------
+
   String _mapSex(String sex) {
     switch (sex.toLowerCase()) {
       case 'male':   return 'male';
@@ -127,7 +294,6 @@ class BusinessGuestEntryApi {
     }
   }
 
-  // ── Map age group string to enum value ────────────────────────────────────
   String _mapAgeGroup(String ageGroup) {
     switch (ageGroup) {
       case '0–9':               return '1-9';
@@ -141,4 +307,4 @@ class BusinessGuestEntryApi {
       default:                  return 'prefer_not_to_say';
     }
   }
-}
+} 

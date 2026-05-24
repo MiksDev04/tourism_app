@@ -281,19 +281,6 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   }
 
   // ── Actions ─────────────────────────────────────────────────────────────
-
-  Future<void> _onRestore(GuestRecord record) async {
-    final result = await _api.restoreRecord(record.id);
-    if (!mounted) return;
-
-    if (result.isSuccess) {
-      _updateLocalStatus(record, GuestRecordStatus.active);
-      _showSnack('Guest record restored.', color: AppColors.accentGreen);
-    } else {
-      _showSnack(result.error ?? 'Failed to restore.', isError: true);
-    }
-  }
-
   Future<void> _onEdit(GuestRecord record) async {
     final updated = await showEditGuestDialog(context, record: record);
     if (updated == null || !mounted) return;
@@ -319,25 +306,6 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     } else {
       _showSnack(result.error ?? 'Failed to update.', isError: true);
     }
-  }
-
-  void _updateLocalStatus(GuestRecord record, GuestRecordStatus status) {
-    setState(() {
-      final idx = _records.indexWhere((r) => r.id == record.id);
-      if (idx == -1) return;
-      _records[idx] = GuestRecord(
-        id: record.id,
-        checkIn: record.checkIn,
-        checkOut: record.checkOut,
-        nights: record.nights,
-        guests: record.guests,
-        rooms: record.rooms,
-        purpose: record.purpose,
-        transport: record.transport,
-        status: status,
-        demographics: record.demographics,
-      );
-    });
   }
 
   void _showSnack(String msg, {bool isError = false, Color? color}) {
@@ -497,7 +465,6 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
                         records: _pagedRows,
                         isNarrow: isNarrow,
                         onEdit: _onEdit,
-                        onRestore: _onRestore,
                       ),
                       const SizedBox(height: 12),
                       Paginator(
@@ -1138,13 +1105,12 @@ class _GuestTable extends StatelessWidget {
     required this.records,
     required this.isNarrow,
     required this.onEdit,
-    required this.onRestore,
   });
 
   final List<GuestRecord> records;
   final bool isNarrow;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onRestore;
+  
 
   @override
   Widget build(BuildContext context) {
@@ -1179,13 +1145,11 @@ class _GuestTable extends StatelessWidget {
                     _RecordCard(
                       record: r,
                       onEdit: onEdit,
-                      onRestore: onRestore,
                     )
                   else
                     _RecordRow(
                       record: r,
                       onEdit: onEdit,
-                      onRestore: onRestore,
                     ),
                   if (!isLast)
                     const Divider(color: AppColors.cardBorder, height: 1),
@@ -1245,12 +1209,11 @@ class _RecordRow extends StatelessWidget {
   const _RecordRow({
     required this.record,
     required this.onEdit,
-    required this.onRestore,
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onRestore;
+  
 
   @override
   Widget build(BuildContext context) {
@@ -1331,7 +1294,6 @@ class _RecordRow extends StatelessWidget {
             child: _ActionButtons(
               status: r.status,
               onEdit: () => onEdit(r),
-              onRestore: () => onRestore(r),
               onView: () => _showRecordModal(context, r),
             ),
           ),
@@ -1347,12 +1309,11 @@ class _RecordCard extends StatelessWidget {
   const _RecordCard({
     required this.record,
     required this.onEdit,
-    required this.onRestore,
   });
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  final ValueChanged<GuestRecord> onRestore;
+  
 
   @override
   Widget build(BuildContext context) {
@@ -1415,13 +1376,6 @@ class _RecordCard extends StatelessWidget {
                   icon: Icons.edit_outlined,
                   tooltip: 'Edit',
                   onTap: () => onEdit(r),
-                ),
-              ] else ...[
-                const SizedBox(width: 8),
-                _IconBtn(
-                  icon: Icons.unarchive_outlined,
-                  tooltip: 'Restore',
-                  onTap: () => onRestore(r),
                 ),
               ],
             ],
@@ -1492,13 +1446,11 @@ class _ActionButtons extends StatelessWidget {
   const _ActionButtons({
     required this.status,
     required this.onEdit,
-    required this.onRestore,
     required this.onView,
   });
 
   final GuestRecordStatus status;
   final VoidCallback onEdit;
-  final VoidCallback onRestore;
   final VoidCallback onView;
 
   @override
@@ -1512,13 +1464,7 @@ class _ActionButtons extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         if (status == GuestRecordStatus.active)
-          _IconBtn(icon: Icons.edit_outlined, tooltip: 'Edit', onTap: onEdit)
-        else
-          _IconBtn(
-            icon: Icons.unarchive_outlined,
-            tooltip: 'Restore',
-            onTap: onRestore,
-          ),
+          _IconBtn(icon: Icons.edit_outlined, tooltip: 'Edit', onTap: onEdit),
       ],
     );
   }

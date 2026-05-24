@@ -3,14 +3,45 @@
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:share_plus/share_plus.dart';
+import 'package:path/path.dart' as p;
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../../api/business_dashboard_api.dart';
 import '../../../core/services/session_service.dart';
+
+const _businessLineLabels = {
+  'hotel': 'Hotel',
+  'resort': 'Resort',
+  'motel': 'Motel',
+  'pension_inn': 'Pension Inn',
+  'youth_hostel': 'Youth Hostel',
+  'apartment': 'Apartment',
+  'others': 'Others',
+};
+
+String _displayBusinessLineLabel(String raw) {
+  final mapped = _businessLineLabels[raw];
+  if (mapped != null) return mapped;
+
+  final normalised = raw.trim().replaceAll('_', ' ');
+  if (normalised.isEmpty) return raw;
+
+  return normalised
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => part[0].toUpperCase() + part.substring(1))
+      .join(' ');
+}
+
+String _displayBusinessLines(List<String>? values) {
+  final lines = values?.where((value) => value.trim().isNotEmpty).toList() ?? [];
+  if (lines.isEmpty) return '—';
+  return lines.map(_displayBusinessLineLabel).join(', ');
+}
 
 // ─── Business Dashboard Page ──────────────────────────────────────────────────
 
@@ -27,7 +58,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   // Business info loaded from SessionService
   String? _businessId;
   String _businessName = '';
-  String _businessType = '';
+  List<String> _businessLine = [];
   String _address = '';
   int _totalRooms = 0;
 
@@ -64,7 +95,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     setState(() {
       _businessId = session?.businessId;
       _businessName = session?.businessName ?? '';
-      _businessType = session?.businessType ?? '';
+      _businessLine = session?.businessLine ?? const [];
     });
 
     if (_businessId != null) {
@@ -74,17 +105,23 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         setState(() {
           _address = details.address;
           _totalRooms = details.totalRooms;
+          _businessLine = details.businessLine.isNotEmpty
+              ? details.businessLine
+              : (session?.businessLine ?? const []);
         });
       } catch (_) {
         // Keep defaults if the lookup fails.
       }
     }
 
+    if (!mounted) return;
     await _loadDashboard();
+    if (!mounted) return;
     await _loadTrend();
   }
 
   Future<void> _loadDashboard() async {
+    if (!mounted) return;
     setState(() {
       _loadingDash = true;
       _dashError = null;
@@ -106,6 +143,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   Future<void> _loadTrend() async {
+    if (!mounted) return;
     setState(() => _loadingTrend = true);
     try {
       if (_businessId == null) throw Exception('Business account not found.');
@@ -123,6 +161,18 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
   // ── Exports ───────────────────────────────────────────────────────────────────
 
+  Future<Directory> _exportDirectory() async {
+    final downloads = await getDownloadsDirectory();
+    if (downloads != null) return downloads;
+    return getTemporaryDirectory();
+  }
+
+  String _exportLabel() {
+    return _selectedMonth == 0
+        ? '$_selectedYear'
+        : '${_monthShort(_selectedMonth)}_$_selectedYear';
+  }
+
   Future<void> _exportCsv() async {
     setState(() => _exporting = true);
     try {
@@ -133,15 +183,17 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         month: _selectedMonth,
         year: _selectedYear,
       );
-      final dir = await getTemporaryDirectory();
-      final label = _selectedMonth == 0
-          ? '$_selectedYear'
-          : '${_monthShort(_selectedMonth)}_$_selectedYear';
-      final file = File('${dir.path}/guests_$label.csv')
-        ..writeAsStringSync(csv);
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], subject: 'Guest Report – ${_businessName} ($label)');
+      final dir = await _exportDirectory();
+      final label = _exportLabel();
+      final file = File(p.join(dir.path, 'guests_$label.csv'));
+      await file.writeAsString(csv, flush: true);
+      final result = await OpenFile.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showSnack('CSV saved to ${file.path}. ${result.message}');
+      } else {
+        _showSnack('CSV exported to ${file.path}');
+      }
     } catch (e) {
       _showSnack('Export failed: $e');
     } finally {
@@ -159,6 +211,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       final label = _selectedMonth == 0
           ? 'Full Year $_selectedYear'
           : '${_monthName(_selectedMonth)} $_selectedYear';
+      final businessLineText = _displayBusinessLines(_businessLine);
 
       doc.addPage(
         pw.MultiPage(
@@ -175,7 +228,11 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                 ),
               ),
               pw.Text(
-                '${_businessType} •  ${_address}',
+                'Business Line: $businessLineText',
+                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+              ),
+              pw.Text(
+                _address,
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
               ),
               pw.Text(
@@ -277,15 +334,17 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         ),
       );
 
-      final dir = await getTemporaryDirectory();
-      final label2 = _selectedMonth == 0
-          ? '$_selectedYear'
-          : '${_monthShort(_selectedMonth)}_$_selectedYear';
-      final file = File('${dir.path}/dashboard_$label2.pdf');
-      await file.writeAsBytes(await doc.save());
-      await Share.shareXFiles([
-        XFile(file.path),
-      ], subject: 'Dashboard Report – ${_businessName} ($label)');
+      final dir = await _exportDirectory();
+      final label2 = _exportLabel();
+      final file = File(p.join(dir.path, 'dashboard_$label2.pdf'));
+      await file.writeAsBytes(await doc.save(), flush: true);
+      final result = await OpenFile.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showSnack('PDF saved to ${file.path}. ${result.message}');
+      } else {
+        _showSnack('PDF exported to ${file.path}');
+      }
     } catch (e) {
       _showSnack('PDF export failed: $e');
     } finally {
@@ -395,7 +454,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                     if (isNarrow) ...[
                       _HotelHeader(
                         name: _businessName,
-                        type: _businessType,
+                        businessLines: _businessLine,
                         rooms: _totalRooms,
                         address: _address,
                       ),
@@ -421,7 +480,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                           Expanded(
                             child: _HotelHeader(
                               name: _businessName,
-                              type: _businessType,
+                              businessLines: _businessLine,
                               rooms: _totalRooms,
                               address: _address,
                             ),
@@ -534,13 +593,13 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 class _HotelHeader extends StatelessWidget {
   const _HotelHeader({
     required this.name,
-    required this.type,
+    required this.businessLines,
     required this.rooms,
     required this.address,
   });
 
   final String name;
-  final String type;
+  final List<String> businessLines;
   final int rooms;
   final String address;
 
@@ -557,17 +616,48 @@ class _HotelHeader extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
+        if (businessLines.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: businessLines.map((line) {
+              return Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryCyan.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.25),
+                  ),
+                ),
+                child: Text(
+                  _displayBusinessLineLabel(line),
+                  style: const TextStyle(
+                    color: AppColors.primaryCyan,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              );
+            }).toList(),
+          )
+        else
+          const Text(
+            'Business line unavailable',
+            style: TextStyle(color: AppColors.textGray, fontSize: 13),
+          ),
+        const SizedBox(height: 6),
         Text(
-          '${_capitalize(type)}  •  $rooms Rooms  •  $address',
+          '$rooms Rooms  •  $address',
           style: const TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
       ],
     );
   }
-
-  String _capitalize(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
 }
 
 // ─── Filter Row ───────────────────────────────────────────────────────────────

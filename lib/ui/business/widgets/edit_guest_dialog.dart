@@ -456,15 +456,17 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       hasError = true;
     }
 
-    // ── Demographic rows ────────────────────────────────────────────────────
+    // ── Demographic rows ────────────────────────────────────────────────
     final seen = <String>{};
     for (int i = 0; i < _demoRows.length; i++) {
       final row = _demoRows[i];
 
-      if (row.country.isEmpty) {
+      // Country only required when NOT overseas
+      if (!row.isOverseas && row.country.isEmpty) {
         rowErrors[i]['country'] = 'Required';
         hasError = true;
       }
+
       if (row.country == 'Philippines' &&
           !row.isOverseas &&
           row.nationality.isEmpty) {
@@ -495,14 +497,17 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         hasError = true;
       }
 
-      // Duplicate detection — include nationality so Philippine rows can
-      // coexist when they differ only by nationality.
-      if (row.country.isNotEmpty &&
-          row.sex.isNotEmpty &&
-          row.ageGroup.isNotEmpty) {
-        final key = row.country == 'Philippines' && !row.isOverseas
-            ? '${row.country}|${row.nationality}|${row.region}|${row.sex}|${row.ageGroup}'
-            : '${row.country}|${row.region}|${row.isOverseas}|${row.sex}|${row.ageGroup}';
+      // Duplicate detection — overseas rows key on isOverseas+sex+ageGroup only
+      if (row.sex.isNotEmpty && row.ageGroup.isNotEmpty) {
+        final String key;
+        if (row.isOverseas) {
+          key = 'overseas|${row.sex}|${row.ageGroup}';
+        } else if (row.country == 'Philippines') {
+          key =
+              '${row.country}|${row.nationality}|${row.region}|${row.sex}|${row.ageGroup}';
+        } else {
+          key = '${row.country}|${row.sex}|${row.ageGroup}';
+        }
         if (!seen.add(key)) {
           rowErrors[i]['country'] = 'Duplicate row — merge counts instead';
           hasError = true;
@@ -539,13 +544,14 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         : _transport;
 
     final breakdowns = _demoRows
-        .where((e) => e.country.isNotEmpty && e.count > 0)
+        // Overseas rows have no country (dropdown disabled) — isOverseas alone is enough.
+        .where((e) => (e.isOverseas || e.country.isNotEmpty) && e.count > 0)
         .map(
           (e) => GuestBreakdownEntry(
             country: e.isOverseas ? null : e.country,
             nationality: (e.isOverseas || e.country != 'Philippines')
                 ? null
-                : e.nationality, // ← ADD
+                : e.nationality,
             philippinesRegion:
                 (!e.isOverseas &&
                     e.country == 'Philippines' &&
@@ -1525,7 +1531,9 @@ class _DemoEntryRow extends StatelessWidget {
                       errorText: rowErrors['nationality'],
                       child: _CompactDrop(
                         hint: 'Nationality',
-                        value: entry.nationality.isEmpty ? null : entry.nationality,
+                        value: entry.nationality.isEmpty
+                            ? null
+                            : entry.nationality,
                         items: nationalityOptions,
                         onChanged: (v) =>
                             onChanged(entry.copyWith(nationality: v ?? '')),
@@ -1625,18 +1633,18 @@ class _DemoEntryRow extends StatelessWidget {
                       ),
                     ),
                     activeColor: const Color(0xFF3B82F6),
-                    side: const BorderSide(color: AppColors.textGray, width: 1.4),
+                    side: const BorderSide(
+                      color: AppColors.textGray,
+                      width: 1.4,
+                    ),
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                    const SizedBox(width: 4),
+                  const SizedBox(width: 4),
                   const Flexible(
                     child: Text(
                       'Overseas Fil.',
-                      style: TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.textGray, fontSize: 12),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),

@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tourism_app/core/database/local_database.dart';
+import 'package:tourism_app/core/services/offline_service.dart';
 import 'package:tourism_app/core/services/session_service.dart';
 
 enum Role { business, admin }
@@ -23,12 +27,20 @@ class LoginApi {
     required String username,
     required String password,
   }) async {
-    // ── 1. Check internet ─────────────────────────────────────────────────
-   
+    final isOnline = ConnectivityService.instance.isOnline;
 
+    // =========================================================================
+    // OFFLINE PATH
+    // =========================================================================
+    if (!isOnline) {
+      return _offlineLogin(username: username, password: password);
+    }
+
+    // =========================================================================
+    // ONLINE PATH
+    // =========================================================================
     try {
-      // ── 2. Resolve username → email directly from profiles ────────────
-      // ── 2. Resolve username → email via RPC ───────────────────────────
+      // ── 1. Resolve username → email via RPC ────────────────────────────────
       final email =
           await _supabase.rpc(
                 'get_email_by_username',
@@ -40,14 +52,7 @@ class LoginApi {
         return LoginResult.err('No account found with that username.');
       }
 
-      // ignore: unnecessary_null_comparison
-      if (email == null || email.isEmpty) {
-        return LoginResult.err(
-          'Account has no email linked. Please contact support.',
-        );
-      }
-
-      // ── 3. Authenticate with resolved email ───────────────────────────
+      // ── 2. Authenticate with Supabase ──────────────────────────────────────
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -59,7 +64,7 @@ class LoginApi {
 
       final userId = response.user!.id;
 
-      // ── 4. Fetch full profile ──────────────────────────────────────────
+      // ── 3. Fetch profile ───────────────────────────────────────────────────
       final profileData = await _supabase
           .from('profiles')
           .select('full_name, phone, role, email, username')
@@ -79,7 +84,7 @@ class LoginApi {
 
       final role = roleStr == 'admin' ? Role.admin : Role.business;
 
-      // ── 5. Business: check approval + fetch business row ───────────────
+      // ── 4. Business: check approval + fetch business row ───────────────────
       String? businessId;
       String? businessName;
       String? permitNumber;
@@ -101,11 +106,23 @@ class LoginApi {
       String? ownerLastName;
       String? ownerMiddleName;
 
-      if (role == Role.business) {
+      if (role == Role.admin) {
+        await _cacheProfileLocally(
+          userId: userId,
+          username: username,
+          password: password,
+          profileData: profileData,
+          roleStr: roleStr,
+        );
+      } else {
         final businessData = await _supabase
             .from('businesses')
             .select(
-              'id, business_name, permit_number, registration_number, street, total_rooms, permit_file_url, valid_id_url, status, remarks, region, city_municipality, province, barangay, tradename, business_line, owner_first_name, owner_last_name, owner_middle_name, business_type',
+              'id, business_name, permit_number, registration_number, street, '
+              'total_rooms, permit_file_url, valid_id_url, status, remarks, '
+              'region, city_municipality, province, barangay, tradename, '
+              'business_line, owner_first_name, owner_last_name, '
+              'owner_middle_name, business_type',
             )
             .eq('profile_id', userId)
             .maybeSingle();
@@ -124,14 +141,12 @@ class LoginApi {
             'Please wait for an administrator to review your application.',
           );
         }
-
         if (status == 'suspended') {
           return LoginResult.err(
             'Your account is suspended because of violations. '
             'Please go to tourism office for more information.',
           );
         }
-
         if (status == 'rejected') {
           return LoginResult.err(
             'Your account application was not approved. '
@@ -155,14 +170,32 @@ class LoginApi {
         barangay = businessData['barangay'] as String?;
         tradename = businessData['tradename'] as String?;
         businessLine = (businessData['business_line'] as List<dynamic>?)
-            ?.map((value) => value.toString())
+            ?.map((v) => v.toString())
             .toList();
         ownerFirstName = businessData['owner_first_name'] as String?;
         ownerLastName = businessData['owner_last_name'] as String?;
         ownerMiddleName = businessData['owner_middle_name'] as String?;
+
+        // ── 5. Cache credentials + business to SQLite ──────────────────────
+        await _cacheProfileLocally(
+          userId: userId,
+          username: username,
+          password: password,
+          profileData: profileData,
+          roleStr: roleStr,
+        );
+
+        if (businessId != null) {
+          await _cacheBusinessLocally(
+            profileId: userId,
+            businessId: businessId,
+            businessData: businessData,
+            businessLine: businessLine,
+          );
+        }
       }
 
-      // ── 6. Persist session locally ─────────────────────────────────────
+      // ── 6. Save session ────────────────────────────────────────────────────
       final session = SessionData(
         userId: userId,
         fullName: profileData['full_name'] as String? ?? '',
@@ -170,6 +203,7 @@ class LoginApi {
         email: profileData['email'] as String? ?? email,
         phone: profileData['phone'] as String? ?? '',
         role: roleStr,
+        isOfflineSession: false,
         businessId: businessId,
         businessName: businessName,
         permitNumber: permitNumber,
@@ -198,15 +232,212 @@ class LoginApi {
       return LoginResult.ok(role);
     } on AuthException catch (e) {
       return LoginResult.err(_friendlyAuthError(e.message));
-    }  catch (e) {
-  debugPrint('❌ Login error: ${e.runtimeType} — $e');
-  final msg = e.toString().toLowerCase();
-  if (msg.contains('network') || msg.contains('socket') || msg.contains('connection')) {
-    return LoginResult.err('No internet connection. Please go online to sign in.');
+    } catch (e) {
+      debugPrint('❌ Login error: ${e.runtimeType} — $e');
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('network') ||
+          msg.contains('socket') ||
+          msg.contains('connection')) {
+        return LoginResult.err(
+          'No internet connection. Please go online to sign in.',
+        );
+      }
+      return LoginResult.err('Something went wrong. Please try again.');
+    }
   }
-  return LoginResult.err('Something went wrong. Please try again.');
-}
+
+  // ===========================================================================
+  // OFFLINE LOGIN
+  // Verifies credentials against locally cached SHA-256 hash.
+  // Rebuilds the session entirely from SQLite — no Supabase call.
+  // ===========================================================================
+  Future<LoginResult> _offlineLogin({
+    required String username,
+    required String password,
+  }) async {
+    try {
+      final profile = await OfflineAuthService.instance.verifyOfflineLogin(
+        username: username,
+        password: password,
+      );
+
+      if (profile == null) {
+        // No cached credentials → first-time login always needs internet
+        return LoginResult.err(
+          'You\'re offline. Please connect to the internet to sign in for the first time.',
+        );
+      }
+
+      final roleStr = profile['role'] as String? ?? 'business';
+
+      if (roleStr == 'admin') {
+        return LoginResult.err(
+          'Offline login is only available for business accounts. Please connect to the internet to sign in as admin.',
+        );
+      }
+
+      final userId = profile['id'] as String;
+      final role = roleStr == 'admin' ? Role.admin : Role.business;
+
+      // Load cached business from SQLite
+      final db = await LocalDatabase.instance.database;
+      final businesses = await db.query(
+        LocalDatabase.tableLocalBusinesses,
+        where: 'profile_id = ?',
+        whereArgs: [userId],
+        limit: 1,
+      );
+
+      String? businessId;
+      String? businessName;
+      String? permitNumber;
+      String? registrationNumber;
+      String? street;
+      int? totalRooms;
+      String? businessType;
+      String? status;
+      String? remarks;
+      String? region;
+      String? cityMunicipality;
+      String? province;
+      String? barangay;
+      String? tradename;
+      List<String>? businessLine;
+      String? ownerFirstName;
+      String? ownerLastName;
+      String? ownerMiddleName;
+
+      if (businesses.isNotEmpty) {
+        final b = businesses.first;
+        businessId = b['id'] as String?;
+        businessName = b['business_name'] as String?;
+        permitNumber = b['permit_number'] as String?;
+        registrationNumber = b['registration_number'] as String?;
+        street = b['street'] as String?;
+        totalRooms = b['total_rooms'] as int?;
+        businessType = b['business_type'] as String?;
+        status = b['status'] as String?;
+        remarks = null; // not stored locally
+        region = b['region'] as String?;
+        cityMunicipality = b['city_municipality'] as String?;
+        province = b['province'] as String?;
+        barangay = b['barangay'] as String?;
+        tradename = b['tradename'] as String?;
+        ownerFirstName = b['owner_first_name'] as String?;
+        ownerLastName = b['owner_last_name'] as String?;
+        ownerMiddleName = b['owner_middle_name'] as String?;
+
+        // business_line is stored as a JSON string e.g. '["Hotel","Resort"]'
+        final rawLine = b['business_line'] as String?;
+        if (rawLine != null) {
+          try {
+            businessLine = (jsonDecode(rawLine) as List<dynamic>)
+                .map((v) => v.toString())
+                .toList();
+          } catch (_) {
+            businessLine = null;
+          }
+        }
+      }
+
+      final session = SessionData(
+        userId: userId,
+        fullName: profile['full_name'] as String? ?? '',
+        username: profile['username'] as String?,
+        email: profile['email'] as String? ?? '',
+        phone: profile['phone'] as String? ?? '',
+        role: roleStr,
+        isOfflineSession: true, // ← marks this as an offline session
+        businessId: businessId,
+        businessName: businessName,
+        permitNumber: permitNumber,
+        registrationNumber: registrationNumber,
+        street: street,
+        totalRooms: totalRooms,
+        businessType: businessType,
+        status: status,
+        remarks: remarks,
+        region: region,
+        cityMunicipality: cityMunicipality,
+        province: province,
+        barangay: barangay,
+        tradename: tradename,
+        businessLine: businessLine,
+        ownerFirstName: ownerFirstName,
+        ownerLastName: ownerLastName,
+        ownerMiddleName: ownerMiddleName,
+      );
+
+      await SessionService.instance.save(session);
+      await SessionService.instance.loadAndCache();
+
+      return LoginResult.ok(role);
+    } catch (e) {
+      debugPrint('❌ Offline login error: $e');
+      return LoginResult.err('Offline login failed. Please try again.');
+    }
   }
+
+  // ===========================================================================
+  // Cache helpers
+  // ===========================================================================
+
+  Future<void> _cacheProfileLocally({
+    required String userId,
+    required String username,
+    required String password,
+    required Map<String, dynamic> profileData,
+    required String roleStr,
+  }) async {
+    await OfflineAuthService.instance.cacheProfile(
+      id: userId,
+      username: username,
+      password: password,
+      fullName: profileData['full_name'] as String?,
+      email: profileData['email'] as String?,
+      phone: profileData['phone'] as String?,
+      role: roleStr,
+    );
+  }
+
+  Future<void> _cacheBusinessLocally({
+    required String profileId,
+    required String businessId,
+    required Map<String, dynamic> businessData,
+    required List<String>? businessLine,
+  }) async {
+    final db = await LocalDatabase.instance.database;
+
+    await db.insert(
+      LocalDatabase.tableLocalBusinesses,
+      {
+        'id': businessId,
+        'profile_id': profileId,
+        'business_name': businessData['business_name'],
+        'status': businessData['status'],
+        'permit_number': businessData['permit_number'],
+        'registration_number': businessData['registration_number'],
+        'street': businessData['street'],
+        'total_rooms': businessData['total_rooms'],
+        'region': businessData['region'],
+        'city_municipality': businessData['city_municipality'],
+        'province': businessData['province'],
+        'barangay': businessData['barangay'],
+        'tradename': businessData['tradename'],
+        // Encode the list back to a JSON string for SQLite storage
+        'business_line': businessLine != null ? jsonEncode(businessLine) : null,
+        'owner_first_name': businessData['owner_first_name'],
+        'owner_last_name': businessData['owner_last_name'],
+        'owner_middle_name': businessData['owner_middle_name'],
+        'business_type': businessData['business_type'],
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // ===========================================================================
+  // Helpers
+  // ===========================================================================
 
   String _friendlyAuthError(String message) {
     final m = message.toLowerCase();
@@ -224,6 +455,9 @@ class LoginApi {
 
   Future<void> logout() async {
     await SessionService.instance.clear();
-    await _supabase.auth.signOut();
+    // Only sign out from Supabase if we were online to begin with
+    if (ConnectivityService.instance.isOnline) {
+      await _supabase.auth.signOut();
+    }
   }
 }
