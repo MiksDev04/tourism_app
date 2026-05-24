@@ -62,7 +62,16 @@ class _V {
 
   static String? password(String v) {
     if (v.isEmpty) return 'Password is required';
-    if (v.length < 6) return 'Minimum 6 characters';
+    if (v.length < 8) return 'Password must be at least 8 characters long';
+    if (!RegExp(r'[A-Z]').hasMatch(v)) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(v)) {
+      return 'Password must contain at least one number';
+    }
+    if (!RegExp(r"[!@#$%^&*()\-_=+\[\]{};:',.<>?/\\|`~@]").hasMatch(v)) {
+      return 'Password must contain at least one special character (e.g. @, #, !)';
+    }
     return null;
   }
 
@@ -928,6 +937,8 @@ class _Step1Form extends StatefulWidget {
 
 class _Step1FormState extends State<_Step1Form> {
   final _touched = <String>{};
+  bool _hidePassword = true;
+  bool _hideConfirmPassword = true;
 
   void _touch(String field) => setState(() => _touched.add(field));
   bool _show(String f) => _touched.contains(f) || widget.showErrors;
@@ -1002,12 +1013,21 @@ class _Step1FormState extends State<_Step1Form> {
                     : null,
                 child: _Input(
                   controller: widget.passwordCtrl,
-                  hint: 'Min 6 characters',
-                  obscure: true,
+                  hint: 'Min 8 characters',
+                  obscure: _hidePassword,
                   hasError:
                       _show('password') &&
                       _V.password(widget.passwordCtrl.text) != null,
                   onChanged: (_) => _touch('password'),
+                  suffixIcon: IconButton(
+                    onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                    icon: Icon(
+                      _hidePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: AppColors.textSubtle,
+                      size: 18,
+                    ),
+                    tooltip: _hidePassword ? 'Show password' : 'Hide password',
+                  ),
                 ),
               ),
             ),
@@ -1024,7 +1044,7 @@ class _Step1FormState extends State<_Step1Form> {
                 child: _Input(
                   controller: widget.confirmPassCtrl,
                   hint: 'Repeat password',
-                  obscure: true,
+                  obscure: _hideConfirmPassword,
                   hasError:
                       _show('confirmPass') &&
                       _V.confirmPassword(
@@ -1033,6 +1053,15 @@ class _Step1FormState extends State<_Step1Form> {
                           ) !=
                           null,
                   onChanged: (_) => _touch('confirmPass'),
+                  suffixIcon: IconButton(
+                    onPressed: () => setState(() => _hideConfirmPassword = !_hideConfirmPassword),
+                    icon: Icon(
+                      _hideConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      color: AppColors.textSubtle,
+                      size: 18,
+                    ),
+                    tooltip: _hideConfirmPassword ? 'Show password' : 'Hide password',
+                  ),
                 ),
               ),
             ),
@@ -1617,6 +1646,7 @@ class _Input extends StatelessWidget {
     this.obscure = false,
     this.hasError = false,
     this.onChanged,
+    this.suffixIcon,
   });
 
   final TextEditingController controller;
@@ -1625,6 +1655,7 @@ class _Input extends StatelessWidget {
   final bool obscure;
   final bool hasError;
   final ValueChanged<String>? onChanged;
+  final Widget? suffixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -1662,6 +1693,7 @@ class _Input extends StatelessWidget {
             width: 1.5,
           ),
         ),
+        suffixIcon: suffixIcon,
       ),
     );
   }

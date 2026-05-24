@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
@@ -253,11 +254,30 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       await localFile.writeAsBytes(fileData);
       if (!mounted) return;
 
-      _showSuccess('File saved to Downloads: $fileName');
+      // Use shared helper so style/behaviour is consistent
+      _showSuccess(
+        'File saved to Downloads: $fileName',
+        actionText: 'Open',
+        onActionPressed: () => _openFile(localFile),
+        duration: const Duration(seconds: 8),
+      );
     } catch (e) {
       if (mounted) {
         _showError('Error downloading file: $e');
       }
+    }
+  }
+
+  Future<void> _openFile(File file) async {
+    try {
+      final uri = Uri.file(file.path);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) _showError('Could not open file.');
+      }
+    } catch (e) {
+      if (mounted) _showError('Could not open file: $e');
     }
   }
 
@@ -303,13 +323,38 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   // ── Snackbars ─────────────────────────────────────────────────────────────
 
-  void _showSuccess(String msg) {
+  void _showSuccess(
+    String msg, {
+    String? actionText,
+    VoidCallback? onActionPressed,
+    Duration? duration,
+    SnackBarBehavior? behavior,
+  }) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+
+    messenger.showSnackBar(
       SnackBar(
-        content: Text(msg),
         backgroundColor: const Color(0xFF00C48C),
-        duration: const Duration(seconds: 3),
+        behavior: behavior ?? SnackBarBehavior.fixed,
+        // Only apply margin when floating to avoid layout shifts for fixed bars
+        margin: (behavior ?? SnackBarBehavior.fixed) == SnackBarBehavior.floating
+            ? const EdgeInsets.fromLTRB(16, 0, 16, 16)
+            : null,
+        duration: duration ?? const Duration(seconds: 3),
+        content: Text(
+          msg,
+          style: const TextStyle(color: Colors.white),
+        ),
+        action: (actionText != null && onActionPressed != null)
+            ? SnackBarAction(
+                label: actionText,
+                onPressed: onActionPressed,
+                textColor: Colors.white,
+              )
+            : null,
       ),
     );
   }

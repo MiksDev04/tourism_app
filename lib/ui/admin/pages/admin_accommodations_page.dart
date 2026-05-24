@@ -1,12 +1,11 @@
 // lib/ui/admin/pages/admin_accommodations_page.dart
 
-// ignore_for_file: deprecated_member_use
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/accommodation_export_service.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
 import '../widgets/business_details_modal.dart';
@@ -48,6 +47,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   final _searchCtrl = TextEditingController();
   int _currentPage = 0;
   int _pageSize = 10;
+  bool _isExporting = false;
 
   static const List<int> _pageSizeOptions = [10, 20, 30];
 
@@ -118,6 +118,55 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       ? _accommodations.length
       : _accommodations.where((a) => a.status == status).length;
 
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  Future<void> _showExportDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.7),
+      builder: (ctx) => _ExportDialog(
+        onExportExcel: () async {
+          Navigator.of(ctx).pop();
+          await _runExport(excel: true);
+        },
+        onExportPdf: () async {
+          Navigator.of(ctx).pop();
+          await _runExport(excel: false);
+        },
+      ),
+    );
+  }
+
+  Future<void> _runExport({required bool excel}) async {
+    if (_isExporting) return;
+    setState(() => _isExporting = true);
+
+    try {
+      final rows = await _api.fetchExportRows();
+      if (!mounted) return;
+
+      if (rows.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No accommodation data to export.'),
+            backgroundColor: Color(0xFFFFA000),
+          ),
+        );
+        return;
+      }
+
+      if (excel) {
+        await AccommodationExportService.exportToExcel(rows, context);
+      } else {
+        await AccommodationExportService.exportToPdf(rows, context);
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  // ── Status update ─────────────────────────────────────────────────────────
+
   Future<void> _updateStatus(
     Accommodation item,
     AccommodationStatus newStatus, {
@@ -176,9 +225,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
     AccommodationStatus newStatus, {
     String? remarks,
   }) async {
-    if (newStatus != AccommodationStatus.approved) {
-      return;
-    }
+    if (newStatus != AccommodationStatus.approved) return;
 
     final senderId = _senderId;
     final senderName = _senderName;
@@ -191,7 +238,9 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
         senderPhone == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Accommodation was updated, but the decision letter could not be sent because the admin session is missing.'),
+          content: Text(
+            'Accommodation was updated, but the decision letter could not be sent because the admin session is missing.',
+          ),
           backgroundColor: Color(0xFFFFA000),
           duration: Duration(seconds: 3),
         ),
@@ -199,14 +248,14 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       return;
     }
 
-    final subject = 'Accommodation Application Approved';
+    const subject = 'Accommodation Application Approved';
     final remarksText = remarks?.trim();
-    final remarksSection = remarksText?.isNotEmpty == true
-      ? '\n\nRemarks: $remarksText'
-      : '';
-    final body = '''We’re pleased to let you know your accommodation application has been approved.$remarksSection''';
+    final remarksSection =
+        remarksText?.isNotEmpty == true ? '\n\nRemarks: $remarksText' : '';
+    final body =
+        'We\'re pleased to let you know your accommodation application has been approved.$remarksSection';
 
-    final messageType = MessageType.announcement;
+    const messageType = MessageType.announcement;
 
     try {
       final letter = buildOfficialMessageLetter(
@@ -232,7 +281,9 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Accommodation was updated, but the decision letter failed to send: $e'),
+          content: Text(
+            'Accommodation was updated, but the decision letter failed to send: $e',
+          ),
           backgroundColor: const Color(0xFFFFA000),
           duration: const Duration(seconds: 4),
         ),
@@ -263,7 +314,11 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _PageHeader(onRefresh: _loadAccommodations),
+                  _PageHeader(
+                    onRefresh: _loadAccommodations,
+                    onExport: _showExportDialog,
+                    isExporting: _isExporting,
+                  ),
                   const SizedBox(height: 20),
                   _FilterTabBar(
                     selectedTab: _selectedTab,
@@ -296,7 +351,8 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                         padding: const EdgeInsets.all(48),
                         child: Text(
                           _error!,
-                          style: const TextStyle(color: AppColors.accentRed),
+                          style:
+                              const TextStyle(color: AppColors.accentRed),
                         ),
                       ),
                     )
@@ -340,11 +396,264 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   }
 }
 
+// ─── Export Dialog ────────────────────────────────────────────────────────────
+
+class _ExportDialog extends StatelessWidget {
+  const _ExportDialog({
+    required this.onExportExcel,
+    required this.onExportPdf,
+  });
+
+  final VoidCallback onExportExcel;
+  final VoidCallback onExportPdf;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Container(
+            margin: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 40,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ─────────────────────────────────────────────────
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryCyan.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.primaryCyan.withOpacity(0.3),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.download_rounded,
+                        color: AppColors.primaryCyan,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Export Accommodations',
+                            style: TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Download the full accommodations list',
+                            style: TextStyle(
+                              color: AppColors.textGray,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textGray,
+                        size: 18,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints:
+                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                const Divider(color: AppColors.cardBorder, height: 1),
+                const SizedBox(height: 20),
+
+                // ── Format buttons ──────────────────────────────────────────
+                _ExportFormatButton(
+                  icon: Icons.table_chart_rounded,
+                  label: 'Excel Spreadsheet',
+                  subtitle: 'Download as .xlsx file',
+                  color: const Color(0xFF1D6F42),
+                  onTap: onExportExcel,
+                ),
+                const SizedBox(height: 10),
+                _ExportFormatButton(
+                  icon: Icons.picture_as_pdf_rounded,
+                  label: 'PDF Document',
+                  subtitle: 'Share or save as .pdf file',
+                  color: const Color(0xFFB91C1C),
+                  onTap: onExportPdf,
+                ),
+                const SizedBox(height: 16),
+
+                // ── Note ────────────────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBorder.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppColors.cardBorder.withOpacity(0.5),
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        color: AppColors.textSubtle,
+                        size: 14,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Exports all records regardless of active filters.',
+                          style: TextStyle(
+                            color: AppColors.textSubtle,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportFormatButton extends StatefulWidget {
+  const _ExportFormatButton({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  State<_ExportFormatButton> createState() => _ExportFormatButtonState();
+}
+
+class _ExportFormatButtonState extends State<_ExportFormatButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: _hovered
+                ? widget.color.withOpacity(0.12)
+                : widget.color.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: _hovered
+                  ? widget.color.withOpacity(0.4)
+                  : widget.color.withOpacity(0.2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: widget.color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(widget.icon, color: widget.color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: _hovered ? AppColors.textWhite : AppColors.textGray,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.subtitle,
+                      style: const TextStyle(
+                        color: AppColors.textSubtle,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: widget.color.withOpacity(_hovered ? 0.8 : 0.4),
+                size: 18,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Page Header ──────────────────────────────────────────────────────────────
 
 class _PageHeader extends StatelessWidget {
-  const _PageHeader({required this.onRefresh});
+  const _PageHeader({
+    required this.onRefresh,
+    required this.onExport,
+    required this.isExporting,
+  });
+
   final VoidCallback onRefresh;
+  final VoidCallback onExport;
+  final bool isExporting;
 
   @override
   Widget build(BuildContext context) {
@@ -375,12 +684,104 @@ class _PageHeader extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded, color: AppColors.textGray),
-          tooltip: 'Refresh',
+        Row(
+          children: [
+            // ── Export button ───────────────────────────────────────────
+            Tooltip(
+              message: 'Export',
+              child: _ExportIconButton(
+                onTap: isExporting ? null : onExport,
+                isLoading: isExporting,
+              ),
+            ),
+            const SizedBox(width: 4),
+            // ── Refresh button ──────────────────────────────────────────
+            IconButton(
+              onPressed: onRefresh,
+              icon: const Icon(
+                Icons.refresh_rounded,
+                color: AppColors.textGray,
+              ),
+              tooltip: 'Refresh',
+            ),
+          ],
         ),
       ],
+    );
+  }
+}
+
+class _ExportIconButton extends StatefulWidget {
+  const _ExportIconButton({required this.onTap, required this.isLoading});
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  State<_ExportIconButton> createState() => _ExportIconButtonState();
+}
+
+class _ExportIconButtonState extends State<_ExportIconButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: _hovered && widget.onTap != null
+                ? AppColors.primaryCyan.withOpacity(0.12)
+                : AppColors.cardBackground,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _hovered && widget.onTap != null
+                  ? AppColors.primaryCyan.withOpacity(0.4)
+                  : AppColors.cardBorder,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.isLoading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: AppColors.primaryCyan,
+                  ),
+                )
+              else
+                Icon(
+                  Icons.download_rounded,
+                  color: _hovered && widget.onTap != null
+                      ? AppColors.primaryCyan
+                      : AppColors.textGray,
+                  size: 16,
+                ),
+              const SizedBox(width: 6),
+              Text(
+                widget.isLoading ? 'Exporting...' : 'Export',
+                style: TextStyle(
+                  color: _hovered && widget.onTap != null
+                      ? AppColors.primaryCyan
+                      : AppColors.textGray,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -538,14 +939,16 @@ class _SearchBar extends StatelessWidget {
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
         decoration: const InputDecoration(
           hintText: 'Search by name or owner...',
-          hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+          hintStyle:
+              TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
           prefixIcon: Icon(
             Icons.search_rounded,
             color: AppColors.textSubtle,
             size: 20,
           ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         ),
       ),
     );
@@ -555,11 +958,12 @@ class _SearchBar extends StatelessWidget {
 // ─── Accommodation Table (wide screens) ──────────────────────────────────────
 
 class _AccommodationTable extends StatelessWidget {
-  const _AccommodationTable({required this.rows, required this.onStatusUpdate});
+  const _AccommodationTable(
+      {required this.rows, required this.onStatusUpdate});
 
   final List<Accommodation> rows;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-  onStatusUpdate;
+      onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -664,7 +1068,7 @@ class _TableRow extends StatelessWidget {
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-  onStatusUpdate;
+      onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -716,7 +1120,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.businessType.label,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -727,7 +1132,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.businessLineLabel,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -738,7 +1144,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.owner,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -749,7 +1156,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.contact,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -760,7 +1168,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 '${item.rooms}',
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -781,7 +1190,8 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: _ActionButtons(item: item, onStatusUpdate: onStatusUpdate),
+                child: _ActionButtons(
+                    item: item, onStatusUpdate: onStatusUpdate),
               ),
             ),
           ),
@@ -801,7 +1211,7 @@ class _AccommodationCardList extends StatelessWidget {
 
   final List<Accommodation> rows;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-  onStatusUpdate;
+      onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -825,11 +1235,12 @@ class _AccommodationCardList extends StatelessWidget {
 }
 
 class _AccommodationCard extends StatelessWidget {
-  const _AccommodationCard({required this.item, required this.onStatusUpdate});
+  const _AccommodationCard(
+      {required this.item, required this.onStatusUpdate});
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-  onStatusUpdate;
+      onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -905,7 +1316,7 @@ class _CardDetail extends StatelessWidget {
     return Row(
       children: [
         SizedBox(
-          width: 70,
+          width: 80,
           child: Text(
             label,
             style: const TextStyle(
@@ -918,7 +1329,8 @@ class _CardDetail extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            style:
+                const TextStyle(color: AppColors.textGray, fontSize: 13),
           ),
         ),
       ],
@@ -949,33 +1361,36 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = _styleFor(status);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: style.color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: style.color.withOpacity(0.3)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: style.color,
-              shape: BoxShape.circle,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: style.color,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            style.label,
-            style: TextStyle(
-              color: style.color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
+            const SizedBox(width: 4),
+            Text(
+              style.label,
+              style: TextStyle(
+                color: style.color,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -993,18 +1408,8 @@ String _formatRegisteredDate(String? rawValue) {
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return value;
   const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
   final local = parsed.toLocal();
   return '${monthNames[local.month - 1]} ${local.day}, ${local.year}';
@@ -1017,14 +1422,15 @@ class _ActionButtons extends StatelessWidget {
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-  onStatusUpdate;
+      onStatusUpdate;
 
   Future<void> _showRemarksModal(
     BuildContext context, {
     required AccommodationStatus action,
   }) async {
     final isApprove = action == AccommodationStatus.approved;
-    final color = isApprove ? const Color(0xFF00C48C) : const Color(0xFFFF4D6A);
+    final color =
+        isApprove ? const Color(0xFF00C48C) : const Color(0xFFFF4D6A);
     final icon = isApprove
         ? Icons.check_circle_outline_rounded
         : Icons.cancel_outlined;
@@ -1059,7 +1465,6 @@ class _ActionButtons extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Header ────────────────────────────────────────────────
                   Row(
                     children: [
                       Container(
@@ -1068,7 +1473,8 @@ class _ActionButtons extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.1),
                           shape: BoxShape.circle,
-                          border: Border.all(color: color.withOpacity(0.3)),
+                          border:
+                              Border.all(color: color.withOpacity(0.3)),
                         ),
                         child: Icon(icon, color: color, size: 20),
                       ),
@@ -1115,8 +1521,6 @@ class _ActionButtons extends StatelessWidget {
                   const SizedBox(height: 20),
                   const Divider(color: AppColors.cardBorder, height: 1),
                   const SizedBox(height: 20),
-
-                  // ── Remarks Field ─────────────────────────────────────────
                   const Text(
                     'Remarks',
                     style: TextStyle(
@@ -1128,7 +1532,8 @@ class _ActionButtons extends StatelessWidget {
                   const SizedBox(height: 4),
                   const Text(
                     'This will be visible to the business owner.',
-                    style: TextStyle(color: AppColors.textSubtle, fontSize: 12),
+                    style: TextStyle(
+                        color: AppColors.textSubtle, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -1153,25 +1558,22 @@ class _ActionButtons extends StatelessWidget {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: AppColors.cardBorder,
-                        ),
+                        borderSide:
+                            const BorderSide(color: AppColors.cardBorder),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: AppColors.cardBorder,
-                        ),
+                        borderSide:
+                            const BorderSide(color: AppColors.cardBorder),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: color.withOpacity(0.5)),
+                        borderSide:
+                            BorderSide(color: color.withOpacity(0.5)),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // ── Buttons ───────────────────────────────────────────────
                   Row(
                     children: [
                       Expanded(
@@ -1202,7 +1604,8 @@ class _ActionButtons extends StatelessWidget {
 
     if (confirmed == true) {
       final remarks = remarksCtrl.text.trim();
-      onStatusUpdate(item, action, remarks: remarks.isEmpty ? null : remarks);
+      onStatusUpdate(item, action,
+          remarks: remarks.isEmpty ? null : remarks);
     }
 
     remarksCtrl.dispose();
@@ -1212,68 +1615,67 @@ class _ActionButtons extends StatelessWidget {
   Widget build(BuildContext context) {
     final isPending = item.status == AccommodationStatus.pending;
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // ── View Details ──────────────────────────────────────────────────
-        _ActionIcon(
-          icon: Icons.remove_red_eye_outlined,
-          tooltip: 'View Details',
-          onTap: () {
-            showBusinessDetailsModal(
-              context,
-              BusinessDetails(
-                name: item.name,
-                tradeName: item.tradeName,
-                type: item.businessType.label,
-                businessLine: item.businessLineLabel,
-                rooms: item.rooms,
-                status: item.status,
-                owner: item.owner,
-                permitNumber: item.permitNumber,
-                registrationNumber: item.registrationNumber,
-                registeredDate: _formatRegisteredDate(item.createdAt),
-                address: item.address,
-                street: item.street,
-                barangay: item.barangay,
-                cityMunicipality: item.cityMunicipality,
-                province: item.province,
-                region: item.region,
-                phone: item.contact,
-                email: item.email ?? '—',
-                permitFileUrl: item.permitFileUrl,
-                validIdUrl: item.validIdUrl,
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ActionIcon(
+            icon: Icons.remove_red_eye_outlined,
+            tooltip: 'View Details',
+            onTap: () {
+              showBusinessDetailsModal(
+                context,
+                BusinessDetails(
+                  name: item.name,
+                  tradeName: item.tradeName,
+                  type: item.businessType.label,
+                  businessLine: item.businessLineLabel,
+                  rooms: item.rooms,
+                  status: item.status,
+                  owner: item.owner,
+                  permitNumber: item.permitNumber,
+                  registrationNumber: item.registrationNumber,
+                  registeredDate: _formatRegisteredDate(item.createdAt),
+                  address: item.address,
+                  street: item.street,
+                  barangay: item.barangay,
+                  cityMunicipality: item.cityMunicipality,
+                  province: item.province,
+                  region: item.region,
+                  phone: item.contact,
+                  email: item.email ?? '—',
+                  permitFileUrl: item.permitFileUrl,
+                  validIdUrl: item.validIdUrl,
+                ),
+              );
+            },
+          ),
+          if (isPending) ...[
+            const SizedBox(width: 8),
+            _ActionIcon(
+              icon: Icons.check_circle_outline_rounded,
+              tooltip: 'Approve',
+              color: const Color(0xFF00C48C),
+              onTap: () => _showRemarksModal(
+                context,
+                action: AccommodationStatus.approved,
               ),
-            );
-          },
-        ),
-
-        // ── Approve (pending only) ────────────────────────────────────────
-        if (isPending) ...[
-          const SizedBox(width: 8),
-          _ActionIcon(
-            icon: Icons.check_circle_outline_rounded,
-            tooltip: 'Approve',
-            color: const Color(0xFF00C48C),
-            onTap: () => _showRemarksModal(
-              context,
-              action: AccommodationStatus.approved,
             ),
-          ),
-          const SizedBox(width: 8),
-
-          // ── Reject (pending only) ─────────────────────────────────────
-          _ActionIcon(
-            icon: Icons.cancel_outlined,
-            tooltip: 'Reject',
-            color: const Color(0xFFFF4D6A),
-            onTap: () => _showRemarksModal(
-              context,
-              action: AccommodationStatus.rejected,
+            const SizedBox(width: 8),
+            _ActionIcon(
+              icon: Icons.cancel_outlined,
+              tooltip: 'Reject',
+              color: const Color(0xFFFF4D6A),
+              onTap: () => _showRemarksModal(
+                context,
+                action: AccommodationStatus.rejected,
+              ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

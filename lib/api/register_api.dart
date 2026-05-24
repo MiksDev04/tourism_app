@@ -47,6 +47,7 @@ class RegisterApi {
         email: email,
         phoneNumber: phoneNumber,
         businessName: businessName,
+        password: password,
         ownerFirstName: ownerFirstName,
         ownerLastName: ownerLastName,
         businessLine: businessLine,
@@ -204,6 +205,7 @@ class RegisterApi {
     required String email,
     required String phoneNumber,
     required String businessName,
+    required String password,
     required String ownerFirstName,
     required String ownerLastName,
     required List<String> businessLine,
@@ -238,6 +240,19 @@ class RegisterApi {
     if (!emailRe.hasMatch(email.trim())) return 'Enter a valid email address.';
     if (!phoneRe.hasMatch(strippedPhone)) return 'Invalid phone number format.';
     if (businessName.trim().isEmpty) return 'Business name is required.';
+    if (password.isEmpty) return 'Password is required.';
+    if (password.length < 8) {
+      return 'Password must be at least 8 characters long.';
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(password)) {
+      return 'Password must contain at least one uppercase letter.';
+    }
+    if (!RegExp(r'[0-9]').hasMatch(password)) {
+      return 'Password must contain at least one number.';
+    }
+    if (!RegExp(r"[!@#$%^&*()\-_=+\[\]{};:',.<>?/\\|`~@]").hasMatch(password)) {
+      return 'Password must contain at least one special character (e.g. @, #, !).';
+    }
     if (businessLine.isEmpty) return 'Select at least one business line.';
     if (businessLine.any((line) => !allowedBusinessLines.contains(line))) {
       return 'Invalid business line selected.';
