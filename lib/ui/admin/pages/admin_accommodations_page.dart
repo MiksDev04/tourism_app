@@ -402,24 +402,48 @@ class _FilterTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: List.generate(tabs.length, (i) {
-          final tab = tabs[i];
-          final count = countForStatus(tab.status);
-          final isActive = selectedTab == i;
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: _FilterChip(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 600;
+
+        if (!isNarrow) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(tabs.length, (i) {
+                final tab = tabs[i];
+                final count = countForStatus(tab.status);
+                final isActive = selectedTab == i;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: _FilterChip(
+                    label: tab.label,
+                    count: count,
+                    isActive: isActive,
+                    onTap: () => onTabSelected(i),
+                  ),
+                );
+              }),
+            ),
+          );
+        }
+
+        return Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: List.generate(tabs.length, (i) {
+            final tab = tabs[i];
+            final count = countForStatus(tab.status);
+            final isActive = selectedTab == i;
+            return _FilterChip(
               label: tab.label,
               count: count,
               isActive: isActive,
               onTap: () => onTabSelected(i),
-            ),
-          );
-        }),
-      ),
+            );
+          }),
+        );
+      },
     );
   }
 }
@@ -580,14 +604,38 @@ class _TableHeader extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Expanded(flex: 4, child: _HeaderCell('Business Name')),
-          Expanded(flex: 2, child: _HeaderCell('Type')),
-          Expanded(flex: 3, child: _HeaderCell('Business Line')),
-          Expanded(flex: 3, child: _HeaderCell('Owner')),
-          Expanded(flex: 3, child: _HeaderCell('Contact')),
-          Expanded(flex: 1, child: _HeaderCell('Rooms')),
-          Expanded(flex: 2, child: _HeaderCell('Status')),
-          Expanded(flex: 3, child: _HeaderCell('Actions')),
+          Expanded(flex: 3, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Business Name'),
+          )),
+          Expanded(flex: 2, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Type'),
+          )),
+          Expanded(flex: 3, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Business Line'),
+          )),
+          Expanded(flex: 2, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Owner'),
+          )),
+          Expanded(flex: 2, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Contact'),
+          )),
+          Expanded(flex: 1, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Rooms'),
+          )),
+          Expanded(flex: 2, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Status'),
+          )),
+          Expanded(flex: 2, child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: _HeaderCell('Actions'),
+          )),
         ],
       ),
     );
@@ -625,81 +673,116 @@ class _TableRow extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            flex: 4,
-            child: Row(
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryCyan.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.primaryCyan.withOpacity(0.2),
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: AppColors.primaryCyan.withOpacity(0.2),
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.apartment_rounded,
+                      color: AppColors.primaryCyan,
+                      size: 16,
                     ),
                   ),
-                  child: const Icon(
-                    Icons.apartment_rounded,
-                    color: AppColors.primaryCyan,
-                    size: 16,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    item.name,
-                    style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      item.name,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    overflow: TextOverflow.ellipsis,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           Expanded(
             flex: 2,
-            child: Text(
-              item.businessType.label,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                item.businessType.label,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           Expanded(
             flex: 3,
-            child: Text(
-              item.businessLineLabel,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                item.businessLineLabel,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           Expanded(
-            flex: 3,
-            child: Text(
-              item.owner,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                item.owner,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           Expanded(
-            flex: 3,
-            child: Text(
-              item.contact,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                item.contact,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
           Expanded(
             flex: 1,
-            child: Text(
-              '${item.rooms}',
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '${item.rooms}',
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
-          Expanded(flex: 2, child: _StatusBadge(status: item.status)),
           Expanded(
-            flex: 3,
-            child: Align(
-              alignment: Alignment.center,
-              child: _ActionButtons(item: item, onStatusUpdate: onStatusUpdate),
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _StatusBadge(status: item.status),
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _ActionButtons(item: item, onStatusUpdate: onStatusUpdate),
+              ),
             ),
           ),
         ],
@@ -1141,6 +1224,7 @@ class _ActionButtons extends StatelessWidget {
               context,
               BusinessDetails(
                 name: item.name,
+                tradeName: item.tradeName,
                 type: item.businessType.label,
                 businessLine: item.businessLineLabel,
                 rooms: item.rooms,

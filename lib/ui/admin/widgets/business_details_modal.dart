@@ -10,6 +10,7 @@ import '../models/accommodation_models.dart';
 class BusinessDetails {
   const BusinessDetails({
     required this.name,
+    required this.tradeName,
     required this.type,
     required this.businessLine,
     required this.rooms,
@@ -31,6 +32,7 @@ class BusinessDetails {
   });
 
   final String name;
+  final String tradeName;
   final String type;
   final String businessLine;
   final int rooms;
@@ -285,38 +287,47 @@ class _DetailsGrid extends StatelessWidget {
   final BusinessDetails details;
   @override
   Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _DetailRow(
+          first: _DetailField(label: 'Trade Name', value: details.tradeName),
+          second: _DetailField(label: 'Owner', value: details.owner),
+        ),
+        const SizedBox(height: 12),
+        _DetailRow(
+          first: _DetailField(label: 'Business Line', value: details.businessLine),
+          second: _DetailField(
+            label: 'Registered',
+            value: _formatRegisteredDate(details.registeredDate),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _DetailRow(
+          first: _DetailField(label: 'Permit #', value: details.permitNumber),
+          second: _DetailField(
+            label: 'Registration #',
+            value: details.registrationNumber,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _DetailField(label: 'Owner', value: details.owner),
-              const SizedBox(height: 12),
-              _DetailField(label: 'Business Line', value: details.businessLine),
-              const SizedBox(height: 12),
-              _DetailField(
-                label: 'Registration #',
-                value: details.registrationNumber,
-              ),
-            ],
-          ),
-        ),
+        Expanded(child: first),
         const SizedBox(width: 24),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _DetailField(label: 'Permit #', value: details.permitNumber),
-              const SizedBox(height: 12),
-              _DetailField(
-                label: 'Registered',
-                value: _formatRegisteredDate(details.registeredDate),
-              ),
-            ],
-          ),
-        ),
+        Expanded(child: second),
       ],
     );
   }

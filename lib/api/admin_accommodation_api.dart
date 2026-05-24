@@ -32,6 +32,7 @@ class AdminAccommodationApi {
             owner_first_name,
             owner_middle_name,
             owner_last_name,
+            tradename,
             permit_number,
             registration_number,
             street,

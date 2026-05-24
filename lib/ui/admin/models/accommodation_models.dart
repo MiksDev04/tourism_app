@@ -9,6 +9,7 @@ class Accommodation {
     required this.id,
     required this.profileId,
     required this.name,
+    required this.tradeName,
     required this.businessType,
     required this.businessLines,
     required this.owner,
@@ -35,6 +36,7 @@ class Accommodation {
   final String id;
   final String profileId;
   final String name;
+  final String tradeName;
   final BusinessType businessType;
   final List<BusinessLine> businessLines;
   final String owner;
@@ -132,6 +134,7 @@ class Accommodation {
       id: map['id'] as String,
       profileId: map['profile_id'] as String,
       name: map['business_name'] as String,
+      tradeName: map['tradename'] as String? ?? '—',
       businessType: _parseBusinessType(map['business_type'] as String),
       businessLines: businessLines,
       owner: _combineOwnerName(map),
@@ -164,6 +167,7 @@ class Accommodation {
       id: id,
       profileId: profileId,
       name: name,
+      tradeName: tradeName,
       businessType: businessType,
       businessLines: businessLines,
       owner: owner,
