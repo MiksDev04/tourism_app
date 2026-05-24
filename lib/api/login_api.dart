@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tourism_app/core/services/session_service.dart';
@@ -25,18 +24,7 @@ class LoginApi {
     required String password,
   }) async {
     // ── 1. Check internet ─────────────────────────────────────────────────
-    try {
-      final result = await InternetAddress.lookup('google.com');
-      if (result.isEmpty || result.first.rawAddress.isEmpty) {
-        return LoginResult.err(
-          'No internet connection. Please go online to sign in.',
-        );
-      }
-    } on SocketException catch (_) {
-      return LoginResult.err(
-        'No internet connection. Please go online to sign in.',
-      );
-    }
+   
 
     try {
       // ── 2. Resolve username → email directly from profiles ────────────
@@ -210,10 +198,14 @@ class LoginApi {
       return LoginResult.ok(role);
     } on AuthException catch (e) {
       return LoginResult.err(_friendlyAuthError(e.message));
-    } catch (e) {
-      debugPrint('❌ Login error: ${e.runtimeType} — $e');
-      return LoginResult.err('Something went wrong. Please try again.');
-    }
+    }  catch (e) {
+  debugPrint('❌ Login error: ${e.runtimeType} — $e');
+  final msg = e.toString().toLowerCase();
+  if (msg.contains('network') || msg.contains('socket') || msg.contains('connection')) {
+    return LoginResult.err('No internet connection. Please go online to sign in.');
+  }
+  return LoginResult.err('Something went wrong. Please try again.');
+}
   }
 
   String _friendlyAuthError(String message) {

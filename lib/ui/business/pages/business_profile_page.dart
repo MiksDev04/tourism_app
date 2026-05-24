@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../../router/app_router.dart';
@@ -384,8 +385,8 @@ class _BusinessCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = business?.businessName ?? '—';
-    final line = business?.businessLine.firstOrNull?.label ?? '';
+    final name   = business?.businessName ?? '—';
+    final line   = business?.businessLine.firstOrNull?.label ?? '';
     final status = business?.status ?? BusinessStatus.pending;
 
     return _SectionCard(
@@ -717,7 +718,6 @@ class _BusinessInfoCard extends StatelessWidget {
             ]),
           const SizedBox(height: 14),
 
-          // Business Type + Total Rooms
           if (isNarrow) ...[
             _LabeledField(
               label: 'Business Type',
@@ -758,7 +758,6 @@ class _BusinessInfoCard extends StatelessWidget {
             ]),
           const SizedBox(height: 14),
 
-          // Business Line (multi-select chips)
           _LabeledField(
             label: 'Business Line',
             child: _BusinessLineChips(
@@ -858,8 +857,7 @@ class _BusinessInfoCard extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
                 'No business record found. Please contact the admin.',
-                style: TextStyle(
-                    color: Colors.amber.shade400, fontSize: 12.5),
+                style: TextStyle(color: Colors.amber.shade400, fontSize: 12.5),
               ),
             ),
 
@@ -905,29 +903,23 @@ class _BusinessLineChips extends StatelessWidget {
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
               color: isOn
                   ? AppColors.primaryCyan.withOpacity(0.15)
                   : AppColors.inputBackground,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isOn
-                    ? AppColors.primaryCyan
-                    : AppColors.inputBorder,
+                color: isOn ? AppColors.primaryCyan : AppColors.inputBorder,
                 width: isOn ? 1.5 : 1,
               ),
             ),
             child: Text(
               line.label,
               style: TextStyle(
-                color: isOn
-                    ? AppColors.primaryCyan
-                    : AppColors.textGray,
+                color: isOn ? AppColors.primaryCyan : AppColors.textGray,
                 fontSize: 12.5,
-                fontWeight:
-                    isOn ? FontWeight.w600 : FontWeight.w400,
+                fontWeight: isOn ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
           ),
@@ -944,16 +936,22 @@ class _PasswordChangeDialog extends StatefulWidget {
   final BusinessProfileApi api;
 
   @override
-  State<_PasswordChangeDialog> createState() =>
-      _PasswordChangeDialogState();
+  State<_PasswordChangeDialog> createState() => _PasswordChangeDialogState();
 }
 
 class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
-  int _step = 1;  // 1=send OTP  2=verify OTP  3=enter passwords
-  bool _loading = false;
+  // step 1 = send OTP | step 2 = verify OTP | step 3 = enter passwords
+  int _step = 1;
+  bool _loading  = false;
   String? _error;
 
-  final _otpCtrl      = TextEditingController();
+  // ── PIN controllers & focus (step 2) ─────────────────────────────────────────
+  final List<TextEditingController> _pinCtrl =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _pinFocus =
+      List.generate(6, (_) => FocusNode());
+
+  // ── Password controllers (step 3) ────────────────────────────────────────────
   final _oldPassCtrl  = TextEditingController();
   final _newPassCtrl  = TextEditingController();
   final _confPassCtrl = TextEditingController();
@@ -963,42 +961,49 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
 
   @override
   void dispose() {
-    _otpCtrl.dispose();
+    for (final c in _pinCtrl)  c.dispose();
+    for (final f in _pinFocus) f.dispose();
     _oldPassCtrl.dispose();
     _newPassCtrl.dispose();
     _confPassCtrl.dispose();
     super.dispose();
   }
 
+  void _clearPins() {
+    for (final c in _pinCtrl) c.clear();
+  }
+
   Future<void> _sendOtp() async {
     setState(() { _loading = true; _error = null; });
     try {
       await widget.api.sendPasswordChangeOtp();
-      setState(() => _step = 2);
+      if (!mounted) return;
+      setState(() { _loading = false; _step = 2; });
+      // Auto-focus first PIN box after transition
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _pinFocus[0].requestFocus());
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
-  Future<void> _verifyOtp() async {
+  Future<void> _verifyOtp(String otp) async {
     setState(() { _loading = true; _error = null; });
     try {
-      await widget.api.verifyPasswordChangeOtp(otp: _otpCtrl.text);
-      setState(() => _step = 3);
+      await widget.api.verifyPasswordChangeOtp(otp: otp);
+      if (!mounted) return;
+      setState(() { _loading = false; _step = 3; });
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
   Future<void> _submitPassword() async {
     setState(() { _loading = true; _error = null; });
     try {
-      await widget.api.verifyOldPassword(
-          oldPassword: _oldPassCtrl.text);
+      await widget.api.verifyOldPassword(oldPassword: _oldPassCtrl.text);
       await widget.api.updatePassword(
         newPassword:     _newPassCtrl.text,
         confirmPassword: _confPassCtrl.text,
@@ -1013,9 +1018,8 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
         );
       }
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
@@ -1035,12 +1039,14 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
           onCancel: () => Navigator.pop(context),
         ),
         2 => _StepVerifyOtp(
-          ctrl:    _otpCtrl,
-          loading: _loading,
-          error:   _error,
+          pinCtrl:  _pinCtrl,
+          pinFocus: _pinFocus,
+          loading:  _loading,
+          error:    _error,
           onVerify: _verifyOtp,
           onResend: () {
-            setState(() { _step = 1; _error = null; _otpCtrl.clear(); });
+            _clearPins();
+            setState(() { _step = 1; _error = null; });
           },
         ),
         _ => _StepNewPassword(
@@ -1084,37 +1090,50 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
   bool _loading = false;
   String? _error;
 
-  final _otpCtrl      = TextEditingController();
+  // ── PIN controllers & focus (step 2) ─────────────────────────────────────────
+  final List<TextEditingController> _pinCtrl =
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _pinFocus =
+      List.generate(6, (_) => FocusNode());
+
+  // ── New email controller (step 3) ────────────────────────────────────────────
   final _newEmailCtrl = TextEditingController();
 
   @override
   void dispose() {
-    _otpCtrl.dispose();
+    for (final c in _pinCtrl)  c.dispose();
+    for (final f in _pinFocus) f.dispose();
     _newEmailCtrl.dispose();
     super.dispose();
+  }
+
+  void _clearPins() {
+    for (final c in _pinCtrl) c.clear();
   }
 
   Future<void> _sendOtp() async {
     setState(() { _loading = true; _error = null; });
     try {
       await widget.api.sendEmailChangeOtp();
-      setState(() => _step = 2);
+      if (!mounted) return;
+      setState(() { _loading = false; _step = 2; });
+      WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _pinFocus[0].requestFocus());
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
-  Future<void> _verifyOtp() async {
+  Future<void> _verifyOtp(String otp) async {
     setState(() { _loading = true; _error = null; });
     try {
-      await widget.api.verifyEmailChangeOtp(otp: _otpCtrl.text);
-      setState(() => _step = 3);
+      await widget.api.verifyEmailChangeOtp(otp: otp);
+      if (!mounted) return;
+      setState(() { _loading = false; _step = 3; });
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
@@ -1134,9 +1153,8 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
         );
       }
     } on ProfileApiException catch (e) {
-      setState(() => _error = e.message);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() { _loading = false; _error = e.message; });
     }
   }
 
@@ -1156,12 +1174,14 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
           onCancel: () => Navigator.pop(context),
         ),
         2 => _StepVerifyOtp(
-          ctrl:    _otpCtrl,
-          loading: _loading,
-          error:   _error,
+          pinCtrl:  _pinCtrl,
+          pinFocus: _pinFocus,
+          loading:  _loading,
+          error:    _error,
           onVerify: _verifyOtp,
           onResend: () {
-            setState(() { _step = 1; _error = null; _otpCtrl.clear(); });
+            _clearPins();
+            setState(() { _step = 1; _error = null; });
           },
         ),
         _ => _StepNewEmail(
@@ -1193,8 +1213,7 @@ class _DialogShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
@@ -1274,9 +1293,11 @@ class _StepSendOtp extends StatelessWidget {
                 color: AppColors.primaryCyan, size: 22),
           ),
           const SizedBox(width: 14),
-          Expanded(child: Text(description,
-              style: const TextStyle(
-                  color: AppColors.textGray, fontSize: 13, height: 1.5))),
+          Expanded(
+            child: Text(description,
+                style: const TextStyle(
+                    color: AppColors.textGray, fontSize: 13, height: 1.5)),
+          ),
         ]),
         if (error != null) ...[
           const SizedBox(height: 14),
@@ -1310,59 +1331,158 @@ class _StepSendOtp extends StatelessWidget {
   }
 }
 
-class _StepVerifyOtp extends StatelessWidget {
+// ─── Step 2: Verify OTP — 6-box PIN design (copied from AdminProfilePage) ─────
+
+class _StepVerifyOtp extends StatefulWidget {
   const _StepVerifyOtp({
-    required this.ctrl,
+    required this.pinCtrl,
+    required this.pinFocus,
     required this.loading,
     this.error,
     required this.onVerify,
     required this.onResend,
   });
 
-  final TextEditingController ctrl;
+  /// 6 controllers owned by the parent dialog state.
+  final List<TextEditingController> pinCtrl;
+
+  /// 6 focus nodes owned by the parent dialog state.
+  final List<FocusNode> pinFocus;
+
   final bool loading;
   final String? error;
-  final VoidCallback onVerify, onResend;
+
+  /// Called with the 6-digit OTP string when the user taps Verify.
+  final ValueChanged<String> onVerify;
+  final VoidCallback onResend;
+
+  @override
+  State<_StepVerifyOtp> createState() => _StepVerifyOtpState();
+}
+
+class _StepVerifyOtpState extends State<_StepVerifyOtp> {
+  String get _otpValue => widget.pinCtrl.map((c) => c.text).join();
+
+  void _onPinChanged(String value, int index) {
+    if (value.length == 1 && index < 5) {
+      widget.pinFocus[index + 1].requestFocus();
+    }
+    if (value.isEmpty && index > 0) {
+      widget.pinFocus[index - 1].requestFocus();
+    }
+    setState(() {}); // rebuild so Verify button enables/disables
+  }
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Enter the 6-digit code sent to your email.',
-            style: TextStyle(color: AppColors.textGray, fontSize: 13)),
-        const SizedBox(height: 16),
-        _LabeledField(
-          label: 'Verification Code',
-          child: _InputField(
-            controller: ctrl,
-            keyboardType: TextInputType.number,
+        // ── Icon + subtitle ───────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.primaryCyan.withOpacity(0.08),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.mark_email_read_outlined,
+            color: AppColors.primaryCyan,
+            size: 28,
           ),
         ),
-        if (error != null) ...[
-          const SizedBox(height: 12),
-          _ErrorBanner(error!),
-        ],
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: onResend,
-          child: const Text("Didn't receive a code? Resend",
-              style: TextStyle(
-                  color: AppColors.primaryCyan,
-                  fontSize: 12,
-                  decoration: TextDecoration.underline)),
+        const SizedBox(height: 14),
+        const Text(
+          'Enter the 6-digit code sent to your email.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
         const SizedBox(height: 22),
+
+        // ── PIN boxes ─────────────────────────────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(6, (i) => Container(
+            width: 46,
+            height: 54,
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            child: TextField(
+              controller: widget.pinCtrl[i],
+              focusNode:  widget.pinFocus[i],
+              maxLength:  1,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
+              decoration: InputDecoration(
+                counterText: '',
+                filled: true,
+                fillColor: AppColors.inputBackground,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.inputBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.inputBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(
+                      color: AppColors.primaryCyan, width: 2),
+                ),
+              ),
+              onChanged: (v) => _onPinChanged(v, i),
+            ),
+          )),
+        ),
+
+        // ── Error banner ──────────────────────────────────────────────────────
+        if (widget.error != null) ...[
+          const SizedBox(height: 14),
+          _ErrorBanner(widget.error!),
+        ],
+
+        const SizedBox(height: 22),
+
+        // ── Verify button ─────────────────────────────────────────────────────
         _ActionButton(
-          icon: Icons.verified_outlined,
-          label: 'Verify Code',
-          isSaving: loading,
-          onPressed: onVerify,
+          icon:     Icons.verified_outlined,
+          label:    'Verify Code',
+          isSaving: widget.loading,
+          // Enabled only when all 6 boxes are filled
+          onPressed: _otpValue.length == 6 && !widget.loading
+              ? () => widget.onVerify(_otpValue)
+              : () {},
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── Resend link ───────────────────────────────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: widget.loading ? null : widget.onResend,
+              child: const Text(
+                'Resend Code',
+                style: TextStyle(color: AppColors.primaryCyan, fontSize: 12),
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
+
+// ─── Step 3a: New Password ────────────────────────────────────────────────────
 
 class _StepNewPassword extends StatelessWidget {
   const _StepNewPassword({
@@ -1428,6 +1548,8 @@ class _StepNewPassword extends StatelessWidget {
     );
   }
 }
+
+// ─── Step 3b: New Email ───────────────────────────────────────────────────────
 
 class _StepNewEmail extends StatelessWidget {
   const _StepNewEmail({
@@ -1524,7 +1646,8 @@ class _SubLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(width: 3, height: 14,
+        Container(
+            width: 3, height: 14,
             decoration: BoxDecoration(
               color: AppColors.primaryCyan,
               borderRadius: BorderRadius.circular(2))),
@@ -1705,7 +1828,7 @@ class _ActionButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AppColors.gradientStart, AppColors.gradientEnd]),
+              colors: [AppColors.gradientStart, AppColors.gradientEnd]),
           borderRadius: BorderRadius.circular(9),
           boxShadow: [
             BoxShadow(
@@ -1789,7 +1912,6 @@ InputDecoration _inputDeco() => InputDecoration(
   ),
   focusedBorder: OutlineInputBorder(
     borderRadius: BorderRadius.circular(8),
-    borderSide:
-        const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+    borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
   ),
 );

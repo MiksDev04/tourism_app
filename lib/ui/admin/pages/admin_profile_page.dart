@@ -727,6 +727,7 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
   }
 
   @override
+
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,

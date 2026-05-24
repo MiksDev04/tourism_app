@@ -17,7 +17,7 @@ class App extends StatelessWidget {
       theme: _buildTheme(),
 
       // ── Routing ──────────────────────────────────────────────────────────────
-      initialRoute: AppRouter.initialRoute,
+      initialRoute: AppRouter.initialRoute, 
       onGenerateRoute: AppRouter.onGenerateRoute,
     );
   }

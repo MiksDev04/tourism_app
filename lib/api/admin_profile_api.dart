@@ -11,10 +11,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //    Step 3 — verifyOldPassword(oldPass)     → re-auth check
 //           + updatePassword(new, confirm)   → sets new password
 //
-//  EMAIL CHANGE FLOW  (same OTP pattern — OTP goes to the CURRENT email):
+//  EMAIL CHANGE FLOW  (OTP goes to the CURRENT email):
 //    Step 1 — sendEmailChangeOtp()           → 6-digit OTP to current email
 //    Step 2 — verifyEmailChangeOtp(otp)      → validates code, refreshes session
-//    Step 3 — updateEmail(newEmail)          → updates auth + public.profiles
+//    Step 3 — updateEmail(newEmail)          → updates auth.users + auth.identities
+//                                               + public.profiles via RPC
 //
 //  NOTE: signInWithOtp fires a 6-digit code (not a login link) because
 //  shouldCreateUser:false and no redirectTo is set. ✔ Desktop-safe.
@@ -25,6 +26,27 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //
 //  Exception contract:
 //    Every public method throws [ProfileApiException] on error.
+//
+//  SQL DEPENDENCY — run this in Supabase before using updateEmail():
+//
+//    CREATE OR REPLACE FUNCTION update_auth_email(new_email text)
+//    RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+//    SET search_path = auth, public AS $$
+//    DECLARE v_uid uuid := auth.uid();
+//    BEGIN
+//      IF v_uid IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+//      UPDATE auth.users
+//        SET email = new_email, updated_at = now() WHERE id = v_uid;
+//      UPDATE auth.identities
+//        SET identity_data = identity_data
+//                            || jsonb_build_object(
+//                                 'email', new_email,
+//                                 'email_verified', true,
+//                                 'sub', v_uid::text),
+//            email      = new_email,
+//            updated_at = now()
+//        WHERE user_id = v_uid AND provider = 'email';
+//    END; $$;
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AdminProfileApi {
@@ -36,17 +58,14 @@ class AdminProfileApi {
 
   String get _uid {
     final id = _client.auth.currentUser?.id;
-    if (id == null)
-      throw const ProfileApiException('No authenticated user found.');
+    if (id == null) throw const ProfileApiException('No authenticated user found.');
     return id;
   }
 
   String get _currentEmail {
     final email = _client.auth.currentUser?.email;
     if (email == null || email.isEmpty) {
-      throw const ProfileApiException(
-        'Authenticated user has no email address.',
-      );
+      throw const ProfileApiException('Authenticated user has no email address.');
     }
     return email;
   }
@@ -59,9 +78,7 @@ class AdminProfileApi {
     try {
       final row = await _client
           .from('profiles')
-          .select(
-            'id, full_name, username, email, phone, role, created_at, updated_at',
-          )
+          .select('id, full_name, username, email, phone, role, created_at, updated_at')
           .eq('id', _uid)
           .single();
       return ProfileModel.fromMap(row);
@@ -76,7 +93,6 @@ class AdminProfileApi {
 
   // ────────────────────────────────────────────────────────────────────────────
   //  2. UPDATE ACCOUNT INFO  (name / username / phone only)
-  //     Email is changed via its own OTP flow — see methods 7–9 below.
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> updateAccountInfo({
@@ -91,14 +107,11 @@ class AdminProfileApi {
     await _assertUsernameAvailable(username, _uid);
 
     try {
-      await _client
-          .from('profiles')
-          .update({
-            'full_name': fullName.trim(),
-            'username': username.trim(),
-            'phone': phone.trim(),
-          })
-          .eq('id', _uid);
+      await _client.from('profiles').update({
+        'full_name': fullName.trim(),
+        'username': username.trim(),
+        'phone': phone.trim(),
+      }).eq('id', _uid);
       await _client.auth.refreshSession();
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
@@ -157,15 +170,12 @@ class AdminProfileApi {
       }
       throw ProfileApiException('Verification failed: ${e.message}');
     } catch (e) {
-      throw ProfileApiException(
-        'Unexpected error verifying current password: $e',
-      );
+      throw ProfileApiException('Unexpected error verifying current password: $e');
     }
   }
 
   // ────────────────────────────────────────────────────────────────────────────
   //  6. UPDATE PASSWORD  — PASSWORD CHANGE STEP 3b
-  //     Call AFTER verifyPasswordChangeOtp AND verifyOldPassword succeed.
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> updatePassword({
@@ -184,9 +194,6 @@ class AdminProfileApi {
 
   // ────────────────────────────────────────────────────────────────────────────
   //  7. SEND OTP  — EMAIL CHANGE STEP 1
-  //
-  //  Sends OTP to the user's CURRENT email to confirm their identity before
-  //  allowing the address to be changed.
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> sendEmailChangeOtp() async {
@@ -213,24 +220,26 @@ class AdminProfileApi {
   // ────────────────────────────────────────────────────────────────────────────
   //  9. UPDATE EMAIL  — EMAIL CHANGE STEP 3
   //
-  //  Call AFTER verifyEmailChangeOtp succeeds.
-  //  Updates public.profiles immediately, then triggers Supabase auth email
-  //  update (the auth.users email flips after the user clicks the confirmation
-  //  link in the new inbox — Supabase secure email change behaviour).
+  //  Updates all three places the email is stored:
+  //    • auth.users          → email column
+  //    • auth.identities     → identity_data JSONB + email column  ← was missing
+  //    • public.profiles     → email column
+  //
+  //  After the RPC succeeds the session is refreshed so _currentEmail
+  //  immediately reflects the new address without requiring a re-login.
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> updateEmail({required String newEmail}) async {
     final trimmed = newEmail.trim().toLowerCase();
     _validators.email(trimmed);
 
-    // Reject if same as current
     if (trimmed == _currentEmail.toLowerCase()) {
       throw const ProfileApiException(
         'New email address must be different from your current one.',
       );
     }
 
-    // Check not already taken by another user
+    // Ensure the new address isn't already used by another account
     try {
       final existing = await _client
           .from('profiles')
@@ -249,11 +258,22 @@ class AdminProfileApi {
       throw ProfileApiException(_postgrestMessage(e));
     }
 
-    // Update auth.users directly via RPC (no confirmation email triggered)
+    // ── RPC: updates auth.users AND auth.identities atomically ──────────────
+    //
+    //  The previous bug: only auth.users was updated, leaving auth.identities
+    //  with the old email. This caused the old address to still be treated as
+    //  a valid login identity, and future signInWithPassword calls would
+    //  silently resolve against the stale identity row.
+    //
+    //  The SQL function (update_auth_email) now does:
+    //    1. UPDATE auth.users        SET email = new_email
+    //    2. UPDATE auth.identities   SET identity_data = identity_data
+    //                                    || '{"email": new_email, ...}',
+    //                                    email = new_email
+    //       WHERE provider = 'email' AND user_id = auth.uid()
+    // ────────────────────────────────────────────────────────────────────────
     try {
       await _client.rpc('update_auth_email', params: {'new_email': trimmed});
-      // ← ADD THIS: sync local session so _currentEmail returns the new address
-      await _client.auth.refreshSession();
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
     } catch (e) {
@@ -266,6 +286,13 @@ class AdminProfileApi {
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
     }
+
+    // Refresh session so _currentEmail and the JWT both reflect the new address
+    try {
+      await _client.auth.refreshSession();
+    } catch (_) {
+      // Non-fatal — the DB changes succeeded; the app can re-auth on next launch
+    }
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -274,7 +301,6 @@ class AdminProfileApi {
 
   final _validators = _Validators();
 
-  /// Shared OTP verification logic used by both password and email change flows.
   Future<void> _verifyOtp(String otp) async {
     final code = otp.trim();
     if (code.isEmpty) {
@@ -316,10 +342,7 @@ class AdminProfileApi {
     }
   }
 
-  Future<void> _assertUsernameAvailable(
-    String username,
-    String currentUid,
-  ) async {
+  Future<void> _assertUsernameAvailable(String username, String currentUid) async {
     try {
       final existing = await _client
           .from('profiles')
@@ -343,14 +366,14 @@ class AdminProfileApi {
     final detail = e.details?.toString().toLowerCase() ?? '';
     final code = e.code ?? '';
     if (code == '23505') {
-      if (detail.contains('username'))
-        return 'That username is already in use.';
+      if (detail.contains('username')) return 'That username is already in use.';
       if (detail.contains('email')) return 'That email is already registered.';
       return 'A duplicate value already exists.';
     }
     if (code == '23503') return 'Related record not found (foreign key error).';
-    if (code == '42501')
+    if (code == '42501') {
       return 'Permission denied. You may not have access to this resource.';
+    }
     return e.message.isNotEmpty ? e.message : 'A database error occurred.';
   }
 }
@@ -363,14 +386,12 @@ class _Validators {
   void fullName(String v) {
     final s = v.trim();
     if (s.isEmpty) throw const ProfileApiException('Full name is required.');
-    if (s.length < 2)
-      throw const ProfileApiException(
-        'Full name must be at least 2 characters.',
-      );
-    if (s.length > 100)
-      throw const ProfileApiException(
-        'Full name must not exceed 100 characters.',
-      );
+    if (s.length < 2) {
+      throw const ProfileApiException('Full name must be at least 2 characters.');
+    }
+    if (s.length > 100) {
+      throw const ProfileApiException('Full name must not exceed 100 characters.');
+    }
     if (!RegExp(r"^[a-zA-Z\s\-'.]+$").hasMatch(s)) {
       throw const ProfileApiException(
         "Full name may only contain letters, spaces, hyphens ( - ) and apostrophes ( ' ).",
@@ -381,14 +402,12 @@ class _Validators {
   void username(String v) {
     final s = v.trim();
     if (s.isEmpty) throw const ProfileApiException('Username is required.');
-    if (s.length < 3)
-      throw const ProfileApiException(
-        'Username must be at least 3 characters.',
-      );
-    if (s.length > 30)
-      throw const ProfileApiException(
-        'Username must not exceed 30 characters.',
-      );
+    if (s.length < 3) {
+      throw const ProfileApiException('Username must be at least 3 characters.');
+    }
+    if (s.length > 30) {
+      throw const ProfileApiException('Username must not exceed 30 characters.');
+    }
     if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(s)) {
       throw const ProfileApiException(
         'Username may only contain letters, numbers and underscores.',
@@ -398,8 +417,7 @@ class _Validators {
 
   void email(String v) {
     final s = v.trim();
-    if (s.isEmpty)
-      throw const ProfileApiException('Email address is required.');
+    if (s.isEmpty) throw const ProfileApiException('Email address is required.');
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s)) {
       throw const ProfileApiException('Please enter a valid email address.');
     }
@@ -409,22 +427,17 @@ class _Validators {
 
   void phone(String v) {
     final stripped = v.trim().replaceAll(RegExp(r'[-\s]'), '');
-    if (stripped.isEmpty)
-      throw const ProfileApiException('Phone number is required.');
+    if (stripped.isEmpty) throw const ProfileApiException('Phone number is required.');
     if (!_phoneRe.hasMatch(stripped)) {
-      throw const ProfileApiException(
-        'Use format 09XX-XXX-XXXX or +639XXXXXXXXX.',
-      );
+      throw const ProfileApiException('Use format 09XX-XXX-XXXX or +639XXXXXXXXX.');
     }
   }
 
   void password(String pass, String confirm) {
-    if (pass.isEmpty)
-      throw const ProfileApiException('New password is required.');
-    if (pass.length < 8)
-      throw const ProfileApiException(
-        'Password must be at least 8 characters long.',
-      );
+    if (pass.isEmpty) throw const ProfileApiException('New password is required.');
+    if (pass.length < 8) {
+      throw const ProfileApiException('Password must be at least 8 characters long.');
+    }
     if (!RegExp(r'[A-Z]').hasMatch(pass)) {
       throw const ProfileApiException(
         'Password must contain at least one uppercase letter.',
@@ -440,8 +453,7 @@ class _Validators {
         'Password must contain at least one special character (e.g. @, #, !).',
       );
     }
-    if (pass != confirm)
-      throw const ProfileApiException('Passwords do not match.');
+    if (pass != confirm) throw const ProfileApiException('Passwords do not match.');
   }
 }
 

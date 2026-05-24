@@ -1683,30 +1683,6 @@ class _RecordDetailModal extends StatelessWidget {
                 ),
               ),
             ),
-
-            // ── Footer ─────────────────────────────────────────────────
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: AppColors.cardBorder)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textGray,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                    ),
-                    child: const Text('Close'),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
