@@ -94,7 +94,7 @@ class AdminAccommodationApi {
           .toList();
     } catch (e) {
       debugPrint('❌ fetchAll error: $e');
-      return [];
+      rethrow; // ← let the caller handle it
     }
   }
 

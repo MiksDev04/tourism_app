@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
+import 'package:tourism_app/ui/shared/pages/error_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/accommodation_export_service.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -54,6 +55,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   List<Accommodation> _accommodations = [];
   bool _isLoading = true;
   String? _error;
+  int? _errorCode;
   String? _senderId;
   String? _senderName;
   String? _senderEmail;
@@ -67,7 +69,8 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   }
 
   Future<void> _loadSession() async {
-    final session = SessionService.instance.current ??
+    final session =
+        SessionService.instance.current ??
         await SessionService.instance.loadAndCache();
     if (!mounted) return;
     setState(() {
@@ -82,13 +85,28 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _errorCode = null;
     });
-    final data = await _api.fetchAll();
-    if (!mounted) return;
-    setState(() {
-      _accommodations = data;
-      _isLoading = false;
-    });
+    try {
+      final data = await _api.fetchAll();
+      if (!mounted) return;
+      setState(() {
+        _accommodations = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      // map common exceptions to status codes
+      final isConnErr =
+          e.toString().toLowerCase().contains('socket') ||
+          e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection');
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+        _errorCode = isConnErr ? 503 : 500;
+      });
+    }
   }
 
   List<Accommodation> get _filtered {
@@ -250,8 +268,9 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
 
     const subject = 'Accommodation Application Approved';
     final remarksText = remarks?.trim();
-    final remarksSection =
-        remarksText?.isNotEmpty == true ? '\n\nRemarks: $remarksText' : '';
+    final remarksSection = remarksText?.isNotEmpty == true
+        ? '\n\nRemarks: $remarksText'
+        : '';
     final body =
         'We\'re pleased to let you know your accommodation application has been approved.$remarksSection';
 
@@ -303,63 +322,48 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       title: 'Accommodations',
       selectedIndex: 1,
       onNavSelected: (_) {},
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 900;
-          return RefreshIndicator(
-            onRefresh: _loadAccommodations,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.all(isNarrow ? 16 : 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _PageHeader(
-                    onRefresh: _loadAccommodations,
-                    onExport: _showExportDialog,
-                    isExporting: _isExporting,
-                  ),
-                  const SizedBox(height: 20),
-                  _FilterTabBar(
-                    selectedTab: _selectedTab,
-                    tabs: _filterTabs,
-                    countForStatus: _countForStatus,
-                    onTabSelected: (i) => setState(() {
-                      _selectedTab = i;
-                      _currentPage = 0;
-                    }),
-                  ),
-                  const SizedBox(height: 14),
-                  _SearchBar(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() {
-                      _searchQuery = v;
-                      _currentPage = 0;
-                    }),
-                  ),
-                  const SizedBox(height: 14),
-                  if (_isLoading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(48),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  else if (_error != null)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(48),
-                        child: Text(
-                          _error!,
-                          style:
-                              const TextStyle(color: AppColors.accentRed),
-                        ),
-                      ),
-                    )
-                  else
-                    Column(
+      child: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? ErrorPage(
+              statusCode: _errorCode ?? 500,
+              onRetry: _loadAccommodations,
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 900;
+                return RefreshIndicator(
+                  onRefresh: _loadAccommodations,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _PageHeader(
+                          onRefresh: _loadAccommodations,
+                          onExport: _showExportDialog,
+                          isExporting: _isExporting,
+                        ),
+                        const SizedBox(height: 20),
+                        _FilterTabBar(
+                          selectedTab: _selectedTab,
+                          tabs: _filterTabs,
+                          countForStatus: _countForStatus,
+                          onTabSelected: (i) => setState(() {
+                            _selectedTab = i;
+                            _currentPage = 0;
+                          }),
+                        ),
+                        const SizedBox(height: 14),
+                        _SearchBar(
+                          controller: _searchCtrl,
+                          onChanged: (v) => setState(() {
+                            _searchQuery = v;
+                            _currentPage = 0;
+                          }),
+                        ),
+                        const SizedBox(height: 14),
                         isNarrow
                             ? _AccommodationCardList(
                                 rows: _pagedRows,
@@ -386,12 +390,10 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                         ),
                       ],
                     ),
-                ],
-              ),
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }
@@ -399,10 +401,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
 // ─── Export Dialog ────────────────────────────────────────────────────────────
 
 class _ExportDialog extends StatelessWidget {
-  const _ExportDialog({
-    required this.onExportExcel,
-    required this.onExportPdf,
-  });
+  const _ExportDialog({required this.onExportExcel, required this.onExportPdf});
 
   final VoidCallback onExportExcel;
   final VoidCallback onExportPdf;
@@ -484,8 +483,10 @@ class _ExportDialog extends StatelessWidget {
                         size: 18,
                       ),
                       padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 28, minHeight: 28),
+                      constraints: const BoxConstraints(
+                        minWidth: 28,
+                        minHeight: 28,
+                      ),
                     ),
                   ],
                 ),
@@ -613,7 +614,9 @@ class _ExportFormatButtonState extends State<_ExportFormatButton> {
                     Text(
                       widget.label,
                       style: TextStyle(
-                        color: _hovered ? AppColors.textWhite : AppColors.textGray,
+                        color: _hovered
+                            ? AppColors.textWhite
+                            : AppColors.textGray,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -939,16 +942,14 @@ class _SearchBar extends StatelessWidget {
         style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
         decoration: const InputDecoration(
           hintText: 'Search by name or owner...',
-          hintStyle:
-              TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+          hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
           prefixIcon: Icon(
             Icons.search_rounded,
             color: AppColors.textSubtle,
             size: 20,
           ),
           border: InputBorder.none,
-          contentPadding:
-              EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         ),
       ),
     );
@@ -958,12 +959,11 @@ class _SearchBar extends StatelessWidget {
 // ─── Accommodation Table (wide screens) ──────────────────────────────────────
 
 class _AccommodationTable extends StatelessWidget {
-  const _AccommodationTable(
-      {required this.rows, required this.onStatusUpdate});
+  const _AccommodationTable({required this.rows, required this.onStatusUpdate});
 
   final List<Accommodation> rows;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-      onStatusUpdate;
+  onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -1008,38 +1008,62 @@ class _TableHeader extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Business Name'),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Type'),
-          )),
-          Expanded(flex: 3, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Business Line'),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Owner'),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Contact'),
-          )),
-          Expanded(flex: 1, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Rooms'),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Status'),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: _HeaderCell('Actions'),
-          )),
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Business Name'),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Type'),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Business Line'),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Owner'),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Contact'),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Rooms'),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Status'),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: _HeaderCell('Actions'),
+            ),
+          ),
         ],
       ),
     );
@@ -1068,7 +1092,7 @@ class _TableRow extends StatelessWidget {
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-      onStatusUpdate;
+  onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -1120,8 +1144,7 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.businessType.label,
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1132,8 +1155,7 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.businessLineLabel,
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1144,8 +1166,7 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.owner,
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1156,8 +1177,7 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 item.contact,
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1168,8 +1188,7 @@ class _TableRow extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 '${item.rooms}',
-                style: const TextStyle(
-                    color: AppColors.textGray, fontSize: 13),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1191,7 +1210,9 @@ class _TableRow extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _ActionButtons(
-                    item: item, onStatusUpdate: onStatusUpdate),
+                  item: item,
+                  onStatusUpdate: onStatusUpdate,
+                ),
               ),
             ),
           ),
@@ -1211,7 +1232,7 @@ class _AccommodationCardList extends StatelessWidget {
 
   final List<Accommodation> rows;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-      onStatusUpdate;
+  onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -1235,12 +1256,11 @@ class _AccommodationCardList extends StatelessWidget {
 }
 
 class _AccommodationCard extends StatelessWidget {
-  const _AccommodationCard(
-      {required this.item, required this.onStatusUpdate});
+  const _AccommodationCard({required this.item, required this.onStatusUpdate});
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-      onStatusUpdate;
+  onStatusUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -1329,8 +1349,7 @@ class _CardDetail extends StatelessWidget {
         Expanded(
           child: Text(
             value,
-            style:
-                const TextStyle(color: AppColors.textGray, fontSize: 13),
+            style: const TextStyle(color: AppColors.textGray, fontSize: 13),
           ),
         ),
       ],
@@ -1408,8 +1427,18 @@ String _formatRegisteredDate(String? rawValue) {
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return value;
   const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ];
   final local = parsed.toLocal();
   return '${monthNames[local.month - 1]} ${local.day}, ${local.year}';
@@ -1422,15 +1451,14 @@ class _ActionButtons extends StatelessWidget {
 
   final Accommodation item;
   final Function(Accommodation, AccommodationStatus, {String? remarks})
-      onStatusUpdate;
+  onStatusUpdate;
 
   Future<void> _showRemarksModal(
     BuildContext context, {
     required AccommodationStatus action,
   }) async {
     final isApprove = action == AccommodationStatus.approved;
-    final color =
-        isApprove ? const Color(0xFF00C48C) : const Color(0xFFFF4D6A);
+    final color = isApprove ? const Color(0xFF00C48C) : const Color(0xFFFF4D6A);
     final icon = isApprove
         ? Icons.check_circle_outline_rounded
         : Icons.cancel_outlined;
@@ -1473,8 +1501,7 @@ class _ActionButtons extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: color.withOpacity(0.1),
                           shape: BoxShape.circle,
-                          border:
-                              Border.all(color: color.withOpacity(0.3)),
+                          border: Border.all(color: color.withOpacity(0.3)),
                         ),
                         child: Icon(icon, color: color, size: 20),
                       ),
@@ -1532,8 +1559,7 @@ class _ActionButtons extends StatelessWidget {
                   const SizedBox(height: 4),
                   const Text(
                     'This will be visible to the business owner.',
-                    style: TextStyle(
-                        color: AppColors.textSubtle, fontSize: 12),
+                    style: TextStyle(color: AppColors.textSubtle, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -1558,18 +1584,19 @@ class _ActionButtons extends StatelessWidget {
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: AppColors.cardBorder),
+                        borderSide: const BorderSide(
+                          color: AppColors.cardBorder,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: AppColors.cardBorder),
+                        borderSide: const BorderSide(
+                          color: AppColors.cardBorder,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            BorderSide(color: color.withOpacity(0.5)),
+                        borderSide: BorderSide(color: color.withOpacity(0.5)),
                       ),
                     ),
                   ),
@@ -1604,8 +1631,7 @@ class _ActionButtons extends StatelessWidget {
 
     if (confirmed == true) {
       final remarks = remarksCtrl.text.trim();
-      onStatusUpdate(item, action,
-          remarks: remarks.isEmpty ? null : remarks);
+      onStatusUpdate(item, action, remarks: remarks.isEmpty ? null : remarks);
     }
 
     remarksCtrl.dispose();

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:tourism_app/ui/shared/pages/error_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -95,6 +96,8 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   // ── UI State ─────────────────────────────────────────────────────────────
   bool _loadingReports = false;
+  int? _errorCode; // add this
+  String? _fetchError; // add this
   bool _isGenerating = false;
   bool _showFilters = false;
   String _searchQuery = '';
@@ -150,7 +153,11 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   Future<void> _fetchReports() async {
     if (!mounted) return;
-    setState(() => _loadingReports = true);
+    setState(() {
+      _loadingReports = true;
+      _fetchError = null;
+      _errorCode = null;
+    });
     try {
       final rows = await _supabase
           .from('reports')
@@ -163,8 +170,18 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
             .map((r) => GeneratedReport.fromRow(r))
             .toList();
       });
+    } on SocketException {
+      if (!mounted) return;
+      setState(() {
+        _fetchError = 'no_internet';
+        _errorCode = 503;
+      });
     } catch (e) {
-      _showError('Failed to load reports: $e');
+      if (!mounted) return;
+      setState(() {
+        _fetchError = e.toString();
+        _errorCode = 500;
+      });
     } finally {
       if (mounted) setState(() => _loadingReports = false);
     }
@@ -309,7 +326,8 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     return list;
   }
 
-  int get _totalPages => (_filteredReports.length / _pageSize).ceil().clamp(1, 999);
+  int get _totalPages =>
+      (_filteredReports.length / _pageSize).ceil().clamp(1, 999);
 
   int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
 
@@ -340,14 +358,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
         backgroundColor: const Color(0xFF00C48C),
         behavior: behavior ?? SnackBarBehavior.fixed,
         // Only apply margin when floating to avoid layout shifts for fixed bars
-        margin: (behavior ?? SnackBarBehavior.fixed) == SnackBarBehavior.floating
+        margin:
+            (behavior ?? SnackBarBehavior.fixed) == SnackBarBehavior.floating
             ? const EdgeInsets.fromLTRB(16, 0, 16, 16)
             : null,
         duration: duration ?? const Duration(seconds: 3),
-        content: Text(
-          msg,
-          style: const TextStyle(color: Colors.white),
-        ),
+        content: Text(msg, style: const TextStyle(color: Colors.white)),
         action: (actionText != null && onActionPressed != null)
             ? SnackBarAction(
                 label: actionText,
@@ -378,105 +394,103 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       title: 'Report',
       selectedIndex: 2,
       onNavSelected: (_) {},
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 900;
-          return RefreshIndicator(
-            onRefresh: _fetchReports,
-            color: AppColors.primaryCyan,
-            backgroundColor: AppColors.cardBackground,
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.all(isNarrow ? 16 : 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Header ──
-                  _PageHeader(
-                    isNarrow: isNarrow,
-                    showFilters: _showFilters,
-                    isGenerating: _isGenerating,
-                    onFilterTap: () => setState(() => _showFilters = !_showFilters),
-                    onGenerateTap: _showGenerateDialog,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // ── Filters ──
-                  if (_showFilters) ...[
-                    _FilterSection(
-                      months: _months,
-                      years: _years,
-                      selectedMonth: _filterMonth,
-                      selectedYear: _filterYear,
-                      onMonthChanged: (v) => setState(() {
-                        _filterMonth = v ?? '';
-                        _resetPage();
-                      }),
-                      onYearChanged: (v) => setState(() {
-                        _filterYear = v ?? '';
-                        _resetPage();
-                      }),
-                      onClear: _clearFilters,
+      child: _loadingReports
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryCyan),
+            )
+          : _fetchError != null
+          ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _fetchReports)
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 900;
+                return RefreshIndicator(
+                  onRefresh: _fetchReports,
+                  color: AppColors.primaryCyan,
+                  backgroundColor: AppColors.cardBackground,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _PageHeader(
+                          isNarrow: isNarrow,
+                          showFilters: _showFilters,
+                          isGenerating: _isGenerating,
+                          onFilterTap: () =>
+                              setState(() => _showFilters = !_showFilters),
+                          onGenerateTap: _showGenerateDialog,
+                        ),
+                        const SizedBox(height: 16),
+                        if (_showFilters) ...[
+                          _FilterSection(
+                            months: _months,
+                            years: _years,
+                            selectedMonth: _filterMonth,
+                            selectedYear: _filterYear,
+                            onMonthChanged: (v) => setState(() {
+                              _filterMonth = v ?? '';
+                              _resetPage();
+                            }),
+                            onYearChanged: (v) => setState(() {
+                              _filterYear = v ?? '';
+                              _resetPage();
+                            }),
+                            onClear: _clearFilters,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        _SearchBar(
+                          controller: _searchCtrl,
+                          onChanged: (v) => setState(() {
+                            _searchQuery = v;
+                            _resetPage();
+                          }),
+                        ),
+                        const SizedBox(height: 20),
+                        _SectionLabel(
+                          icon: Icons.folder_zip_rounded,
+                          label: 'Generated Reports',
+                          subtitle: 'DAE-1B Excel files — pull down to refresh',
+                          trailing: _isGenerating
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppColors.primaryCyan,
+                                  ),
+                                )
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        _GeneratedReportsTable(
+                          rows: _pagedReports,
+                          isLoading: false,
+                          onDownload: _downloadReport,
+                        ),
+                        const SizedBox(height: 12),
+                        Paginator(
+                          currentPage: _clampedPage,
+                          totalPages: _totalPages,
+                          totalItems: _filteredReports.length,
+                          pageSize: _pageSize,
+                          pageSizeOptions: _pageSizeOptions,
+                          onPageSizeChanged: (size) => setState(() {
+                            _pageSize = size;
+                            _currentPage = 0;
+                          }),
+                          onPageChanged: (page) => setState(() {
+                            _currentPage = page;
+                          }),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                  ],
-
-                  // ── Search ──
-                  _SearchBar(
-                    controller: _searchCtrl,
-                    onChanged: (v) => setState(() {
-                      _searchQuery = v;
-                      _resetPage();
-                    }),
                   ),
-                  const SizedBox(height: 20),
-
-                  // ── Section Label ──
-                  _SectionLabel(
-                    icon: Icons.folder_zip_rounded,
-                    label: 'Generated Reports',
-                    subtitle: 'DAE-1B Excel files — pull down to refresh',
-                    trailing: _isGenerating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.primaryCyan,
-                            ),
-                          )
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // ── Table ──
-                  _GeneratedReportsTable(
-                    rows: _pagedReports,
-                    isLoading: _loadingReports,
-                    onDownload: _downloadReport,
-                  ),
-                  const SizedBox(height: 12),
-                  Paginator(
-                    currentPage: _clampedPage,
-                    totalPages: _totalPages,
-                    totalItems: _filteredReports.length,
-                    pageSize: _pageSize,
-                    pageSizeOptions: _pageSizeOptions,
-                    onPageSizeChanged: (size) => setState(() {
-                      _pageSize = size;
-                      _currentPage = 0;
-                    }),
-                    onPageChanged: (page) => setState(() {
-                      _currentPage = page;
-                    }),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 }
@@ -920,7 +934,6 @@ class _DownloadButton extends StatelessWidget {
 
 // ─── Generate Report Dialog ───────────────────────────────────────────────────
 
-
 class _GenerateReportDialog extends StatefulWidget {
   const _GenerateReportDialog({
     required this.months,
@@ -934,7 +947,8 @@ class _GenerateReportDialog extends StatefulWidget {
     required int month,
     required int year,
     required ReportSheetOptions sheetOptions,
-  }) onGenerate;
+  })
+  onGenerate;
 
   @override
   State<_GenerateReportDialog> createState() => _GenerateReportDialogState();
@@ -955,8 +969,18 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
 
   static int _monthIndex(String name) {
     const names = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return names.indexOf(name) + 1;
   }
@@ -981,23 +1005,37 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
               Row(
                 children: [
                   Container(
-                    width: 36, height: 36,
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       color: AppColors.primaryCyan.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.description_rounded,
-                        color: AppColors.primaryCyan, size: 18),
+                    child: const Icon(
+                      Icons.description_rounded,
+                      color: AppColors.primaryCyan,
+                      size: 18,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Generate DAE-1B Report',
-                          style: TextStyle(color: AppColors.textWhite,
-                              fontSize: 16, fontWeight: FontWeight.w700)),
-                      Text('All approved establishments · export as .xlsx',
-                          style: TextStyle(color: AppColors.textGray, fontSize: 11.5)),
+                      Text(
+                        'Generate DAE-1B Report',
+                        style: TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'All approved establishments · export as .xlsx',
+                        style: TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 11.5,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -1029,9 +1067,14 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
               const SizedBox(height: 18),
 
               // Sheet selection
-              const Text('Include Sheets',
-                  style: TextStyle(color: AppColors.textGray,
-                      fontSize: 12, fontWeight: FontWeight.w500)),
+              const Text(
+                'Include Sheets',
+                style: TextStyle(
+                  color: AppColors.textGray,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               const SizedBox(height: 10),
               Container(
                 decoration: BoxDecoration(
@@ -1058,7 +1101,8 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                     const Divider(color: AppColors.cardBorder, height: 1),
                     _SheetToggle(
                       label: 'Monthly Summary',
-                      subtitle: 'All 12 months of the year — all establishments',
+                      subtitle:
+                          'All 12 months of the year — all establishments',
                       value: _sheet3,
                       onChanged: (v) => setState(() => _sheet3 = v),
                       isLast: true,
@@ -1069,8 +1113,10 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
               if (!_sheet1 && !_sheet2 && !_sheet3)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Text('Select at least one sheet to generate.',
-                      style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5)),
+                  child: Text(
+                    'Select at least one sheet to generate.',
+                    style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5),
+                  ),
                 ),
               const SizedBox(height: 20),
 
@@ -1080,25 +1126,30 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel',
-                        style: TextStyle(color: AppColors.textGray, fontSize: 13)),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: AppColors.textGray, fontSize: 13),
+                    ),
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: _canGenerate
                         ? () => widget.onGenerate(
-                              month: _monthIndex(_selectedMonth!),
-                              year: int.parse(_selectedYear!),
-                              sheetOptions: ReportSheetOptions(
-                                includeDailySheet: _sheet1,
-                                includeCountrySumSheet: _sheet2,
-                                includeMonthlySummarySheet: _sheet3,
-                              ),
-                            )
+                            month: _monthIndex(_selectedMonth!),
+                            year: int.parse(_selectedYear!),
+                            sheetOptions: ReportSheetOptions(
+                              includeDailySheet: _sheet1,
+                              includeCountrySumSheet: _sheet2,
+                              includeMonthlySummarySheet: _sheet3,
+                            ),
+                          )
                         : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: _canGenerate
                             ? AppColors.primaryCyan
@@ -1108,13 +1159,22 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_awesome_rounded, size: 15,
-                              color: _canGenerate ? Colors.black : Colors.black45),
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 15,
+                            color: _canGenerate ? Colors.black : Colors.black45,
+                          ),
                           const SizedBox(width: 6),
-                          Text('Generate & Save',
-                              style: TextStyle(
-                                  color: _canGenerate ? Colors.black : Colors.black45,
-                                  fontSize: 13, fontWeight: FontWeight.w600)),
+                          Text(
+                            'Generate & Save',
+                            style: TextStyle(
+                              color: _canGenerate
+                                  ? Colors.black
+                                  : Colors.black45,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1424,10 +1484,7 @@ class _FilterDropdown extends StatelessWidget {
                 color: AppColors.textGray,
                 size: 20,
               ),
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 13,
-              ),
+              style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
               dropdownColor: AppColors.cardBackground,
               items: items
                   .map(

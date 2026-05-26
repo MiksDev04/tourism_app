@@ -1,8 +1,11 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
+import '../../shared/pages/error_page.dart';
 import '../../../api/admin_compliance_api.dart';
 import '../../shared/widgets/paginator.dart';
 
@@ -36,7 +39,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   // ── State ──────────────────────────────────────────────────────────────────
   List<BusinessActivityRecord> _allRecords = [];
   bool _isLoading = true;
-  String? _error;
+  String? _fetchError;
+  int? _errorCode;
 
   String _searchQuery = '';
   String _selectedActivityStatus = 'All Statuses';
@@ -66,7 +70,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   Future<void> _load() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _fetchError = null;
+      _errorCode = null;
     });
     try {
       final records = await AdminComplianceApi.fetchActivitySummary();
@@ -76,10 +81,27 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
           _isLoading = false;
         });
       }
+    } on SocketException catch (e) {
+      if (mounted) {
+        setState(() {
+          _fetchError = e.toString();
+          _errorCode = 503;
+          _isLoading = false;
+        });
+      }
+    } on TimeoutException catch (e) {
+      if (mounted) {
+        setState(() {
+          _fetchError = e.toString();
+          _errorCode = 408;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = e.toString();
+          _fetchError = e.toString();
+          _errorCode = 500;
           _isLoading = false;
         });
       }
@@ -210,77 +232,87 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       title: 'Compliance',
       selectedIndex: 4,
       onNavSelected: (_) {},
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 900;
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(isNarrow ? 16 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PageHeader(
-                  onRefresh: _load,
-                  totalAccommodations: _pagedRows.length,
-                ),
-                const SizedBox(height: 20),
-                if (_isLoading)
-                  _LoadingState()
-                else if (_error != null)
-                  _ErrorState(message: _error!, onRetry: _load)
-                else ...[
-                  _SummaryCards(
-                    active: _activeCount,
-                    atRisk: _atRiskCount,
-                    inactive: _inactiveCount,
-                  ),
-                  const SizedBox(height: 16),
-                  _FilterRow(
-                    searchCtrl: _searchCtrl,
-                    onSearchChanged: (v) => setState(() {
-                      _searchQuery = v;
-                      _resetPage();
-                    }),
-                    selectedActivityStatus: _selectedActivityStatus,
-                    onActivityStatusChanged: (v) => setState(() {
-                      _selectedActivityStatus = v!;
-                      _resetPage();
-                    }),
-                    selectedBusinessStatus: _selectedBusinessStatus,
-                    onBusinessStatusChanged: (v) => setState(() {
-                      _selectedBusinessStatus = v!;
-                      _resetPage();
-                    }),
-                    selectedType: _selectedBusinessLine,
-                    typeOptions: _typeOptions,
-                    onTypeChanged: (v) => setState(() {
-                      _selectedBusinessLine = v!;
-                      _resetPage();
-                    }),
-                  ),
-                  const SizedBox(height: 14),
-                  _ComplianceTable(
-                    rows: _pagedRows,
-                    onStatusChange: _handleStatusChange,
-                  ),
-                  const SizedBox(height: 12),
-                  Paginator(
-                    currentPage: _currentPage,
-                    totalPages: _totalPages,
-                    totalItems: _filtered.length,
-                    pageSize: _pageSize,
-                    pageSizeOptions: _pageSizeOptions,
-                    onPageSizeChanged: (size) => setState(() {
-                      _pageSize = size;
-                      _currentPage = 0;
-                    }),
-                    onPageChanged: (p) => setState(() => _currentPage = p),
-                  ),
-                ],
-              ],
-            ),
-          );
-        },
-      ),
+      child: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.accentGreen,
+              ),
+            )
+          : _fetchError != null
+              ? ErrorPage(
+                  statusCode: _errorCode ?? 500,
+                  onRetry: _load,
+                )
+              : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 900;
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isNarrow ? 16 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _PageHeader(
+                onRefresh: _load,
+                totalAccommodations: _pagedRows.length,
+              ),
+              const SizedBox(height: 20),
+              _SummaryCards(
+                active: _activeCount,
+                atRisk: _atRiskCount,
+                inactive: _inactiveCount,
+              ),
+              const SizedBox(height: 16),
+              _FilterRow(
+                searchCtrl: _searchCtrl,
+                onSearchChanged: (v) => setState(() {
+                  _searchQuery = v;
+                  _resetPage();
+                }),
+                selectedActivityStatus: _selectedActivityStatus,
+                onActivityStatusChanged: (v) => setState(() {
+                  _selectedActivityStatus = v!;
+                  _resetPage();
+                }),
+                selectedBusinessStatus: _selectedBusinessStatus,
+                onBusinessStatusChanged: (v) => setState(() {
+                  _selectedBusinessStatus = v!;
+                  _resetPage();
+                }),
+                selectedType: _selectedBusinessLine,
+                typeOptions: _typeOptions,
+                onTypeChanged: (v) => setState(() {
+                  _selectedBusinessLine = v!;
+                  _resetPage();
+                }),
+              ),
+              const SizedBox(height: 14),
+              _ComplianceTable(
+                rows: _pagedRows,
+                onStatusChange: _handleStatusChange,
+              ),
+              const SizedBox(height: 12),
+              Paginator(
+                currentPage: _currentPage,
+                totalPages: _totalPages,
+                totalItems: _filtered.length,
+                pageSize: _pageSize,
+                pageSizeOptions: _pageSizeOptions,
+                onPageSizeChanged: (size) => setState(() {
+                  _pageSize = size;
+                  _currentPage = 0;
+                }),
+                onPageChanged: (p) => setState(() => _currentPage = p),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -336,72 +368,6 @@ class _PageHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-// ─── Loading / Error States ───────────────────────────────────────────────────
-
-class _LoadingState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 200,
-      child: Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: AppColors.accentGreen,
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.accentRed.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.accentRed.withOpacity(0.25)),
-      ),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: AppColors.accentRed,
-            size: 28,
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Failed to load compliance data',
-            style: TextStyle(
-              color: AppColors.textWhite,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            message,
-            style: const TextStyle(color: AppColors.textGray, fontSize: 12),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 14),
-          TextButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: const Text('Retry'),
-            style: TextButton.styleFrom(foregroundColor: AppColors.accentGreen),
-          ),
-        ],
-      ),
     );
   }
 }

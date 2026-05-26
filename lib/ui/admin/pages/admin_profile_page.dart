@@ -1,7 +1,11 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:tourism_app/ui/shared/pages/error_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../router/app_router.dart';
@@ -22,10 +26,12 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   // Account Info controllers (no email field — email has its own flow)
   final _fullNameCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
-  final _phoneCtrl    = TextEditingController();
+  final _phoneCtrl = TextEditingController();
 
   bool _loadingProfile = true;
-  bool _savingInfo     = false;
+  bool _savingInfo = false;
+  String? _fetchError;
+  int? _errorCode;
 
   ProfileModel? _profile;
 
@@ -48,21 +54,42 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   // ── Data loading ─────────────────────────────────────────────────────────────
 
   Future<void> _loadProfile() async {
-    setState(() => _loadingProfile = true);
+    setState(() {
+      _loadingProfile = true;
+      _fetchError = null;
+      _errorCode = null;
+    });
     try {
       final profile = await _api.fetchProfile();
       if (!mounted) return;
       setState(() {
-        _profile           = profile;
+        _profile = profile;
         _fullNameCtrl.text = profile.fullName;
         _usernameCtrl.text = profile.username;
-        _phoneCtrl.text    = profile.phone;
-        _loadingProfile    = false;
+        _phoneCtrl.text = profile.phone;
+        _loadingProfile = false;
       });
-    } on ProfileApiException catch (e) {
+    } on SocketException {
       if (!mounted) return;
-      setState(() => _loadingProfile = false);
-      _showSnackbar(e.message, isError: true);
+      setState(() {
+        _loadingProfile = false;
+        _fetchError = 'Network error.';
+        _errorCode = 503;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _loadingProfile = false;
+        _fetchError = 'Request timed out.';
+        _errorCode = 408;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingProfile = false;
+        _fetchError = e.toString();
+        _errorCode = 500;
+      });
     }
   }
 
@@ -87,7 +114,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       await _api.updateAccountInfo(
         fullName: _fullNameCtrl.text,
         username: _usernameCtrl.text,
-        phone:    _phoneCtrl.text,
+        phone: _phoneCtrl.text,
       );
       if (!mounted) return;
       final updated = await _api.fetchProfile();
@@ -112,7 +139,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       builder: (_) => _OtpModal(
         api: _api,
         title: 'Verify Your Identity',
-        subtitle: 'A 6-digit code will be sent to your registered email to confirm it\'s you before changing your password.',
+        subtitle:
+            'A 6-digit code will be sent to your registered email to confirm it\'s you before changing your password.',
         onSendOtp: (api) => api.sendPasswordChangeOtp(),
         onVerifyOtp: (api, otp) => api.verifyPasswordChangeOtp(otp: otp),
         onVerified: () {
@@ -147,7 +175,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       builder: (_) => _OtpModal(
         api: _api,
         title: 'Verify Your Identity',
-        subtitle: 'A 6-digit code will be sent to your current email address to confirm it\'s you before changing your email.',
+        subtitle:
+            'A 6-digit code will be sent to your current email address to confirm it\'s you before changing your email.',
         onSendOtp: (api) => api.sendEmailChangeOtp(),
         onVerifyOtp: (api, otp) => api.verifyEmailChangeOtp(otp: otp),
         onVerified: () {
@@ -171,7 +200,9 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           final updated = await _api.fetchProfile();
           if (!mounted) return;
           setState(() => _profile = updated);
-          _showSnackbar('Email updated! Check your new inbox to confirm the change.');
+          _showSnackbar(
+            'Email updated! Check your new inbox to confirm the change.',
+          );
         },
       ),
     );
@@ -186,7 +217,11 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       selectedIndex: 5,
       onNavSelected: (_) {},
       child: _loadingProfile
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primaryCyan))
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryCyan),
+            )
+          : _fetchError != null
+          ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadProfile)
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -203,30 +238,29 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                         _AccountInfoCard(
                           fullNameCtrl: _fullNameCtrl,
                           usernameCtrl: _usernameCtrl,
-                          phoneCtrl:    _phoneCtrl,
-                          loading:      _savingInfo,
-                          onSave:       _saveAccountInfo,
+                          phoneCtrl: _phoneCtrl,
+                          loading: _savingInfo,
+                          onSave: _saveAccountInfo,
                         ),
                         const SizedBox(height: 16),
-                        // ── Email change card ────────────────────────────────
                         _SecureActionCard(
-                          icon:        Icons.email_outlined,
-                          title:       'Email Address',
-                          subtitle:    _profile?.email ?? '—',
+                          icon: Icons.email_outlined,
+                          title: 'Email Address',
+                          subtitle: _profile?.email ?? '—',
                           subtitleIsEmail: true,
-                          buttonIcon:  Icons.edit_outlined,
+                          buttonIcon: Icons.edit_outlined,
                           buttonLabel: 'Change Email',
-                          onPressed:   _startChangeEmailFlow,
+                          onPressed: _startChangeEmailFlow,
                         ),
                         const SizedBox(height: 16),
-                        // ── Password change card ─────────────────────────────
                         _SecureActionCard(
-                          icon:        Icons.lock_outline_rounded,
-                          title:       'Password',
-                          subtitle:    'Update your account password securely via email OTP',
-                          buttonIcon:  Icons.lock_reset_rounded,
+                          icon: Icons.lock_outline_rounded,
+                          title: 'Password',
+                          subtitle:
+                              'Update your account password securely via email OTP',
+                          buttonIcon: Icons.lock_reset_rounded,
                           buttonLabel: 'Change Password',
-                          onPressed:   _startChangePasswordFlow,
+                          onPressed: _startChangePasswordFlow,
                         ),
                       ],
                     ),
@@ -306,8 +340,8 @@ class _SecureActionCard extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           _GradientButton(
-            icon:      buttonIcon,
-            label:     buttonLabel,
+            icon: buttonIcon,
+            label: buttonLabel,
             onPressed: onPressed,
           ),
         ],
@@ -345,16 +379,17 @@ class _OtpModal extends StatefulWidget {
 }
 
 class _OtpModalState extends State<_OtpModal> {
-  final List<TextEditingController> _pinCtrl =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _pinFocus =
-      List.generate(6, (_) => FocusNode());
+  final List<TextEditingController> _pinCtrl = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _pinFocus = List.generate(6, (_) => FocusNode());
 
-  bool _sending   = true;
+  bool _sending = true;
   bool _verifying = false;
   bool _resending = false;
   String? _errorMsg;
-  bool _otpSent   = false;
+  bool _otpSent = false;
 
   @override
   void initState() {
@@ -370,49 +405,73 @@ class _OtpModalState extends State<_OtpModal> {
   }
 
   Future<void> _sendOtp() async {
-    setState(() { _sending = true; _errorMsg = null; });
+    setState(() {
+      _sending = true;
+      _errorMsg = null;
+    });
     try {
       await widget.onSendOtp(widget.api);
       if (!mounted) return;
-      setState(() { _sending = false; _otpSent = true; });
+      setState(() {
+        _sending = false;
+        _otpSent = true;
+      });
       _pinFocus[0].requestFocus();
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _sending = false; _errorMsg = e.message; });
+      setState(() {
+        _sending = false;
+        _errorMsg = e.message;
+      });
     }
   }
 
   Future<void> _resendOtp() async {
-    setState(() { _resending = true; _errorMsg = null; });
+    setState(() {
+      _resending = true;
+      _errorMsg = null;
+    });
     for (final c in _pinCtrl) c.clear();
     try {
       await widget.onSendOtp(widget.api);
       if (!mounted) return;
-      setState(() { _resending = false; _otpSent = true; });
+      setState(() {
+        _resending = false;
+        _otpSent = true;
+      });
       _pinFocus[0].requestFocus();
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _resending = false; _errorMsg = e.message; });
+      setState(() {
+        _resending = false;
+        _errorMsg = e.message;
+      });
     }
   }
 
   String get _otpValue => _pinCtrl.map((c) => c.text).join();
 
   Future<void> _verify() async {
-    setState(() { _verifying = true; _errorMsg = null; });
+    setState(() {
+      _verifying = true;
+      _errorMsg = null;
+    });
     try {
       await widget.onVerifyOtp(widget.api, _otpValue);
       if (!mounted) return;
       widget.onVerified();
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _verifying = false; _errorMsg = e.message; });
+      setState(() {
+        _verifying = false;
+        _errorMsg = e.message;
+      });
     }
   }
 
   void _onPinChanged(String value, int index) {
     if (value.length == 1 && index < 5) _pinFocus[index + 1].requestFocus();
-    if (value.isEmpty && index > 0)     _pinFocus[index - 1].requestFocus();
+    if (value.isEmpty && index > 0) _pinFocus[index - 1].requestFocus();
     setState(() {});
   }
 
@@ -467,45 +526,54 @@ class _OtpModalState extends State<_OtpModal> {
             if (!_sending) ...[
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(6, (i) => Container(
-                  width: 46,
-                  height: 54,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  child: TextField(
-                    controller: _pinCtrl[i],
-                    focusNode: _pinFocus[i],
-                    maxLength: 1,
-                    keyboardType: TextInputType.number,
-                    textAlign: TextAlign.center,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
+                children: List.generate(
+                  6,
+                  (i) => Container(
+                    width: 46,
+                    height: 54,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    child: TextField(
+                      controller: _pinCtrl[i],
+                      focusNode: _pinFocus[i],
+                      maxLength: 1,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        filled: true,
+                        fillColor: AppColors.inputBackground,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.inputBorder,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.inputBorder,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: const BorderSide(
+                            color: AppColors.primaryCyan,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      onChanged: (v) => _onPinChanged(v, i),
                     ),
-                    decoration: InputDecoration(
-                      counterText: '',
-                      filled: true,
-                      fillColor: AppColors.inputBackground,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.inputBorder),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppColors.inputBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(
-                            color: AppColors.primaryCyan, width: 2),
-                      ),
-                    ),
-                    onChanged: (v) => _onPinChanged(v, i),
                   ),
-                )),
+                ),
               ),
 
               if (_errorMsg != null) ...[
@@ -518,10 +586,10 @@ class _OtpModalState extends State<_OtpModal> {
               SizedBox(
                 width: double.infinity,
                 child: _GradientButton(
-                  icon:      Icons.verified_outlined,
-                  label:     'Verify Code',
-                  loading:   _verifying,
-                  enabled:   _otpValue.length == 6,
+                  icon: Icons.verified_outlined,
+                  label: 'Verify Code',
+                  loading: _verifying,
+                  enabled: _otpValue.length == 6,
                   onPressed: _verify,
                 ),
               ),
@@ -535,18 +603,25 @@ class _OtpModalState extends State<_OtpModal> {
                     onPressed: _resending ? null : _resendOtp,
                     child: _resending
                         ? const SizedBox(
-                            width: 12, height: 12,
+                            width: 12,
+                            height: 12,
                             child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                color: AppColors.textGray),
+                              strokeWidth: 1.5,
+                              color: AppColors.textGray,
+                            ),
                           )
                         : const Text(
                             'Resend Code',
                             style: TextStyle(
-                                color: AppColors.primaryCyan, fontSize: 12),
+                              color: AppColors.primaryCyan,
+                              fontSize: 12,
+                            ),
                           ),
                   ),
-                  const Text('·', style: TextStyle(color: AppColors.textSubtle)),
+                  const Text(
+                    '·',
+                    style: TextStyle(color: AppColors.textSubtle),
+                  ),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text(
@@ -577,14 +652,14 @@ class _ChangePasswordModal extends StatefulWidget {
 }
 
 class _ChangePasswordModalState extends State<_ChangePasswordModal> {
-  final _oldPassCtrl     = TextEditingController();
-  final _newPassCtrl     = TextEditingController();
+  final _oldPassCtrl = TextEditingController();
+  final _newPassCtrl = TextEditingController();
   final _confirmPassCtrl = TextEditingController();
 
-  bool _obscureOld     = true;
-  bool _obscureNew     = true;
+  bool _obscureOld = true;
+  bool _obscureNew = true;
   bool _obscureConfirm = true;
-  bool _loading        = false;
+  bool _loading = false;
   String? _errorMsg;
 
   @override
@@ -596,18 +671,24 @@ class _ChangePasswordModalState extends State<_ChangePasswordModal> {
   }
 
   Future<void> _submit() async {
-    setState(() { _loading = true; _errorMsg = null; });
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
     try {
       await widget.api.verifyOldPassword(oldPassword: _oldPassCtrl.text);
       await widget.api.updatePassword(
-        newPassword:     _newPassCtrl.text,
+        newPassword: _newPassCtrl.text,
         confirmPassword: _confirmPassCtrl.text,
       );
       if (!mounted) return;
       widget.onSuccess();
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _errorMsg = e.message; });
+      setState(() {
+        _loading = false;
+        _errorMsg = e.message;
+      });
     }
   }
 
@@ -624,41 +705,42 @@ class _ChangePasswordModalState extends State<_ChangePasswordModal> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ModalHeader(
-              icon:     Icons.lock_reset_rounded,
-              title:    'Set New Password',
+              icon: Icons.lock_reset_rounded,
+              title: 'Set New Password',
               subtitle: 'Identity verified. Enter your new password below.',
             ),
             const Divider(color: AppColors.cardBorder, height: 28),
             _ModalField(
               label: 'Current Password',
-              icon:  Icons.lock_outline_rounded,
+              icon: Icons.lock_outline_rounded,
               child: _PasswordField(
                 controller: _oldPassCtrl,
-                obscure:    _obscureOld,
-                hint:       'Enter your current password',
-                onToggle:   () => setState(() => _obscureOld = !_obscureOld),
+                obscure: _obscureOld,
+                hint: 'Enter your current password',
+                onToggle: () => setState(() => _obscureOld = !_obscureOld),
               ),
             ),
             const SizedBox(height: 16),
             _ModalField(
               label: 'New Password',
-              icon:  Icons.lock_open_outlined,
+              icon: Icons.lock_open_outlined,
               child: _PasswordField(
                 controller: _newPassCtrl,
-                obscure:    _obscureNew,
-                hint:       'Min. 8 chars, 1 uppercase, 1 number, 1 special',
-                onToggle:   () => setState(() => _obscureNew = !_obscureNew),
+                obscure: _obscureNew,
+                hint: 'Min. 8 chars, 1 uppercase, 1 number, 1 special',
+                onToggle: () => setState(() => _obscureNew = !_obscureNew),
               ),
             ),
             const SizedBox(height: 16),
             _ModalField(
               label: 'Confirm New Password',
-              icon:  Icons.check_circle_outline_rounded,
+              icon: Icons.check_circle_outline_rounded,
               child: _PasswordField(
                 controller: _confirmPassCtrl,
-                obscure:    _obscureConfirm,
-                hint:       'Re-enter your new password',
-                onToggle:   () => setState(() => _obscureConfirm = !_obscureConfirm),
+                obscure: _obscureConfirm,
+                hint: 'Re-enter your new password',
+                onToggle: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
               ),
             ),
             const SizedBox(height: 6),
@@ -672,11 +754,11 @@ class _ChangePasswordModalState extends State<_ChangePasswordModal> {
             ],
             const SizedBox(height: 22),
             _ModalActions(
-              loading:       _loading,
-              confirmLabel:  'Update Password',
-              confirmIcon:   Icons.lock_reset_rounded,
-              onConfirm:     _submit,
-              onCancel:      () => Navigator.of(context).pop(),
+              loading: _loading,
+              confirmLabel: 'Update Password',
+              confirmIcon: Icons.lock_reset_rounded,
+              onConfirm: _submit,
+              onCancel: () => Navigator.of(context).pop(),
             ),
           ],
         ),
@@ -705,7 +787,7 @@ class _ChangeEmailModal extends StatefulWidget {
 class _ChangeEmailModalState extends State<_ChangeEmailModal> {
   final _newEmailCtrl = TextEditingController();
 
-  bool _loading    = false;
+  bool _loading = false;
   String? _errorMsg;
 
   @override
@@ -715,19 +797,24 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
   }
 
   Future<void> _submit() async {
-    setState(() { _loading = true; _errorMsg = null; });
+    setState(() {
+      _loading = true;
+      _errorMsg = null;
+    });
     try {
       await widget.api.updateEmail(newEmail: _newEmailCtrl.text);
       if (!mounted) return;
       widget.onSuccess();
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _errorMsg = e.message; });
+      setState(() {
+        _loading = false;
+        _errorMsg = e.message;
+      });
     }
   }
 
   @override
-
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,
@@ -740,24 +827,29 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ModalHeader(
-              icon:     Icons.email_outlined,
-              title:    'Change Email Address',
-              subtitle: 'Identity verified. Enter your new email address below.',
+              icon: Icons.email_outlined,
+              title: 'Change Email Address',
+              subtitle:
+                  'Identity verified. Enter your new email address below.',
             ),
             const Divider(color: AppColors.cardBorder, height: 28),
 
             // Current email (read-only display)
             _ModalField(
               label: 'Current Email',
-              icon:  Icons.inbox_outlined,
+              icon: Icons.inbox_outlined,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 13,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.inputBackground.withOpacity(0.5),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                      color: AppColors.inputBorder.withOpacity(0.4)),
+                    color: AppColors.inputBorder.withOpacity(0.4),
+                  ),
                 ),
                 child: Text(
                   widget.currentEmail,
@@ -773,16 +865,20 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
 
             _ModalField(
               label: 'New Email Address',
-              icon:  Icons.email_outlined,
+              icon: Icons.email_outlined,
               child: TextField(
                 controller: _newEmailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(
-                    color: AppColors.textWhite, fontSize: 13.5),
+                  color: AppColors.textWhite,
+                  fontSize: 13.5,
+                ),
                 decoration: _inputDecoration().copyWith(
                   hintText: 'Enter new email address',
                   hintStyle: const TextStyle(
-                      color: AppColors.textSubtle, fontSize: 12.5),
+                    color: AppColors.textSubtle,
+                    fontSize: 12.5,
+                  ),
                 ),
               ),
             ),
@@ -801,11 +897,11 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
 
             const SizedBox(height: 22),
             _ModalActions(
-              loading:      _loading,
+              loading: _loading,
               confirmLabel: 'Update Email',
-              confirmIcon:  Icons.save_outlined,
-              onConfirm:    _submit,
-              onCancel:     () => Navigator.of(context).pop(),
+              confirmIcon: Icons.save_outlined,
+              onConfirm: _submit,
+              onCancel: () => Navigator.of(context).pop(),
             ),
           ],
         ),
@@ -843,16 +939,19 @@ class _ModalHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  )),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: const TextStyle(
-                      color: AppColors.textGray, fontSize: 12)),
+              Text(
+                subtitle,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -881,9 +980,9 @@ class _ModalActions extends StatelessWidget {
       children: [
         Expanded(
           child: _GradientButton(
-            icon:      confirmIcon,
-            label:     confirmLabel,
-            loading:   loading,
+            icon: confirmIcon,
+            label: confirmLabel,
+            loading: loading,
             onPressed: onConfirm,
           ),
         ),
@@ -894,9 +993,9 @@ class _ModalActions extends StatelessWidget {
             foregroundColor: AppColors.textGray,
             side: const BorderSide(color: AppColors.inputBorder),
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(9)),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 20, vertical: 11),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
           ),
           child: const Text('Cancel', style: TextStyle(fontSize: 13.5)),
         ),
@@ -920,16 +1019,20 @@ class _ModalField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          Icon(icon, color: AppColors.textGray, size: 13),
-          const SizedBox(width: 5),
-          Text(label,
+        Row(
+          children: [
+            Icon(icon, color: AppColors.textGray, size: 13),
+            const SizedBox(width: 5),
+            Text(
+              label,
               style: const TextStyle(
                 color: AppColors.textGray,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
-              )),
-        ]),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 7),
         child,
       ],
@@ -957,8 +1060,7 @@ class _PasswordField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: _inputDecoration().copyWith(
         hintText: hint,
-        hintStyle: const TextStyle(
-            color: AppColors.textSubtle, fontSize: 12.5),
+        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
         suffixIcon: IconButton(
           icon: Icon(
             obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
@@ -986,14 +1088,22 @@ class _ErrorBanner extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: Colors.red.withOpacity(0.3)),
       ),
-      child: Row(children: [
-        const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(message,
-              style: const TextStyle(color: Colors.redAccent, fontSize: 12.5)),
-        ),
-      ]),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.redAccent,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12.5),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1023,16 +1133,19 @@ class _GradientButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: active
               ? const LinearGradient(
-                  colors: [AppColors.gradientStart, AppColors.gradientEnd])
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                )
               : null,
           color: active ? null : AppColors.inputBackground,
           borderRadius: BorderRadius.circular(9),
           boxShadow: active
-              ? [BoxShadow(
-                  color: AppColors.primaryBlue.withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 3),
-                )]
+              ? [
+                  BoxShadow(
+                    color: AppColors.primaryBlue.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
               : [],
         ),
         child: ElevatedButton(
@@ -1042,25 +1155,31 @@ class _GradientButton extends StatelessWidget {
             shadowColor: Colors.transparent,
             disabledBackgroundColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(9)),
+              borderRadius: BorderRadius.circular(9),
+            ),
           ),
           child: loading
               ? const SizedBox(
-                  width: 18, height: 18,
+                  width: 18,
+                  height: 18,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: AppColors.primaryCyan),
+                    strokeWidth: 2,
+                    color: AppColors.primaryCyan,
+                  ),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(icon, size: 16, color: Colors.white),
                     const SizedBox(width: 8),
-                    Text(label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                        )),
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
         ),
@@ -1091,7 +1210,6 @@ class _PageHeader extends StatelessWidget {
           'Manage your account information',
           style: TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
-        
       ],
     );
   }
@@ -1105,15 +1223,16 @@ class _ProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name    = profile?.fullName ?? '—';
-    final email   = profile?.email    ?? '—';
+    final name = profile?.fullName ?? '—';
+    final email = profile?.email ?? '—';
     final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
 
     return _SectionCard(
       child: Row(
         children: [
           Container(
-            width: 64, height: 64,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
@@ -1123,28 +1242,33 @@ class _ProfileCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
             child: Center(
-              child: Text(initial,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w700,
-                  )),
+              child: Text(
+                initial,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
           const SizedBox(width: 18),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  )),
+              Text(
+                name,
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               const SizedBox(height: 3),
-              Text(email,
-                  style: const TextStyle(
-                      color: AppColors.textGray, fontSize: 13)),
+              Text(
+                email,
+                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              ),
               const SizedBox(height: 8),
               _RoleBadge(role: profile?.role ?? 'admin'),
             ],
@@ -1178,17 +1302,22 @@ class _RoleBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6, height: 6,
+            width: 6,
+            height: 6,
             decoration: const BoxDecoration(
-                color: AppColors.primaryCyan, shape: BoxShape.circle),
+              color: AppColors.primaryCyan,
+              shape: BoxShape.circle,
+            ),
           ),
           const SizedBox(width: 6),
-          Text(_label,
-              style: const TextStyle(
-                color: AppColors.primaryCyan,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-              )),
+          Text(
+            _label,
+            style: const TextStyle(
+              color: AppColors.primaryCyan,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1217,44 +1346,53 @@ class _AccountInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.person_outline_rounded,
-                color: AppColors.primaryCyan, size: 18),
-            SizedBox(width: 8),
-            Text('Account Information',
+          const Row(
+            children: [
+              Icon(
+                Icons.person_outline_rounded,
+                color: AppColors.primaryCyan,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Account Information',
                 style: TextStyle(
                   color: AppColors.textWhite,
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                )),
-          ]),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
-          Row(children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Full Name',
-                child: _InputField(controller: fullNameCtrl),
+          Row(
+            children: [
+              Expanded(
+                child: _LabeledField(
+                  label: 'Full Name',
+                  child: _InputField(controller: fullNameCtrl),
+                ),
               ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _LabeledField(
-                label: 'Username',
-                child: _InputField(controller: usernameCtrl),
+              const SizedBox(width: 14),
+              Expanded(
+                child: _LabeledField(
+                  label: 'Username',
+                  child: _InputField(controller: usernameCtrl),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
           const SizedBox(height: 16),
           _LabeledField(
             label: 'Phone Number',
-            icon:  Icons.phone_outlined,
+            icon: Icons.phone_outlined,
             child: _PhoneInputField(controller: phoneCtrl),
           ),
           const SizedBox(height: 22),
           _GradientButton(
-            icon:      Icons.save_outlined,
-            label:     'Save Changes',
-            loading:   loading,
+            icon: Icons.save_outlined,
+            label: 'Save Changes',
+            loading: loading,
             onPressed: onSave,
           ),
         ],
@@ -1303,23 +1441,28 @@ class _LabeledField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(children: [
-          if (icon != null) ...[
-            Icon(icon, color: AppColors.textGray, size: 14),
-            const SizedBox(width: 5),
-          ],
-          Text(label,
+        Row(
+          children: [
+            if (icon != null) ...[
+              Icon(icon, color: AppColors.textGray, size: 14),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              label,
               style: const TextStyle(
                 color: AppColors.textGray,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w500,
-              )),
-        ]),
+              ),
+            ),
+          ],
+        ),
         if (hint != null) ...[
           const SizedBox(height: 2),
-          Text(hint!,
-              style: const TextStyle(
-                  color: AppColors.textSubtle, fontSize: 10.5)),
+          Text(
+            hint!,
+            style: const TextStyle(color: AppColors.textSubtle, fontSize: 10.5),
+          ),
         ],
         const SizedBox(height: 7),
         child,
@@ -1368,24 +1511,24 @@ class _PhoneInputField extends StatelessWidget {
 // ─── Shared Input Decoration ──────────────────────────────────────────────────
 
 InputDecoration _inputDecoration() => InputDecoration(
-      filled: true,
-      fillColor: AppColors.inputBackground,
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
-      ),
-      disabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: AppColors.inputBorder.withOpacity(0.4)),
-      ),
-    );
+  filled: true,
+  fillColor: AppColors.inputBackground,
+  isDense: true,
+  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.inputBorder),
+  ),
+  enabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.inputBorder),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+  ),
+  disabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: BorderSide(color: AppColors.inputBorder.withOpacity(0.4)),
+  ),
+);

@@ -1,5 +1,8 @@
 // ignore_for_file: avoid_print
 
+import 'dart:async';
+import 'dart:io';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,14 +61,17 @@ class AdminProfileApi {
 
   String get _uid {
     final id = _client.auth.currentUser?.id;
-    if (id == null) throw const ProfileApiException('No authenticated user found.');
+    if (id == null)
+      throw const ProfileApiException('No authenticated user found.');
     return id;
   }
 
   String get _currentEmail {
     final email = _client.auth.currentUser?.email;
     if (email == null || email.isEmpty) {
-      throw const ProfileApiException('Authenticated user has no email address.');
+      throw const ProfileApiException(
+        'Authenticated user has no email address.',
+      );
     }
     return email;
   }
@@ -78,11 +84,17 @@ class AdminProfileApi {
     try {
       final row = await _client
           .from('profiles')
-          .select('id, full_name, username, email, phone, role, created_at, updated_at')
+          .select(
+            'id, full_name, username, email, phone, role, created_at, updated_at',
+          )
           .eq('id', _uid)
           .single();
       return ProfileModel.fromMap(row);
     } on ProfileApiException {
+      rethrow;
+    } on SocketException {
+      rethrow;
+    } on TimeoutException {
       rethrow;
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
@@ -107,11 +119,14 @@ class AdminProfileApi {
     await _assertUsernameAvailable(username, _uid);
 
     try {
-      await _client.from('profiles').update({
-        'full_name': fullName.trim(),
-        'username': username.trim(),
-        'phone': phone.trim(),
-      }).eq('id', _uid);
+      await _client
+          .from('profiles')
+          .update({
+            'full_name': fullName.trim(),
+            'username': username.trim(),
+            'phone': phone.trim(),
+          })
+          .eq('id', _uid);
       await _client.auth.refreshSession();
     } on PostgrestException catch (e) {
       throw ProfileApiException(_postgrestMessage(e));
@@ -170,7 +185,9 @@ class AdminProfileApi {
       }
       throw ProfileApiException('Verification failed: ${e.message}');
     } catch (e) {
-      throw ProfileApiException('Unexpected error verifying current password: $e');
+      throw ProfileApiException(
+        'Unexpected error verifying current password: $e',
+      );
     }
   }
 
@@ -342,7 +359,10 @@ class AdminProfileApi {
     }
   }
 
-  Future<void> _assertUsernameAvailable(String username, String currentUid) async {
+  Future<void> _assertUsernameAvailable(
+    String username,
+    String currentUid,
+  ) async {
     try {
       final existing = await _client
           .from('profiles')
@@ -366,7 +386,8 @@ class AdminProfileApi {
     final detail = e.details?.toString().toLowerCase() ?? '';
     final code = e.code ?? '';
     if (code == '23505') {
-      if (detail.contains('username')) return 'That username is already in use.';
+      if (detail.contains('username'))
+        return 'That username is already in use.';
       if (detail.contains('email')) return 'That email is already registered.';
       return 'A duplicate value already exists.';
     }
@@ -387,10 +408,14 @@ class _Validators {
     final s = v.trim();
     if (s.isEmpty) throw const ProfileApiException('Full name is required.');
     if (s.length < 2) {
-      throw const ProfileApiException('Full name must be at least 2 characters.');
+      throw const ProfileApiException(
+        'Full name must be at least 2 characters.',
+      );
     }
     if (s.length > 100) {
-      throw const ProfileApiException('Full name must not exceed 100 characters.');
+      throw const ProfileApiException(
+        'Full name must not exceed 100 characters.',
+      );
     }
     if (!RegExp(r"^[a-zA-Z\s\-'.]+$").hasMatch(s)) {
       throw const ProfileApiException(
@@ -403,10 +428,14 @@ class _Validators {
     final s = v.trim();
     if (s.isEmpty) throw const ProfileApiException('Username is required.');
     if (s.length < 3) {
-      throw const ProfileApiException('Username must be at least 3 characters.');
+      throw const ProfileApiException(
+        'Username must be at least 3 characters.',
+      );
     }
     if (s.length > 30) {
-      throw const ProfileApiException('Username must not exceed 30 characters.');
+      throw const ProfileApiException(
+        'Username must not exceed 30 characters.',
+      );
     }
     if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(s)) {
       throw const ProfileApiException(
@@ -417,7 +446,8 @@ class _Validators {
 
   void email(String v) {
     final s = v.trim();
-    if (s.isEmpty) throw const ProfileApiException('Email address is required.');
+    if (s.isEmpty)
+      throw const ProfileApiException('Email address is required.');
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(s)) {
       throw const ProfileApiException('Please enter a valid email address.');
     }
@@ -427,16 +457,22 @@ class _Validators {
 
   void phone(String v) {
     final stripped = v.trim().replaceAll(RegExp(r'[-\s]'), '');
-    if (stripped.isEmpty) throw const ProfileApiException('Phone number is required.');
+    if (stripped.isEmpty)
+      throw const ProfileApiException('Phone number is required.');
     if (!_phoneRe.hasMatch(stripped)) {
-      throw const ProfileApiException('Use format 09XX-XXX-XXXX or +639XXXXXXXXX.');
+      throw const ProfileApiException(
+        'Use format 09XX-XXX-XXXX or +639XXXXXXXXX.',
+      );
     }
   }
 
   void password(String pass, String confirm) {
-    if (pass.isEmpty) throw const ProfileApiException('New password is required.');
+    if (pass.isEmpty)
+      throw const ProfileApiException('New password is required.');
     if (pass.length < 8) {
-      throw const ProfileApiException('Password must be at least 8 characters long.');
+      throw const ProfileApiException(
+        'Password must be at least 8 characters long.',
+      );
     }
     if (!RegExp(r'[A-Z]').hasMatch(pass)) {
       throw const ProfileApiException(
@@ -453,7 +489,8 @@ class _Validators {
         'Password must contain at least one special character (e.g. @, #, !).',
       );
     }
-    if (pass != confirm) throw const ProfileApiException('Passwords do not match.');
+    if (pass != confirm)
+      throw const ProfileApiException('Passwords do not match.');
   }
 }
 

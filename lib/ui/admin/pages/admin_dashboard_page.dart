@@ -1,4 +1,5 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -37,6 +38,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   bool _loadingTrend = true;
   bool _exporting = false;
   String? _dashError;
+  int? _errorCode;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
   @override
@@ -50,6 +52,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     setState(() {
       _loadingDash = true;
       _dashError = null;
+      _errorCode = null;
     });
     try {
       final data = await _api.fetchDashboardData(
@@ -57,8 +60,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         year: _selectedYear,
       );
       if (mounted) setState(() => _dashData = data);
+    } on SocketException {
+      if (mounted) {
+        setState(() {
+          _dashError = 'no_internet';
+          _errorCode = 503;
+        });
+      }
+    } on TimeoutException {
+      if (mounted)
+        setState(() {
+          _dashError = 'timeout';
+          _errorCode = 408;
+        });
     } catch (e) {
-      if (mounted) setState(() => _dashError = e.toString());
+      if (mounted)
+        setState(() {
+          _dashError = e.toString();
+          _errorCode = 500;
+        });
     } finally {
       if (mounted) setState(() => _loadingDash = false);
     }
@@ -543,123 +563,119 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       title: 'Dashboard',
       selectedIndex: 0,
       onNavSelected: (_) {},
-      child: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 600;
-                final isMedium = constraints.maxWidth < 900;
+      child: _loadingDash
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryCyan),
+            )
+          : _dashError != null
+          ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadDashboard)
+          : Stack(
+              children: [
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isNarrow = constraints.maxWidth < 600;
+                      final isMedium = constraints.maxWidth < 900;
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isNarrow) ...[
-                      _DashboardHeader(
-                        selectedMonth: _selectedMonth,
-                        selectedYear: _selectedYear,
-                      ),
-                      const SizedBox(height: 12),
-                      _FilterRow(
-                        selectedMonth: _selectedMonth,
-                        selectedYear: _selectedYear,
-                        onMonthChanged: (m) {
-                          setState(() => _selectedMonth = m);
-                          _loadDashboard();
-                        },
-                        onYearChanged: (y) {
-                          setState(() => _selectedYear = y);
-                          _loadDashboard();
-                        },
-                        onExport: _exporting ? null : _showExportMenu,
-                        isExporting: _exporting,
-                      ),
-                    ] else ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: _DashboardHeader(
+                          if (isNarrow) ...[
+                            _DashboardHeader(
                               selectedMonth: _selectedMonth,
                               selectedYear: _selectedYear,
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          _FilterRow(
+                            const SizedBox(height: 12),
+                            _FilterRow(
+                              selectedMonth: _selectedMonth,
+                              selectedYear: _selectedYear,
+                              onMonthChanged: (m) {
+                                setState(() => _selectedMonth = m);
+                                _loadDashboard();
+                              },
+                              onYearChanged: (y) {
+                                setState(() => _selectedYear = y);
+                                _loadDashboard();
+                              },
+                              onExport: _exporting ? null : _showExportMenu,
+                              isExporting: _exporting,
+                            ),
+                          ] else ...[
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: _DashboardHeader(
+                                    selectedMonth: _selectedMonth,
+                                    selectedYear: _selectedYear,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                _FilterRow(
+                                  selectedMonth: _selectedMonth,
+                                  selectedYear: _selectedYear,
+                                  onMonthChanged: (m) {
+                                    setState(() => _selectedMonth = m);
+                                    _loadDashboard();
+                                  },
+                                  onYearChanged: (y) {
+                                    setState(() => _selectedYear = y);
+                                    _loadDashboard();
+                                  },
+                                  onExport: _exporting ? null : _showExportMenu,
+                                  isExporting: _exporting,
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          _StatCards(
+                            stats: _dashData!.stats,
                             selectedMonth: _selectedMonth,
                             selectedYear: _selectedYear,
-                            onMonthChanged: (m) {
-                              setState(() => _selectedMonth = m);
-                              _loadDashboard();
-                            },
-                            onYearChanged: (y) {
-                              setState(() => _selectedYear = y);
-                              _loadDashboard();
-                            },
-                            onExport: _exporting ? null : _showExportMenu,
-                            isExporting: _exporting,
+                            isNarrow: isNarrow,
                           ),
+                          const SizedBox(height: 20),
+                          _DonutChartsRow(
+                            genderDist: _dashData!.genderDistribution,
+                            topNationalities: _dashData!.topNationalities,
+                            topRegions: _dashData!.topRegions,
+                            isNarrow: isNarrow,
+                            isMedium: isMedium,
+                          ),
+                          const SizedBox(height: 20),
+                          _TrendCard(
+                            trendData: _trendData,
+                            year1: _trendYear1,
+                            year2: _trendYear2,
+                            isLoading: _loadingTrend,
+                            onYear1Changed: (y) {
+                              setState(() => _trendYear1 = y);
+                              _loadTrend();
+                            },
+                            onYear2Changed: (y) {
+                              setState(() => _trendYear2 = y);
+                              _loadTrend();
+                            },
+                          ),
+                          const SizedBox(height: 32),
                         ],
+                      );
+                    },
+                  ),
+                ),
+                if (_exporting)
+                  Container(
+                    color: Colors.black45,
+                    child: const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.primaryCyan,
                       ),
-                    ],
-                    const SizedBox(height: 20),
-                    if (_loadingDash)
-                      const _LoadingSection(height: 120)
-                    else if (_dashError != null)
-                      ErrorPage(
-                        statusCode:
-                            503, // or whatever code you get from your API
-                        onRetry: _loadDashboard,
-                      )
-                    else ...[
-                      _StatCards(
-                        stats: _dashData!.stats,
-                        selectedMonth: _selectedMonth,
-                        selectedYear: _selectedYear,
-                        isNarrow: isNarrow,
-                      ),
-                      const SizedBox(height: 20),
-                      _DonutChartsRow(
-                        genderDist: _dashData!.genderDistribution,
-                        topNationalities: _dashData!.topNationalities,
-                        topRegions: _dashData!.topRegions,
-                        isNarrow: isNarrow,
-                        isMedium: isMedium,
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    _TrendCard(
-                      trendData: _trendData,
-                      year1: _trendYear1,
-                      year2: _trendYear2,
-                      isLoading: _loadingTrend,
-                      onYear1Changed: (y) {
-                        setState(() => _trendYear1 = y);
-                        _loadTrend();
-                      },
-                      onYear2Changed: (y) {
-                        setState(() => _trendYear2 = y);
-                        _loadTrend();
-                      },
                     ),
-                    const SizedBox(height: 32),
-                  ],
-                );
-              },
+                  ),
+              ],
             ),
-          ),
-
-          // ── Exporting overlay ─────────────────────────────────────────────
-          if (_exporting)
-            Container(
-              color: Colors.black45,
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryCyan),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
