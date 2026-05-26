@@ -1,10 +1,16 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path/path.dart' as p;
+import 'package:tourism_app/ui/shared/pages/error_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_dashboard_api.dart';
-// import removed: session_service not used in this file
 
 // ─── Admin Dashboard Page ─────────────────────────────────────────────────────
 
@@ -29,6 +35,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Map<int, List<MonthlyCount>> _trendData = {};
   bool _loadingDash = true;
   bool _loadingTrend = true;
+  bool _exporting = false;
   String? _dashError;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -71,6 +78,464 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     }
   }
 
+  // ── Exports ───────────────────────────────────────────────────────────────────
+
+  Future<Directory> _exportDirectory() async {
+    final downloads = await getDownloadsDirectory();
+    if (downloads != null) return downloads;
+    return getTemporaryDirectory();
+  }
+
+  String _exportLabel() {
+    return _selectedMonth == 0
+        ? '$_selectedYear'
+        : '${_monthShort(_selectedMonth)}_$_selectedYear';
+  }
+
+  String _csvCell(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  /// Replaces Unicode punctuation Helvetica can't render with plain ASCII.
+  String _pdfSafe(String s) => s
+      .replaceAll('\u2014', '-')
+      .replaceAll('\u2013', '-')
+      .replaceAll('—', '-')
+      .replaceAll('–', '-');
+
+  // ── CSV Export ────────────────────────────────────────────────────────────────
+
+  Future<void> _exportCsv() async {
+    setState(() => _exporting = true);
+    try {
+      final d = _dashData;
+      if (d == null) return;
+
+      final periodLabel = _selectedMonth == 0
+          ? 'Full Year $_selectedYear'
+          : '${_monthName(_selectedMonth)} $_selectedYear';
+
+      final buf = StringBuffer();
+
+      // ── Header info ────────────────────────────────────────────────────────
+      buf.writeln('City,San Pablo City');
+      buf.writeln('Period,${_csvCell(periodLabel)}');
+      buf.writeln();
+
+      // ── Summary ────────────────────────────────────────────────────────────
+      buf.writeln('SUMMARY');
+      buf.writeln('Metric,Value');
+      buf.writeln('Active Accommodations,${d.stats.activeAccommodations}');
+      buf.writeln('Tourists This Period,${d.stats.touristsThisPeriod}');
+      buf.writeln('Pending Registrations,${d.stats.pendingRegistrations}');
+      buf.writeln('Total Tourists This Year,${d.stats.touristsThisYear}');
+      buf.writeln();
+
+      // ── Gender Distribution ────────────────────────────────────────────────
+      buf.writeln('GENDER DISTRIBUTION');
+      buf.writeln('Gender,Count,Percentage');
+      buf.writeln(
+        'Male,${d.genderDistribution.male},'
+        '${(d.genderDistribution.maleRatio * 100).toStringAsFixed(1)}%',
+      );
+      buf.writeln(
+        'Female,${d.genderDistribution.female},'
+        '${(d.genderDistribution.femaleRatio * 100).toStringAsFixed(1)}%',
+      );
+      buf.writeln();
+
+      // ── Top Nationalities ──────────────────────────────────────────────────
+      buf.writeln('TOP 5 COUNTRIES/NATIONALITIES');
+      buf.writeln('Nationality,Tourists');
+      for (final n in d.topNationalities) {
+        buf.writeln('${_csvCell(n.nationality)},${n.count}');
+      }
+      buf.writeln();
+
+      // ── Top Local Regions ──────────────────────────────────────────────────
+      buf.writeln('TOP LOCAL REGIONS (Philippine Visitors)');
+      buf.writeln('Region,Tourists');
+      for (final r in d.topRegions) {
+        buf.writeln('${_csvCell(r.region)},${r.count}');
+      }
+      buf.writeln();
+
+      // ── Tourist Trend ──────────────────────────────────────────────────────
+      final y1Data =
+          _trendData[_trendYear1] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+      final y2Data =
+          _trendData[_trendYear2] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+
+      buf.writeln('TOURIST TREND - $_trendYear1 vs $_trendYear2');
+      buf.writeln('Month,$_trendYear1 Tourists,$_trendYear2 Tourists');
+      for (int i = 0; i < 12; i++) {
+        final y1Count = i < y1Data.length ? y1Data[i].count : 0;
+        final y2Count = i < y2Data.length ? y2Data[i].count : 0;
+        buf.writeln('${_monthName(i + 1)},$y1Count,$y2Count');
+      }
+
+      final dir = await _exportDirectory();
+      final file = File(
+        p.join(dir.path, 'admin_dashboard_${_exportLabel()}.csv'),
+      );
+      await file.writeAsString('\uFEFF${buf.toString()}', flush: true);
+
+      final result = await OpenFile.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showSnack('CSV saved to ${file.path}. ${result.message}');
+      } else {
+        _showSnack('CSV exported to ${file.path}');
+      }
+    } catch (e) {
+      _showSnack('Export failed: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  // ── PDF Export ────────────────────────────────────────────────────────────────
+
+  Future<void> _exportPdf() async {
+    setState(() => _exporting = true);
+    try {
+      final d = _dashData;
+      if (d == null) return;
+
+      final doc = pw.Document();
+      final label = _selectedMonth == 0
+          ? 'Full Year $_selectedYear'
+          : '${_monthName(_selectedMonth)} $_selectedYear';
+
+      final y1Data =
+          _trendData[_trendYear1] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+      final y2Data =
+          _trendData[_trendYear2] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          header: (_) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'San Pablo City Tourism',
+                style: pw.TextStyle(
+                  fontSize: 18,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                _pdfSafe('Dashboard Report - $label'),
+                style: const pw.TextStyle(fontSize: 11),
+              ),
+              pw.Divider(),
+            ],
+          ),
+          build: (_) => [
+            // ── Summary ──────────────────────────────────────────────────────
+            pw.Text(
+              'Summary',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Metric', 'Value'],
+              data: [
+                ['Active Accommodations', '${d.stats.activeAccommodations}'],
+                ['Tourists This Period', '${d.stats.touristsThisPeriod}'],
+                ['Pending Registrations', '${d.stats.pendingRegistrations}'],
+                ['Total Tourists This Year', '${d.stats.touristsThisYear}'],
+              ],
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Gender Distribution ───────────────────────────────────────────
+            pw.Text(
+              'Gender Distribution',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Gender', 'Count', 'Percentage'],
+              data: [
+                [
+                  'Male',
+                  '${d.genderDistribution.male}',
+                  '${(d.genderDistribution.maleRatio * 100).toStringAsFixed(1)}%',
+                ],
+                [
+                  'Female',
+                  '${d.genderDistribution.female}',
+                  '${(d.genderDistribution.femaleRatio * 100).toStringAsFixed(1)}%',
+                ],
+              ],
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Top Nationalities ─────────────────────────────────────────────
+            pw.Text(
+              'Top 5 Countries/Nationalities',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Nationality', 'Tourists'],
+              data: d.topNationalities
+                  .map((n) => [n.nationality, '${n.count}'])
+                  .toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Top Local Regions ─────────────────────────────────────────────
+            pw.Text(
+              'Top Local Regions (Philippine Visitors)',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Region', 'Tourists'],
+              data: d.topRegions.map((r) => [r.region, '${r.count}']).toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Tourist Trend ─────────────────────────────────────────────────
+            pw.Text(
+              'Tourist Trend - $_trendYear1 vs $_trendYear2',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Monthly tourist arrivals - year-over-year comparison',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: [
+                'Month',
+                '$_trendYear1 Tourists',
+                '$_trendYear2 Tourists',
+              ],
+              data: List.generate(12, (i) {
+                final y1Count = i < y1Data.length ? y1Data[i].count : 0;
+                final y2Count = i < y2Data.length ? y2Data[i].count : 0;
+                return [_monthName(i + 1), '$y1Count', '$y2Count'];
+              }),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final dir = await _exportDirectory();
+      final file = File(
+        p.join(dir.path, 'admin_dashboard_${_exportLabel()}.pdf'),
+      );
+      await file.writeAsBytes(await doc.save(), flush: true);
+
+      final result = await OpenFile.open(file.path);
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showSnack('PDF saved to ${file.path}. ${result.message}');
+      } else {
+        _showSnack('PDF exported to ${file.path}');
+      }
+    } catch (e) {
+      _showSnack('PDF export failed: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  // ── Export Modal ──────────────────────────────────────────────────────────────
+
+  void _showExportMenu() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: AppColors.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.cardBorder),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Icon badge ────────────────────────────────────────────────
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.upload_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Title ─────────────────────────────────────────────────────
+                const Text(
+                  'Export Report',
+                  style: TextStyle(
+                    color: AppColors.textWhite,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _selectedMonth == 0
+                      ? 'Full Year $_selectedYear'
+                      : '${_monthName(_selectedMonth)} $_selectedYear',
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ── CSV option ────────────────────────────────────────────────
+                _ExportDialogOption(
+                  icon: Icons.table_chart_rounded,
+                  color: AppColors.accentGreen,
+                  title: 'Export as CSV',
+                  subtitle: 'Summary, distribution & trend data',
+                  onTap: () {
+                    Navigator.pop(dialogCtx);
+                    _exportCsv();
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // ── PDF option ────────────────────────────────────────────────
+                _ExportDialogOption(
+                  icon: Icons.picture_as_pdf_rounded,
+                  color: AppColors.accentOrange,
+                  title: 'Export as PDF',
+                  subtitle: 'Formatted report document',
+                  onTap: () {
+                    Navigator.pop(dialogCtx);
+                    _exportPdf();
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // ── Cancel ────────────────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: AppColors.cardBorder),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.accentGreen),
+    );
+  }
+
+  // ── Label helpers ─────────────────────────────────────────────────────────────
+
+  static String _monthName(int m) => const [
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][m];
+
+  static String _monthShort(int m) => const [
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][m];
+
   // ── Build ──────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -78,45 +543,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       title: 'Dashboard',
       selectedIndex: 0,
       onNavSelected: (_) {},
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 600;
-            final isMedium = constraints.maxWidth < 900;
+      child: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 600;
+                final isMedium = constraints.maxWidth < 900;
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (isNarrow) ...[
-                  _DashboardHeader(
-                    selectedMonth: _selectedMonth,
-                    selectedYear: _selectedYear,
-                  ),
-                  const SizedBox(height: 12),
-                  _FilterRow(
-                    selectedMonth: _selectedMonth,
-                    selectedYear: _selectedYear,
-                    onMonthChanged: (m) {
-                      setState(() => _selectedMonth = m);
-                      _loadDashboard();
-                    },
-                    onYearChanged: (y) {
-                      setState(() => _selectedYear = y);
-                      _loadDashboard();
-                    },
-                  ),
-                ] else ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: _DashboardHeader(
-                          selectedMonth: _selectedMonth,
-                          selectedYear: _selectedYear,
-                        ),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isNarrow) ...[
+                      _DashboardHeader(
+                        selectedMonth: _selectedMonth,
+                        selectedYear: _selectedYear,
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(height: 12),
                       _FilterRow(
                         selectedMonth: _selectedMonth,
                         selectedYear: _selectedYear,
@@ -128,50 +572,171 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           setState(() => _selectedYear = y);
                           _loadDashboard();
                         },
+                        onExport: _exporting ? null : _showExportMenu,
+                        isExporting: _exporting,
+                      ),
+                    ] else ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: _DashboardHeader(
+                              selectedMonth: _selectedMonth,
+                              selectedYear: _selectedYear,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          _FilterRow(
+                            selectedMonth: _selectedMonth,
+                            selectedYear: _selectedYear,
+                            onMonthChanged: (m) {
+                              setState(() => _selectedMonth = m);
+                              _loadDashboard();
+                            },
+                            onYearChanged: (y) {
+                              setState(() => _selectedYear = y);
+                              _loadDashboard();
+                            },
+                            onExport: _exporting ? null : _showExportMenu,
+                            isExporting: _exporting,
+                          ),
+                        ],
                       ),
                     ],
-                  ),
-                ],
-                const SizedBox(height: 20),
-                if (_loadingDash)
-                  const _LoadingSection(height: 120)
-                else if (_dashError != null)
-                  _ErrorSection(message: _dashError!)
-                else ...[
-                  _StatCards(
-                    stats: _dashData!.stats,
-                    selectedMonth: _selectedMonth,
-                    selectedYear: _selectedYear,
-                    isNarrow: isNarrow,
-                  ),
-                  const SizedBox(height: 20),
-                  _DonutChartsRow(
-                    genderDist: _dashData!.genderDistribution,
-                    topNationalities: _dashData!.topNationalities,
-                    topRegions: _dashData!.topRegions,
-                    isNarrow: isNarrow,
-                    isMedium: isMedium,
-                  ),
-                ],
-                const SizedBox(height: 20),
-                _TrendCard(
-                  trendData: _trendData,
-                  year1: _trendYear1,
-                  year2: _trendYear2,
-                  isLoading: _loadingTrend,
-                  onYear1Changed: (y) {
-                    setState(() => _trendYear1 = y);
-                    _loadTrend();
-                  },
-                  onYear2Changed: (y) {
-                    setState(() => _trendYear2 = y);
-                    _loadTrend();
-                  },
+                    const SizedBox(height: 20),
+                    if (_loadingDash)
+                      const _LoadingSection(height: 120)
+                    else if (_dashError != null)
+                      ErrorPage(
+                        statusCode:
+                            503, // or whatever code you get from your API
+                        onRetry: _loadDashboard,
+                      )
+                    else ...[
+                      _StatCards(
+                        stats: _dashData!.stats,
+                        selectedMonth: _selectedMonth,
+                        selectedYear: _selectedYear,
+                        isNarrow: isNarrow,
+                      ),
+                      const SizedBox(height: 20),
+                      _DonutChartsRow(
+                        genderDist: _dashData!.genderDistribution,
+                        topNationalities: _dashData!.topNationalities,
+                        topRegions: _dashData!.topRegions,
+                        isNarrow: isNarrow,
+                        isMedium: isMedium,
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    _TrendCard(
+                      trendData: _trendData,
+                      year1: _trendYear1,
+                      year2: _trendYear2,
+                      isLoading: _loadingTrend,
+                      onYear1Changed: (y) {
+                        setState(() => _trendYear1 = y);
+                        _loadTrend();
+                      },
+                      onYear2Changed: (y) {
+                        setState(() => _trendYear2 = y);
+                        _loadTrend();
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                );
+              },
+            ),
+          ),
+
+          // ── Exporting overlay ─────────────────────────────────────────────
+          if (_exporting)
+            Container(
+              color: Colors.black45,
+              child: const Center(
+                child: CircularProgressIndicator(color: AppColors.primaryCyan),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Export Dialog Option ─────────────────────────────────────────────────────
+
+class _ExportDialogOption extends StatelessWidget {
+  const _ExportDialogOption({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.25)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 32),
-              ],
-            );
-          },
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: color.withOpacity(0.7),
+                size: 14,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -190,16 +755,26 @@ class _DashboardHeader extends StatelessWidget {
   final int selectedYear;
 
   String get _periodLabel {
-    if (selectedMonth == 0) return 'San Pablo City — Full Year $selectedYear';
-    return 'San Pablo City — ${_monthName(selectedMonth)} $selectedYear';
+    if (selectedMonth == 0)
+      return 'San Pablo City \u2014 Full Year $selectedYear';
+    return 'San Pablo City \u2014 ${_monthName(selectedMonth)} $selectedYear';
   }
 
   static String _monthName(int m) => const [
-        '',
-        'January', 'February', 'March', 'April',
-        'May', 'June', 'July', 'August',
-        'September', 'October', 'November', 'December',
-      ][m];
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][m];
 
   @override
   Widget build(BuildContext context) {
@@ -232,12 +807,16 @@ class _FilterRow extends StatelessWidget {
     required this.selectedYear,
     required this.onMonthChanged,
     required this.onYearChanged,
+    required this.onExport,
+    required this.isExporting,
   });
 
   final int selectedMonth;
   final int selectedYear;
   final ValueChanged<int> onMonthChanged;
   final ValueChanged<int> onYearChanged;
+  final VoidCallback? onExport;
+  final bool isExporting;
 
   static const _months = [
     (0, 'All Months'),
@@ -285,6 +864,7 @@ class _FilterRow extends StatelessWidget {
             icon: Icons.event_rounded,
           ),
         ),
+        _ExportButton(onTap: onExport, isLoading: isExporting),
       ],
     );
   }
@@ -328,7 +908,10 @@ class _FilterDropdown<T> extends StatelessWidget {
                   color: AppColors.textGray,
                   size: 18,
                 ),
-                style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 13,
+                ),
                 onChanged: (v) {
                   if (v != null) onChanged(v);
                 },
@@ -344,6 +927,55 @@ class _FilterDropdown<T> extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExportButton extends StatelessWidget {
+  const _ExportButton({required this.onTap, required this.isLoading});
+
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.gradientStart, AppColors.gradientEnd],
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isLoading)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            else
+              const Icon(Icons.upload_rounded, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            const Text(
+              'Export',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -370,10 +1002,21 @@ class _StatCards extends StatelessWidget {
     final currentYear = DateTime.now().year;
     if (selectedYear < currentYear) return 'Full Year $selectedYear';
     final months = const [
-      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      '',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
-    return 'Jan – ${months[DateTime.now().month]} $selectedYear';
+    return 'Jan \u2013 ${months[DateTime.now().month]} $selectedYear';
   }
 
   @override
@@ -490,7 +1133,10 @@ class _StatCard extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 sub!,
-                style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+                style: const TextStyle(
+                  color: AppColors.textSubtle,
+                  fontSize: 11,
+                ),
               ),
             ] else
               const SizedBox(height: 17),
@@ -521,7 +1167,9 @@ class _DonutChartsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final genderCard = _GenderDonut(dist: genderDist);
-    final nationalitiesCard = _NationalitiesDonut(nationalities: topNationalities);
+    final nationalitiesCard = _NationalitiesDonut(
+      nationalities: topNationalities,
+    );
     final regionsCard = _RegionsDonut(regions: topRegions);
 
     if (isNarrow) {
@@ -633,7 +1281,9 @@ class _NationalitiesDonut extends StatelessWidget {
 
     final total = nationalities.fold<int>(0, (s, n) => s + n.count);
     final segments = nationalities.asMap().entries.map((e) {
-      final ratio = total == 0 ? 1 / nationalities.length : e.value.count / total;
+      final ratio = total == 0
+          ? 1 / nationalities.length
+          : e.value.count / total;
       return _Segment(
         value: ratio,
         color: _colors[e.key % _colors.length],
@@ -642,7 +1292,9 @@ class _NationalitiesDonut extends StatelessWidget {
       );
     }).toList();
 
-    final legend = nationalities.asMap().entries
+    final legend = nationalities
+        .asMap()
+        .entries
         .map(
           (e) => _LegendItem(
             label: e.value.nationality,
@@ -658,8 +1310,6 @@ class _NationalitiesDonut extends StatelessWidget {
     );
   }
 }
-
-// ─── Transport Donut ──────────────────────────────────────────────────────────
 
 // ─── Regions Donut ────────────────────────────────────────────────────────────
 
@@ -701,7 +1351,9 @@ class _RegionsDonut extends StatelessWidget {
       );
     }).toList();
 
-    final legend = regions.asMap().entries
+    final legend = regions
+        .asMap()
+        .entries
         .map(
           (e) => _LegendItem(
             label: e.value.region,
@@ -717,7 +1369,6 @@ class _RegionsDonut extends StatelessWidget {
     );
   }
 }
-
 
 // ─── Shared Donut Card ────────────────────────────────────────────────────────
 
@@ -787,9 +1438,11 @@ class _TrendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chartHeight = MediaQuery.of(context).size.width < 500 ? 180.0 : 220.0;
-    final y1Data = trendData[year1] ??
+    final y1Data =
+        trendData[year1] ??
         List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
-    final y2Data = trendData[year2] ??
+    final y2Data =
+        trendData[year2] ??
         List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
 
     return _DashCard(
@@ -816,7 +1469,7 @@ class _TrendCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Monthly tourist arrivals — year-over-year comparison',
+            'Monthly tourist arrivals \u2014 year-over-year comparison',
             style: TextStyle(color: AppColors.textSubtle, fontSize: 11),
           ),
           const SizedBox(height: 16),
@@ -999,7 +1652,8 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
       final groupX = leftPad + i * groupW + groupW / 2 - barW - gap / 2;
 
       final x1 = groupX;
-      final h1 = (widget.year1Data[i].count / effectiveMax) * chartH * _ctrl.value;
+      final h1 =
+          (widget.year1Data[i].count / effectiveMax) * chartH * _ctrl.value;
       if (pos.dx >= x1 && pos.dx <= x1 + barW && pos.dy >= chartH - h1) {
         if (_hoveredMonth != i || _hoveredIsYear2) {
           setState(() {
@@ -1011,7 +1665,8 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
       }
 
       final x2 = groupX + barW + gap;
-      final h2 = (widget.year2Data[i].count / effectiveMax) * chartH * _ctrl.value;
+      final h2 =
+          (widget.year2Data[i].count / effectiveMax) * chartH * _ctrl.value;
       if (pos.dx >= x2 && pos.dx <= x2 + barW && pos.dy >= chartH - h2) {
         if (_hoveredMonth != i || !_hoveredIsYear2) {
           setState(() {
@@ -1050,8 +1705,18 @@ class _ComparisonBarPainter extends CustomPainter {
   static const _color2 = AppColors.chartCyan;
 
   static const _monthLabels = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -1091,7 +1756,6 @@ class _ComparisonBarPainter extends CustomPainter {
     for (int i = 0; i < 12; i++) {
       final groupX = leftPad + i * groupW + groupW / 2 - barW - gap / 2;
 
-      // ── Year 1 bar ───────────────────────────────────────────────────────────
       final v1 = year1Data[i].count;
       final h1 = (v1 / effectiveMax) * chartH * animValue;
       final isHov1 = hoveredMonth == i && !hoveredIsYear2;
@@ -1116,7 +1780,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Year 2 bar ───────────────────────────────────────────────────────────
       final v2 = year2Data[i].count;
       final h2 = (v2 / effectiveMax) * chartH * animValue;
       final isHov2 = hoveredMonth == i && hoveredIsYear2;
@@ -1142,7 +1805,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Tooltip ──────────────────────────────────────────────────────────────
       if (hoveredMonth == i) {
         final isY2 = hoveredIsYear2;
         final hov = isY2 ? h2 : h1;
@@ -1159,7 +1821,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Month label ──────────────────────────────────────────────────────────
       _drawText(
         canvas,
         _monthLabels[i],
@@ -1427,7 +2088,6 @@ class _DonutChartState extends State<_DonutChart>
 
     double angle = math.atan2(dy, dx);
     angle = (angle + math.pi * 2) % (math.pi * 2);
-    // Map atan2 angle to arc position: top=0, right=π/2, bottom=π, left=3π/2
     final startAngle = (angle + math.pi / 2) % (math.pi * 2);
 
     double acc = 0;
@@ -1605,8 +2265,11 @@ class _ErrorSection extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: Colors.redAccent, size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.redAccent,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

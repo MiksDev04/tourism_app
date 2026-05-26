@@ -10,7 +10,6 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../../api/admin_accommodation_api.dart';
 
@@ -250,11 +249,20 @@ class AccommodationExportService {
       );
 
       final pdfBytes = await doc.save();
+      final fileName = _buildFileName('pdf');
+      final path = await _saveToDevice(fileName, pdfBytes);
+      if (path == null) throw Exception('Failed to save file to device.');
+
       if (!context.mounted) return;
 
-      await Printing.sharePdf(
-        bytes: pdfBytes,
-        filename: _buildFileName('pdf'),
+      _showSnack(
+        context,
+        'PDF saved:\n$path',
+        action: SnackBarAction(
+          label: 'OPEN',
+          textColor: const Color(0xFF22D3EE),
+          onPressed: () => OpenFile.open(path),
+        ),
       );
     } catch (e) {
       debugPrint('❌ PDF export error: $e');

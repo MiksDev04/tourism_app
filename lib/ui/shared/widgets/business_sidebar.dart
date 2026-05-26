@@ -117,7 +117,6 @@ class _BusinessSidebarState extends State<BusinessSidebar> {
                       .toList(),
                 ),
               ),
-              _SidebarFooter(),
             ],
           ),
         );
@@ -313,42 +312,3 @@ class _NavTile extends StatelessWidget {
   }
 }
 
-// ─── Sidebar Footer ───────────────────────────────────────────────────────────
-
-class _SidebarFooter extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.cardBorder)),
-      ),
-      child: Center(
-        child: GestureDetector(
-          onTap: () async {
-            // Clear local session before navigating away
-            await SessionService.instance.clear();
-            if (context.mounted) {
-              Navigator.pushReplacementNamed(context, AppRoutes.login);
-            }
-          },
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.logout_rounded, color: AppColors.textGray, size: 16),
-              SizedBox(width: 8),
-              Text(
-                'Logout',
-                style: TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

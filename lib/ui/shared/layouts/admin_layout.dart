@@ -117,7 +117,7 @@ class AdminBottomNavBar extends StatelessWidget {
     ),
     NavItem(
       icon: Icons.bar_chart_rounded,
-      label: 'Reports',
+      label: 'Report',
       index: 2,
       route: AppRoutes.adminReports,
     ),

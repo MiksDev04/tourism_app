@@ -38,7 +38,8 @@ String _displayBusinessLineLabel(String raw) {
 }
 
 String _displayBusinessLines(List<String>? values) {
-  final lines = values?.where((value) => value.trim().isNotEmpty).toList() ?? [];
+  final lines =
+      values?.where((value) => value.trim().isNotEmpty).toList() ?? [];
   if (lines.isEmpty) return '—';
   return lines.map(_displayBusinessLineLabel).join(', ');
 }
@@ -173,20 +174,103 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         : '${_monthShort(_selectedMonth)}_$_selectedYear';
   }
 
+  String _pdfSafe(String s) => s
+    .replaceAll('–', '-')
+    .replaceAll('—', '-')
+    .replaceAll('\u2013', '-')
+    .replaceAll('\u2014', '-');
+
+  // Wraps a CSV cell value in quotes if it contains a comma or quote.
+  String _csvCell(String value) {
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
+  }
+
+  // ── CSV Export ────────────────────────────────────────────────────────────────
+
   Future<void> _exportCsv() async {
     setState(() => _exporting = true);
     try {
-      if (_businessId == null) throw Exception('Business account not found.');
-      final csv = await _api.generateCsv(
-        businessId: _businessId!,
-        businessName: _businessName,
-        month: _selectedMonth,
-        year: _selectedYear,
+      final d = _dashData;
+      if (d == null) return;
+
+      final periodLabel = _selectedMonth == 0
+          ? 'Full Year $_selectedYear'
+          : '${_monthName(_selectedMonth)} $_selectedYear';
+      final businessLineText = _displayBusinessLines(_businessLine);
+
+      final buf = StringBuffer();
+
+      // ── Header info ────────────────────────────────────────────────────────
+      buf.writeln('Business,${_csvCell(_businessName)}');
+      buf.writeln('Business Line,${_csvCell(businessLineText)}');
+      buf.writeln('Address,${_csvCell(_address)}');
+      buf.writeln('Period,${_csvCell(periodLabel)}');
+      buf.writeln();
+
+      // ── Summary ────────────────────────────────────────────────────────────
+      buf.writeln('SUMMARY');
+      buf.writeln('Metric,Value');
+      buf.writeln('Guests This Month/Period,${d.stats.guestsThisMonth}');
+      buf.writeln('Guests This Year,${d.stats.guestsThisYear}');
+      buf.writeln(
+        'Avg. Length of Stay,${d.stats.avgLengthOfStay.toStringAsFixed(1)} nights',
       );
+      buf.writeln('Total Rooms,${d.stats.totalRooms}');
+      buf.writeln();
+
+      // ── Sex Distribution ───────────────────────────────────────────────────
+      buf.writeln('SEX DISTRIBUTION');
+      buf.writeln('Sex,Count,Percentage');
+      buf.writeln(
+        'Male,${d.sexDistribution.male},'
+        '${(d.sexDistribution.maleRatio * 100).toStringAsFixed(1)}%',
+      );
+      buf.writeln(
+        'Female,${d.sexDistribution.female},'
+        '${(d.sexDistribution.femaleRatio * 100).toStringAsFixed(1)}%',
+      );
+      buf.writeln();
+
+      // ── Top Countries ──────────────────────────────────────────────────────
+      buf.writeln('TOP COUNTRIES');
+      buf.writeln('Country,Guests');
+      for (final c in d.topCountries) {
+        buf.writeln('${_csvCell(c.country)},${c.count}');
+      }
+      buf.writeln();
+
+      // ── Top Local Regions ──────────────────────────────────────────────────
+      buf.writeln('TOP LOCAL REGIONS (Philippine Visitors)');
+      buf.writeln('Region,Guests');
+      for (final r in d.topRegions) {
+        buf.writeln('${_csvCell(r.region)},${r.count}');
+      }
+      buf.writeln();
+
+      // ── Tourist Trend ──────────────────────────────────────────────────────
+      final y1Data =
+          _trendData[_trendYear1] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+      final y2Data =
+          _trendData[_trendYear2] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+
+      buf.writeln('TOURIST TREND – $_trendYear1 vs $_trendYear2');
+      buf.writeln('Month,$_trendYear1 Guests,$_trendYear2 Guests');
+      for (int i = 0; i < 12; i++) {
+        final y1Count = i < y1Data.length ? y1Data[i].count : 0;
+        final y2Count = i < y2Data.length ? y2Data[i].count : 0;
+        buf.writeln('${_monthName(i + 1)},$y1Count,$y2Count');
+      }
+
       final dir = await _exportDirectory();
-      final label = _exportLabel();
-      final file = File(p.join(dir.path, 'guests_$label.csv'));
-      await file.writeAsString(csv, flush: true);
+      final labelFile = _exportLabel();
+      final file = File(p.join(dir.path, 'dashboard_$labelFile.csv'));
+      await file.writeAsString('\uFEFF${buf.toString()}', flush: true);
+
       final result = await OpenFile.open(file.path);
       if (!mounted) return;
       if (result.type != ResultType.done) {
@@ -201,6 +285,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     }
   }
 
+  // ── PDF Export ────────────────────────────────────────────────────────────────
+
   Future<void> _exportPdf() async {
     setState(() => _exporting = true);
     try {
@@ -212,6 +298,14 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
           ? 'Full Year $_selectedYear'
           : '${_monthName(_selectedMonth)} $_selectedYear';
       final businessLineText = _displayBusinessLines(_businessLine);
+
+      // Trend data
+      final y1Data =
+          _trendData[_trendYear1] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+      final y2Data =
+          _trendData[_trendYear2] ??
+          List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
 
       doc.addPage(
         pw.MultiPage(
@@ -236,14 +330,14 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
               ),
               pw.Text(
-                'Dashboard Report – $label',
+                _pdfSafe('Dashboard Report – $label'),
                 style: const pw.TextStyle(fontSize: 11),
               ),
               pw.Divider(),
             ],
           ),
           build: (_) => [
-            // Stats
+            // ── Summary ──────────────────────────────────────────────────────
             pw.Text(
               'Summary',
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -268,7 +362,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             ),
             pw.SizedBox(height: 16),
 
-            // sex
+            // ── Sex Distribution ──────────────────────────────────────────────
             pw.Text(
               'Sex Distribution',
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -296,7 +390,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             ),
             pw.SizedBox(height: 16),
 
-            // Countries
+            // ── Top Countries ─────────────────────────────────────────────────
             pw.Text(
               'Top Countries',
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -315,7 +409,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             ),
             pw.SizedBox(height: 16),
 
-            // Regions
+            // ── Top Local Regions ─────────────────────────────────────────────
             pw.Text(
               'Top Local Regions (Philippine Visitors)',
               style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
@@ -324,6 +418,32 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             pw.Table.fromTextArray(
               headers: ['Region', 'Guests'],
               data: d.topRegions.map((r) => [r.region, '${r.count}']).toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Tourist Trend ─────────────────────────────────────────────────
+            pw.Text(
+              _pdfSafe('Tourist Trend – $_trendYear1 vs $_trendYear2'),
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              _pdfSafe('Monthly guest arrivals — year-over-year comparison'),
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Month', '$_trendYear1 Guests', '$_trendYear2 Guests'],
+              data: List.generate(12, (i) {
+                final y1Count = i < y1Data.length ? y1Data[i].count : 0;
+                final y2Count = i < y2Data.length ? y2Data[i].count : 0;
+                return [_monthName(i + 1), '$y1Count', '$y2Count'];
+              }),
               cellStyle: const pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -352,85 +472,128 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     }
   }
 
+  // ── Export Modal (centered dialog) ────────────────────────────────────────────
+
   void _showExportMenu() {
-    showModalBottomSheet<void>(
+    showDialog<void>(
       context: context,
-      backgroundColor: AppColors.cardBackground,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.cardBorder,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Export Report',
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
+      barrierDismissible: true,
+      builder: (dialogCtx) => Dialog(
+        backgroundColor: AppColors.cardBackground,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppColors.cardBorder),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Icon badge ──────────────────────────────────────────────────
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.upload_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+
+                // ── Title ───────────────────────────────────────────────────────
+                const Text(
+                  'Export Report',
+                  style: TextStyle(
+                    color: AppColors.textWhite,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _selectedMonth == 0
+                      ? 'Full Year $_selectedYear'
+                      : '${_monthName(_selectedMonth)} $_selectedYear',
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // ── CSV option ──────────────────────────────────────────────────
+                _ExportDialogOption(
+                  icon: Icons.table_chart_rounded,
+                  color: AppColors.accentGreen,
+                  title: 'Export as CSV',
+                  subtitle: 'Summary, distribution & trend data',
+                  onTap: () {
+                    Navigator.pop(dialogCtx);
+                    _exportCsv();
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // ── PDF option ──────────────────────────────────────────────────
+                _ExportDialogOption(
+                  icon: Icons.picture_as_pdf_rounded,
+                  color: AppColors.accentOrange,
+                  title: 'Export as PDF',
+                  subtitle: 'Formatted report document',
+                  onTap: () {
+                    Navigator.pop(dialogCtx);
+                    _exportPdf();
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // ── Cancel ──────────────────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: const BorderSide(color: AppColors.cardBorder),
+                      ),
+                    ),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                _selectedMonth == 0
-                    ? 'Full Year $_selectedYear'
-                    : '${_monthName(_selectedMonth)} $_selectedYear',
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-              ),
-            ),
-            const SizedBox(height: 20),
-            _ExportTile(
-              icon: Icons.table_chart_rounded,
-              color: AppColors.accentGreen,
-              title: 'Export as CSV',
-              subtitle: 'Spreadsheet-ready guest data',
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                _exportCsv();
-              },
-            ),
-            _ExportTile(
-              icon: Icons.picture_as_pdf_rounded,
-              color: AppColors.accentOrange,
-              title: 'Export as PDF',
-              subtitle: 'Formatted report document',
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                _exportPdf();
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+          ),
         ),
       ),
     );
   }
 
   void _showSnack(String msg) {
-  if (!mounted) return;   // ADD THIS
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(msg),
-      backgroundColor: AppColors.cardBackground,
-    ),
-  );
-}
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.accentGreen),
+    );
+  }
 
   // ── Build ──────────────────────────────────────────────────────────────────────
 
@@ -586,6 +749,85 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     'Nov',
     'Dec',
   ][m];
+}
+
+// ─── Export Dialog Option ─────────────────────────────────────────────────────
+
+class _ExportDialogOption extends StatelessWidget {
+  const _ExportDialogOption({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withOpacity(0.25)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: color.withOpacity(0.7),
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ─── Hotel Header ─────────────────────────────────────────────────────────────
@@ -1039,7 +1281,6 @@ class _sexDonut extends StatelessWidget {
     final total = dist.total;
     final maleP = total == 0 ? 0 : ((dist.maleRatio * 100).round());
     final femaleP = total == 0 ? 0 : ((dist.femaleRatio * 100).round());
-    // otherP removed: not used
 
     final segments = [
       _Segment(
@@ -1047,7 +1288,7 @@ class _sexDonut extends StatelessWidget {
         color: AppColors.chartCyan,
         label: 'Male',
         percentage: '$maleP%',
-        count: dist.male, // ADD
+        count: dist.male,
         isEmpty: total == 0,
       ),
       _Segment(
@@ -1055,7 +1296,7 @@ class _sexDonut extends StatelessWidget {
         color: AppColors.chartPurple,
         label: 'Female',
         percentage: '$femaleP%',
-        count: dist.female, // ADD
+        count: dist.female,
         isEmpty: total == 0,
       ),
     ];
@@ -1113,7 +1354,7 @@ class _CountriesDonut extends StatelessWidget {
         color: _colors[e.key % _colors.length],
         label: e.value.country,
         percentage: '$pct%',
-        count: e.value.count, // ADD
+        count: e.value.count,
       );
     }).toList();
 
@@ -1174,7 +1415,7 @@ class _RegionsDonut extends StatelessWidget {
         color: _colors[e.key % _colors.length],
         label: e.value.region,
         percentage: '$pct%',
-        count: e.value.count, 
+        count: e.value.count,
       );
     }).toList();
 
@@ -1281,11 +1522,9 @@ class _TouristTrendCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             children: [
               const Expanded(child: _CardTitle(title: 'Tourist Trend')),
-              // Year pickers
               _YearPill(
                 year: year1,
                 color: AppColors.chartPurple,
@@ -1397,7 +1636,6 @@ class _ComparisonBarChart extends StatefulWidget {
 class _ComparisonBarChartState extends State<_ComparisonBarChart>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
-  // _hoveredBar removed: not used
   bool _hoveredIsYear2 = false;
   int _hoveredMonth = -1;
 
@@ -1488,7 +1726,6 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
     for (int i = 0; i < 12; i++) {
       final groupX = leftPad + i * groupW + groupW / 2 - barW - gap / 2;
 
-      // Year1 bar
       final x1 = groupX;
       final h1 =
           (widget.year1Data[i].count / effectiveMax) * chartH * _ctrl.value;
@@ -1502,7 +1739,6 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
         return;
       }
 
-      // Year2 bar
       final x2 = groupX + barW + gap;
       final h2 =
           (widget.year2Data[i].count / effectiveMax) * chartH * _ctrl.value;
@@ -1572,7 +1808,6 @@ class _ComparisonBarPainter extends CustomPainter {
     final maxVal = allVals.isEmpty ? 0 : allVals.reduce(math.max);
     final effectiveMax = maxVal == 0 ? 10.0 : (maxVal * 1.25).ceilToDouble();
 
-    // Grid lines
     final gridPaint = Paint()
       ..color = AppColors.cardBorder
       ..strokeWidth = 0.5;
@@ -1596,7 +1831,6 @@ class _ComparisonBarPainter extends CustomPainter {
     for (int i = 0; i < 12; i++) {
       final groupX = leftPad + i * groupW + groupW / 2 - barW - gap / 2;
 
-      // ── Year 1 bar ───────────────────────────────────────────────────────────
       final v1 = year1Data[i].count;
       final h1 = (v1 / effectiveMax) * chartH * animValue;
       final isHov1 = hoveredMonth == i && !hoveredIsYear2;
@@ -1622,7 +1856,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Year 2 bar ───────────────────────────────────────────────────────────
       final v2 = year2Data[i].count;
       final h2 = (v2 / effectiveMax) * chartH * animValue;
       final isHov2 = hoveredMonth == i && hoveredIsYear2;
@@ -1649,7 +1882,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Tooltip ──────────────────────────────────────────────────────────────
       if (hoveredMonth == i) {
         final isY2 = hoveredIsYear2;
         final hov = isY2 ? h2 : h1;
@@ -1666,7 +1898,6 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      // ── Month label ──────────────────────────────────────────────────────────
       final labelX = leftPad + i * groupW + groupW / 2 - 10;
       _drawText(
         canvas,
@@ -1677,7 +1908,6 @@ class _ComparisonBarPainter extends CustomPainter {
       );
     }
 
-    // ── Legend ───────────────────────────────────────────────────────────────────
     _drawLegend(canvas, size, chartH + 22);
   }
 
@@ -1690,7 +1920,6 @@ class _ComparisonBarPainter extends CustomPainter {
       fontSize: size.width < 400 ? 9 : 11,
     );
 
-    // Year 1 dot + label
     final p1 = Paint()..color = _color1;
     canvas.drawCircle(Offset(size.width / 2 - 60, y + dotR), dotR, p1);
     _drawText(
@@ -1701,7 +1930,6 @@ class _ComparisonBarPainter extends CustomPainter {
       60,
     );
 
-    // Year 2 dot + label
     final p2 = Paint()..color = _color2;
     canvas.drawCircle(
       Offset(size.width / 2 + spacing + 20, y + dotR),
@@ -1877,7 +2105,7 @@ class _Segment {
     required this.color,
     this.label,
     this.percentage,
-    this.count, // ADD THIS
+    this.count,
     this.isEmpty = false,
   });
 
@@ -1885,7 +2113,7 @@ class _Segment {
   final Color color;
   final String? label;
   final String? percentage;
-  final int? count; // ADD THIS
+  final int? count;
   final bool isEmpty;
 }
 
@@ -2080,52 +2308,6 @@ class _DonutPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _DonutPainter old) =>
       old.animValue != animValue || old.hoveredIdx != hoveredIdx;
-}
-
-// ─── Export Tile ──────────────────────────────────────────────────────────────
-
-class _ExportTile extends StatelessWidget {
-  const _ExportTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: color, size: 20),
-      ),
-      title: Text(
-        title,
-        style: const TextStyle(
-          color: AppColors.textWhite,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(color: AppColors.textGray, fontSize: 12),
-      ),
-      onTap: onTap,
-    );
-  }
 }
 
 // ─── Loading / Error States ───────────────────────────────────────────────────

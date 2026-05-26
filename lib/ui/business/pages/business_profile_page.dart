@@ -345,31 +345,7 @@ class _PageHeader extends StatelessWidget {
               'Manage your account and business information',
               style: TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
-            if (screenWidth <= 600)
-              GestureDetector(
-                onTap: () => Navigator.pushReplacementNamed(
-                    context, AppRoutes.login),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: const BoxDecoration(
-                    border:
-                        Border(top: BorderSide(color: AppColors.cardBorder)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.logout_rounded,
-                          color: AppColors.textGray, size: 16),
-                      SizedBox(width: 8),
-                      Text('Logout',
-                          style: TextStyle(
-                              color: AppColors.textGray,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500)),
-                    ],
-                  ),
-                ),
-              ),
+            
           ],
         ),
       ],

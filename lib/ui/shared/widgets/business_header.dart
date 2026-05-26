@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/session_service.dart';
+import 'logout_confirm_dialog.dart';
 import '../../../router/app_router.dart';
 
 // ─── Business Header ──────────────────────────────────────────────────────────
@@ -17,15 +18,16 @@ class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     final session = SessionService.instance.current;
 
     return Container(
-      height: 56,
+      height: isMobile ? 48 : 56,
       decoration: const BoxDecoration(
         color: AppColors.backgroundMid,
         border: Border(bottom: BorderSide(color: AppColors.cardBorder)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: isMobile ? 12 : 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -33,22 +35,70 @@ class BusinessHeader extends StatelessWidget implements PreferredSizeWidget {
             title,
             style: const TextStyle(
               color: AppColors.textWhite,
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w600,
             ),
           ),
           Row(
             children: [
-              Container(width: 1, height: 24, color: AppColors.cardBorder),
-              const SizedBox(width: 12),
+              _LogoutButton(
+                onTap: () => showLogoutConfirmDialog(context),
+                compact: isMobile,
+              ),
+              SizedBox(width: isMobile ? 6 : 8),
+              Container(width: 1, height: isMobile ? 18 : 24, color: AppColors.cardBorder),
+              SizedBox(width: isMobile ? 8 : 12),
               _ProfileButton(
                 displayName: session?.fullName ?? '—',
                 businessName: session?.businessName ?? '—',
                 initials: session?.initials ?? '?',
+                compact: isMobile,
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Logout Button ───────────────────────────────────────────────────────────
+
+class _LogoutButton extends StatefulWidget {
+  const _LogoutButton({required this.onTap, required this.compact});
+
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  State<_LogoutButton> createState() => _LogoutButtonState();
+}
+
+class _LogoutButtonState extends State<_LogoutButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: EdgeInsets.all(widget.compact ? 6 : 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: _isHovered
+                ? AppColors.cardBorder.withOpacity(0.3)
+                : Colors.transparent,
+          ),
+          child: const Icon(
+            Icons.logout_rounded,
+            color: AppColors.textGray,
+            size: 18,
+          ),
+        ),
       ),
     );
   }
@@ -61,11 +111,13 @@ class _ProfileButton extends StatefulWidget {
     required this.displayName,
     required this.businessName,
     required this.initials,
+    required this.compact,
   });
 
   final String displayName;
   final String businessName;
   final String initials;
+  final bool compact;
 
   @override
   State<_ProfileButton> createState() => _ProfileButtonState();
@@ -84,7 +136,10 @@ class _ProfileButtonState extends State<_ProfileButton> {
         onExit: (_) => setState(() => _isHovered = false),
         cursor: SystemMouseCursors.click,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: EdgeInsets.symmetric(
+            horizontal: widget.compact ? 4 : 8,
+            vertical: widget.compact ? 2 : 4,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             color: _isHovered
@@ -94,8 +149,8 @@ class _ProfileButtonState extends State<_ProfileButton> {
           child: Row(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: widget.compact ? 26 : 30,
+                height: widget.compact ? 26 : 30,
                 decoration: const BoxDecoration(
                   color: AppColors.primaryCyan,
                   shape: BoxShape.circle,
@@ -105,34 +160,36 @@ class _ProfileButtonState extends State<_ProfileButton> {
                   widget.initials,
                   style: const TextStyle(
                     color: AppColors.textWhite,
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.displayName,
-                    style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
+              if (!widget.compact) ...[
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.displayName,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                  Text(
-                    widget.businessName,
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w300,
+                    Text(
+                      widget.businessName,
+                      style: const TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w300,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),

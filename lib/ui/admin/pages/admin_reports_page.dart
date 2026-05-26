@@ -393,6 +393,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                 children: [
                   // ── Header ──
                   _PageHeader(
+                    isNarrow: isNarrow,
                     showFilters: _showFilters,
                     isGenerating: _isGenerating,
                     onFilterTap: () => setState(() => _showFilters = !_showFilters),
@@ -1491,12 +1492,14 @@ class _SearchBar extends StatelessWidget {
 
 class _PageHeader extends StatelessWidget {
   const _PageHeader({
+    required this.isNarrow,
     required this.showFilters,
     required this.isGenerating,
     required this.onFilterTap,
     required this.onGenerateTap,
   });
 
+  final bool isNarrow;
   final bool showFilters;
   final bool isGenerating;
   final VoidCallback onFilterTap;
@@ -1504,18 +1507,16 @@ class _PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final narrow = MediaQuery.of(context).size.width < 700;
-
     final filterBtn = _HeaderButton(
       icon: Icons.filter_list_rounded,
-      label: narrow ? null : 'Filters',
+      label: isNarrow ? null : 'Filters',
       isActive: showFilters,
       onTap: onFilterTap,
     );
 
     final generateBtn = _HeaderButton(
       icon: Icons.description_rounded,
-      label: narrow ? null : 'Generate Report',
+      label: isNarrow ? null : 'Generate Report',
       isPrimary: true,
       isLoading: isGenerating,
       onTap: onGenerateTap,
@@ -1540,7 +1541,7 @@ class _PageHeader extends StatelessWidget {
       ],
     );
 
-    if (narrow) {
+    if (isNarrow) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

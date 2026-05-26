@@ -8,6 +8,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../database/local_database.dart';
+import 'session_service.dart';
 
 // =============================================================================
 // CONNECTIVITY SERVICE
@@ -17,6 +18,8 @@ class ConnectivityService {
   ConnectivityService._internal();
   static final ConnectivityService instance = ConnectivityService._internal();
 
+  // Defaults to true so that a freshly loaded (online) session is never
+  // incorrectly blocked before the first connectivity check fires.
   bool _isOnline = true;
   bool get isOnline => _isOnline;
 
@@ -155,8 +158,58 @@ class SyncService {
 
   void listenForConnectivity() {
     ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
-      if (isOnline) sync();
+      if (isOnline) {
+        // When connectivity is restored, clear the isOfflineSession flag so
+        // the persisted session no longer blocks online-only routes.
+        _clearOfflineSessionFlag();
+        sync();
+      }
     });
+  }
+
+  /// Clears the `isOfflineSession` flag on the in-memory session and persists
+  /// the change to SharedPreferences.  This prevents a stale "offline" marker
+  /// from blocking navigation after the device comes back online.
+  Future<void> _clearOfflineSessionFlag() async {
+    final current = SessionService.instance.current;
+    if (current == null || !current.isOfflineSession) return;
+
+    // Re-save the session with isOfflineSession = false.
+    // We rebuild a corrected copy of the current session.
+    final updated = SessionData(
+      userId:             current.userId,
+      fullName:           current.fullName,
+      username:           current.username,
+      email:              current.email,
+      phone:              current.phone,
+      role:               current.role,
+      isOfflineSession:   false, // ← cleared
+      businessId:         current.businessId,
+      businessName:       current.businessName,
+      permitNumber:       current.permitNumber,
+      registrationNumber: current.registrationNumber,
+      street:             current.street,
+      totalRooms:         current.totalRooms,
+      permitFileUrl:      current.permitFileUrl,
+      validIdUrl:         current.validIdUrl,
+      businessType:       current.businessType,
+      status:             current.status,
+      remarks:            current.remarks,
+      region:             current.region,
+      cityMunicipality:   current.cityMunicipality,
+      province:           current.province,
+      barangay:           current.barangay,
+      tradename:          current.tradename,
+      businessLine:       current.businessLine,
+      ownerFirstName:     current.ownerFirstName,
+      ownerLastName:      current.ownerLastName,
+      ownerMiddleName:    current.ownerMiddleName,
+    );
+
+    await SessionService.instance.save(updated);
+    // Also update the in-memory cache so the guard sees it immediately.
+    await SessionService.instance.loadAndCache();
+    debugPrint('✅ _clearOfflineSessionFlag: isOfflineSession reset to false');
   }
 
   Future<void> sync() async {
@@ -240,62 +293,62 @@ class SyncService {
   }
 
   // ---------------------------------------------------------------------------
-// PUSH — pending_update
-// ---------------------------------------------------------------------------
-Future<void> _pushPendingUpdates() async {
-  final db = await LocalDatabase.instance.database;
+  // PUSH — pending_update
+  // ---------------------------------------------------------------------------
+  Future<void> _pushPendingUpdates() async {
+    final db = await LocalDatabase.instance.database;
 
-  final records = await db.query(
-    LocalDatabase.tableGuestRecords,
-    where: 'sync_status = ?',
-    whereArgs: [LocalDatabase.syncPendingUpdate],
-  );
+    final records = await db.query(
+      LocalDatabase.tableGuestRecords,
+      where: 'sync_status = ?',
+      whereArgs: [LocalDatabase.syncPendingUpdate],
+    );
 
-  for (final record in records) {
-    final recordId = record['id'] as String;
+    for (final record in records) {
+      final recordId = record['id'] as String;
 
-    try {
-      // Always push — the user made an explicit offline edit, so local wins.
-      await _supabase
-          .from('guest_records')
-          .update(_toSupabaseRecord(record))
-          .eq('id', recordId);
+      try {
+        // Always push — the user made an explicit offline edit, so local wins.
+        await _supabase
+            .from('guest_records')
+            .update(_toSupabaseRecord(record))
+            .eq('id', recordId);
 
-      // Replace breakdowns in full.
-      final breakdowns = await db.query(
-        LocalDatabase.tableGuestBreakdowns,
-        where:     'guest_record_id = ?',
-        whereArgs: [recordId],
-      );
+        // Replace breakdowns in full.
+        final breakdowns = await db.query(
+          LocalDatabase.tableGuestBreakdowns,
+          where:     'guest_record_id = ?',
+          whereArgs: [recordId],
+        );
 
-      await _supabase
-          .from('guest_breakdowns')
-          .delete()
-          .eq('guest_record_id', recordId);
-
-      if (breakdowns.isNotEmpty) {
         await _supabase
             .from('guest_breakdowns')
-            .insert(breakdowns.map(_toSupabaseBreakdown).toList());
+            .delete()
+            .eq('guest_record_id', recordId);
+
+        if (breakdowns.isNotEmpty) {
+          await _supabase
+              .from('guest_breakdowns')
+              .insert(breakdowns.map(_toSupabaseBreakdown).toList());
+        }
+
+        // Mark synced.
+        await db.update(
+          LocalDatabase.tableGuestRecords,
+          {
+            'sync_status':      LocalDatabase.syncSynced,
+            'local_updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          where:     'id = ?',
+          whereArgs: [recordId],
+        );
+
+        debugPrint('✅ _pushPendingUpdates: pushed $recordId');
+      } catch (e) {
+        debugPrint('❌ _pushPendingUpdates: failed for $recordId — $e');
       }
-
-      // Mark synced.
-      await db.update(
-        LocalDatabase.tableGuestRecords,
-        {
-          'sync_status':      LocalDatabase.syncSynced,
-          'local_updated_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        where:     'id = ?',
-        whereArgs: [recordId],
-      );
-
-      debugPrint('✅ _pushPendingUpdates: pushed $recordId');
-    } catch (e) {
-      debugPrint('❌ _pushPendingUpdates: failed for $recordId — $e');
     }
   }
-}
 
   // ---------------------------------------------------------------------------
   // PULL — fetch all Supabase records into local SQLite.
@@ -379,21 +432,21 @@ Future<void> _pushPendingUpdates() async {
   // local row → Supabase record map (strips local-only columns).
   // ---------------------------------------------------------------------------
   Map<String, dynamic> _toSupabaseRecord(Map<String, dynamic> row) {
-  return {
-    'id':                  row['id'],
-    'business_id':         row['business_id'],
-    'check_in':            row['check_in'],
-    'check_out':           row['check_out'],
-    'total_guests':        row['total_guests'],
-    'rooms_occupied':      row['rooms_occupied'],
-    'purpose_of_visit':    row['purpose_of_visit'],
-    'transportation_mode': row['transportation_mode'],
-    'status':              row['status'],
-    'is_deleted':          row['is_deleted'] == 1,
-    'created_at':          row['created_at'],
-    // 'updated_at' intentionally omitted — column does not exist on this table
-  };
-}
+    return {
+      'id':                  row['id'],
+      'business_id':         row['business_id'],
+      'check_in':            row['check_in'],
+      'check_out':           row['check_out'],
+      'total_guests':        row['total_guests'],
+      'rooms_occupied':      row['rooms_occupied'],
+      'purpose_of_visit':    row['purpose_of_visit'],
+      'transportation_mode': row['transportation_mode'],
+      'status':              row['status'],
+      'is_deleted':          row['is_deleted'] == 1,
+      'created_at':          row['created_at'],
+      // 'updated_at' intentionally omitted — column does not exist on this table
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // local breakdown row → Supabase breakdown map.
