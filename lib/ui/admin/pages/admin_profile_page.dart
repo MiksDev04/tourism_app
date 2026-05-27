@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
+import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../router/app_router.dart';
@@ -217,9 +218,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       selectedIndex: 5,
       onNavSelected: (_) {},
       child: _loadingProfile
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryCyan),
-            )
+          ? const LoadingPage()
           : _fetchError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadProfile)
           : SingleChildScrollView(

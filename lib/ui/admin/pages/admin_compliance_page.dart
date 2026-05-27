@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/pages/error_page.dart';
@@ -233,12 +234,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       selectedIndex: 4,
       onNavSelected: (_) {},
       child: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppColors.accentGreen,
-              ),
-            )
+          ? const LoadingPage()
           : _fetchError != null
               ? ErrorPage(
                   statusCode: _errorCode ?? 500,

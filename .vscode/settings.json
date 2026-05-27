@@ -7,8 +7,10 @@
         "Lakeview",
         "LTWH",
         "MIMAROPA",
+        "normalised",
         "nunito",
         "pkce",
+        "plpgsql",
         "prefs",
         "Sampaloc",
         "varchar"

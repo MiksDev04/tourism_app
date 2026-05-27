@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
+import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/accommodation_export_service.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -323,7 +324,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       selectedIndex: 1,
       onNavSelected: (_) {},
       child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const LoadingPage()
           : _error != null
           ? ErrorPage(
               statusCode: _errorCode ?? 500,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
+import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
@@ -395,9 +396,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       selectedIndex: 2,
       onNavSelected: (_) {},
       child: _loadingReports
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryCyan),
-            )
+          ? const LoadingPage()
           : _fetchError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _fetchReports)
           : LayoutBuilder(

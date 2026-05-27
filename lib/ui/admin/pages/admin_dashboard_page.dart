@@ -9,6 +9,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as p;
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
+import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_dashboard_api.dart';
@@ -564,9 +565,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       selectedIndex: 0,
       onNavSelected: (_) {},
       child: _loadingDash
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primaryCyan),
-            )
+          ? const LoadingPage()
           : _dashError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadDashboard)
           : Stack(
@@ -2247,54 +2246,3 @@ class _DonutPainter extends CustomPainter {
       old.animValue != animValue || old.hoveredIdx != hoveredIdx;
 }
 
-// ─── Loading / Error States ───────────────────────────────────────────────────
-
-class _LoadingSection extends StatelessWidget {
-  const _LoadingSection({required this.height});
-
-  final double height;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: height,
-      child: const Center(
-        child: CircularProgressIndicator(color: AppColors.primaryCyan),
-      ),
-    );
-  }
-}
-
-class _ErrorSection extends StatelessWidget {
-  const _ErrorSection({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.withOpacity(0.25)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            color: Colors.redAccent,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'Could not load data: $message',
-              style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
