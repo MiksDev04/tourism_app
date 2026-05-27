@@ -24,26 +24,81 @@ class BusinessGuestRecordApi {
   final _supabase = Supabase.instance.client;
 
   // ── Fetch Business ID ─────────────────────────────────────────────────────
+  //
+  // Fallback priority (both online and offline):
+  //   1. Supabase  (only when online — freshest source of truth)
+  //   2. SessionService cache  (always available after any login type)
+  //   3. SQLite local_businesses table  (populated by SyncService pull)
+  //
+  // This triple-fallback means a mid-session connectivity toggle never causes
+  // "Business account not found" — we always have at least the cached value.
 
   Future<String?> fetchBusinessId() async {
     if (!ConnectivityService.instance.isOnline) {
-      return SessionService.instance.current?.businessId;
+      // ── Offline path ──────────────────────────────────────────────────────
+      debugPrint('fetchBusinessId: offline — using local fallbacks');
+      return _sessionId() ?? await _localDbId();
     }
 
+    // ── Online path: try Supabase first ────────────────────────────────────
     try {
       final userId = _supabase.auth.currentUser?.id;
-      if (userId == null) return null;
+      if (userId != null) {
+        final response = await _supabase
+            .from('businesses')
+            .select('id')
+            .eq('profile_id', userId)
+            .maybeSingle();
 
-      final response = await _supabase
-          .from('businesses')
-          .select('id')
-          .eq('profile_id', userId)
-          .maybeSingle();
-
-      return response?['id'] as String?;
-    } catch (_) {
-      return SessionService.instance.current?.businessId;
+        final id = response?['id'] as String?;
+        if (id != null) {
+          debugPrint('fetchBusinessId: resolved from Supabase → $id');
+          return id;
+        }
+        debugPrint(
+          'fetchBusinessId: Supabase returned null for userId=$userId — '
+          'falling back to local caches',
+        );
+      } else {
+        debugPrint(
+          'fetchBusinessId: currentUser is null (token may not have refreshed) '
+          '— falling back to local caches',
+        );
+      }
+    } catch (e) {
+      debugPrint('fetchBusinessId: Supabase threw $e — falling back to local caches');
     }
+
+    // ── Fallback 1: SessionService in-memory cache ─────────────────────────
+    final fromSession = _sessionId();
+    if (fromSession != null) {
+      debugPrint('fetchBusinessId: resolved from SessionService → $fromSession');
+      return fromSession;
+    }
+
+    // ── Fallback 2: SQLite local_businesses ────────────────────────────────
+    final fromDb = await _localDbId();
+    debugPrint('fetchBusinessId: resolved from SQLite → $fromDb');
+    return fromDb;
+  }
+
+  /// Returns the businessId stored in the in-memory session, or null.
+  String? _sessionId() => SessionService.instance.current?.businessId;
+
+  /// Returns the first businessId found in the local SQLite businesses table.
+  Future<String?> _localDbId() async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      final rows = await db.query(
+        LocalDatabase.tableLocalBusinesses,
+        columns: ['id'],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) return rows.first['id'] as String?;
+    } catch (e) {
+      debugPrint('fetchBusinessId (_localDbId): SQLite error — $e');
+    }
+    return null;
   }
 
   // ── Fetch All Guest Records for a Business ────────────────────────────────
@@ -102,7 +157,6 @@ class BusinessGuestRecordApi {
   // ===========================================================================
 
   /// Push all locally-created records that haven't reached Supabase yet.
-  /// SyncService should call this instead of doing raw inserts itself.
   Future<void> syncPendingCreates() async {
     final db = await LocalDatabase.instance.database;
 
@@ -116,7 +170,6 @@ class BusinessGuestRecordApi {
       final recordId = row['id'] as String;
 
       try {
-        // Build the Supabase payload — exclude local-only columns.
         final recordPayload = {
           'id':                  recordId,
           'business_id':         row['business_id'],
@@ -134,7 +187,6 @@ class BusinessGuestRecordApi {
             .from('guest_records')
             .upsert(recordPayload, onConflict: 'id');
 
-        // Push breakdowns.
         final breakdownRows = await db.query(
           LocalDatabase.tableGuestBreakdowns,
           where: 'guest_record_id = ?',
@@ -152,7 +204,6 @@ class BusinessGuestRecordApi {
           );
         }
 
-        // Mark synced in SQLite.
         await db.update(
           LocalDatabase.tableGuestRecords,
           {
@@ -166,13 +217,11 @@ class BusinessGuestRecordApi {
         debugPrint('✅ syncPendingCreates: pushed $recordId');
       } catch (e) {
         debugPrint('❌ syncPendingCreates: failed for $recordId — $e');
-        // Continue with the next record; this one stays pending.
       }
     }
   }
 
   /// Push all locally-edited records that haven't reached Supabase yet.
-  /// SyncService should call this instead of doing raw updates itself.
   Future<void> syncPendingUpdates() async {
     final db = await LocalDatabase.instance.database;
 
@@ -203,7 +252,6 @@ class BusinessGuestRecordApi {
               if (localDt != null &&
                   remoteDt != null &&
                   remoteDt.isAfter(localDt)) {
-                // Remote is newer — discard local pending change, pull instead.
                 await db.update(
                   LocalDatabase.tableGuestRecords,
                   {'sync_status': LocalDatabase.syncSynced},
@@ -219,7 +267,6 @@ class BusinessGuestRecordApi {
           }
         }
 
-        // ── Push record header ───────────────────────────────────────────────
         await _supabase.from('guest_records').update({
           'check_in':            row['check_in'],
           'check_out':           row['check_out'],
@@ -229,7 +276,6 @@ class BusinessGuestRecordApi {
           'transportation_mode': row['transportation_mode'],
         }).eq('id', recordId);
 
-        // ── Push breakdowns (replace) ────────────────────────────────────────
         final breakdownRows = await db.query(
           LocalDatabase.tableGuestBreakdowns,
           where: 'guest_record_id = ?',
@@ -249,7 +295,6 @@ class BusinessGuestRecordApi {
           );
         }
 
-        // ── Mark synced ──────────────────────────────────────────────────────
         await db.update(
           LocalDatabase.tableGuestRecords,
           {
@@ -381,7 +426,6 @@ class BusinessGuestRecordApi {
     required List<GuestBreakdownEntry> breakdowns,
   }) async {
     try {
-      // 1. Update header in Supabase.
       await _supabase.from('guest_records').update({
         'check_in':            checkIn,
         'check_out':           checkOut,
@@ -391,7 +435,6 @@ class BusinessGuestRecordApi {
         'transportation_mode': transportationMode,
       }).eq('id', recordId);
 
-      // 2. Replace breakdowns in Supabase.
       await _supabase
           .from('guest_breakdowns')
           .delete()
@@ -405,7 +448,6 @@ class BusinessGuestRecordApi {
         );
       }
 
-      // 3. Mirror to local SQLite as synced.
       final db = await LocalDatabase.instance.database;
       await db.update(
         LocalDatabase.tableGuestRecords,
@@ -434,7 +476,6 @@ class BusinessGuestRecordApi {
 
   // ===========================================================================
   // OFFLINE UPDATE — SQLite only, tagged pending_update.
-  // syncPendingUpdates() will push this when back online.
   // ===========================================================================
 
   Future<ApiResult<void>> _updateOffline({
@@ -467,7 +508,6 @@ class BusinessGuestRecordApi {
         whereArgs: [recordId],
       );
 
-      // Breakdowns are replaced immediately in SQLite so the UI stays accurate.
       await _replaceLocalBreakdowns(db, recordId, breakdowns);
 
       return const ApiResult.success(null);
@@ -489,7 +529,6 @@ class BusinessGuestRecordApi {
     for (final row in rows) {
       final recordId = row['id'] as String;
 
-      // Don't overwrite a record with unsent local changes.
       final pending = await db.query(
         LocalDatabase.tableGuestRecords,
         columns:   ['sync_status'],
@@ -547,44 +586,41 @@ class BusinessGuestRecordApi {
   }
 
   Future<void> _replaceLocalBreakdowns(
-  dynamic db,
-  String recordId,
-  List<GuestBreakdownEntry> breakdowns,
-) async {
-  await db.delete(
-    LocalDatabase.tableGuestBreakdowns,
-    where:     'guest_record_id = ?',
-    whereArgs: [recordId],
-  );
-
-  for (int i = 0; i < breakdowns.length; i++) {
-    final b             = breakdowns[i];
-    final isOverseas    = b.isOverseas;
-    final isPhilippines = !isOverseas && b.country == 'Philippines';
-
-    await db.insert(
+    dynamic db,
+    String recordId,
+    List<GuestBreakdownEntry> breakdowns,
+  ) async {
+    await db.delete(
       LocalDatabase.tableGuestBreakdowns,
-      {
-        // Use index-based ID — the old composite key collided whenever
-        // two rows shared the same sex+ageGroup+count regardless of country.
-        'id':                 '${recordId}_breakdown_$i',
-        'guest_record_id':    recordId,
-        'country':            isOverseas ? null : b.country,
-        'philippines_region': isPhilippines ? b.philippinesRegion : null,
-        'nationality':        isPhilippines ? b.nationality : null,
-        'sex':                _mapSex(b.sex),
-        'age_group':          _mapAgeGroup(b.ageGroup),
-        'count':              b.count,
-        'is_overseas':        isOverseas ? 1 : 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
+      where:     'guest_record_id = ?',
+      whereArgs: [recordId],
     );
+
+    for (int i = 0; i < breakdowns.length; i++) {
+      final b             = breakdowns[i];
+      final isOverseas    = b.isOverseas;
+      final isPhilippines = !isOverseas && b.country == 'Philippines';
+
+      await db.insert(
+        LocalDatabase.tableGuestBreakdowns,
+        {
+          'id':                 '${recordId}_breakdown_$i',
+          'guest_record_id':    recordId,
+          'country':            isOverseas ? null : b.country,
+          'philippines_region': isPhilippines ? b.philippinesRegion : null,
+          'nationality':        isPhilippines ? b.nationality : null,
+          'sex':                _mapSex(b.sex),
+          'age_group':          _mapAgeGroup(b.ageGroup),
+          'count':              b.count,
+          'is_overseas':        isOverseas ? 1 : 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
-}
 
   // ===========================================================================
   // Converts a raw SQLite breakdown row to a Supabase-compatible map.
-  // Used by syncPendingCreates / syncPendingUpdates.
   // ===========================================================================
 
   Map<String, dynamic> _localBreakdownRowToSupabase(

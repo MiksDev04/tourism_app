@@ -217,9 +217,7 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       title: 'Profile',
       selectedIndex: 5,
       onNavSelected: (_) {},
-      child: _loadingProfile
-          ? const LoadingPage()
-          : _fetchError != null
+      child: _fetchError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadProfile)
           : SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -228,42 +226,53 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                 children: [
                   _PageHeader(),
                   const SizedBox(height: 20),
-                  SizedBox(
-                    width: 530,
-                    child: Column(
-                      children: [
-                        _ProfileCard(profile: _profile),
-                        const SizedBox(height: 16),
-                        _AccountInfoCard(
-                          fullNameCtrl: _fullNameCtrl,
-                          usernameCtrl: _usernameCtrl,
-                          phoneCtrl: _phoneCtrl,
-                          loading: _savingInfo,
-                          onSave: _saveAccountInfo,
+                  if (_loadingProfile)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 48),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primaryCyan,
+                          strokeWidth: 2,
                         ),
-                        const SizedBox(height: 16),
-                        _SecureActionCard(
-                          icon: Icons.email_outlined,
-                          title: 'Email Address',
-                          subtitle: _profile?.email ?? '—',
-                          subtitleIsEmail: true,
-                          buttonIcon: Icons.edit_outlined,
-                          buttonLabel: 'Change Email',
-                          onPressed: _startChangeEmailFlow,
-                        ),
-                        const SizedBox(height: 16),
-                        _SecureActionCard(
-                          icon: Icons.lock_outline_rounded,
-                          title: 'Password',
-                          subtitle:
-                              'Update your account password securely via email OTP',
-                          buttonIcon: Icons.lock_reset_rounded,
-                          buttonLabel: 'Change Password',
-                          onPressed: _startChangePasswordFlow,
-                        ),
-                      ],
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      width: 530,
+                      child: Column(
+                        children: [
+                          _ProfileCard(profile: _profile),
+                          const SizedBox(height: 16),
+                          _AccountInfoCard(
+                            fullNameCtrl: _fullNameCtrl,
+                            usernameCtrl: _usernameCtrl,
+                            phoneCtrl: _phoneCtrl,
+                            loading: _savingInfo,
+                            onSave: _saveAccountInfo,
+                          ),
+                          const SizedBox(height: 16),
+                          _SecureActionCard(
+                            icon: Icons.email_outlined,
+                            title: 'Email Address',
+                            subtitle: _profile?.email ?? '—',
+                            subtitleIsEmail: true,
+                            buttonIcon: Icons.edit_outlined,
+                            buttonLabel: 'Change Email',
+                            onPressed: _startChangeEmailFlow,
+                          ),
+                          const SizedBox(height: 16),
+                          _SecureActionCard(
+                            icon: Icons.lock_outline_rounded,
+                            title: 'Password',
+                            subtitle:
+                                'Update your account password securely via email OTP',
+                            buttonIcon: Icons.lock_reset_rounded,
+                            buttonLabel: 'Change Password',
+                            onPressed: _startChangePasswordFlow,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

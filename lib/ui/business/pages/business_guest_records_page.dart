@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/offline_service.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../shared/widgets/paginator.dart';
 import '../widgets/edit_guest_dialog.dart';
@@ -7,71 +10,49 @@ import '../../../api/business_guest_record_api.dart';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// ADD these three:
 String _displayCountry(GuestBreakdownEntry b) {
-  if (b.isOverseas) {
-    return '—';
-  }
+  if (b.isOverseas) return '—';
   return b.country ?? 'Unspecified';
 }
 
 String _displayNationality(GuestBreakdownEntry b) {
-  if (b.isOverseas) {
-    return '—';
-  }
+  if (b.isOverseas) return '—';
   return b.nationality ?? '—';
 }
 
-String _displayYesNo(bool value) {
-  return value ? 'Yes' : 'No';
-}
+String _displayYesNo(bool value) => value ? 'Yes' : 'No';
 
 Map<String, int> _isOverseasSummary(List<GuestBreakdownEntry> breakdowns) {
   var yes = 0;
-  var no = 0;
-
-  for (final breakdown in breakdowns) {
-    if (breakdown.isOverseas) {
-      yes += breakdown.count;
+  var no  = 0;
+  for (final b in breakdowns) {
+    if (b.isOverseas) {
+      yes += b.count;
     } else {
-      no += breakdown.count;
+      no += b.count;
     }
   }
-
-  return {
-    'Yes': yes,
-    'No': no,
-  };
+  return {'Yes': yes, 'No': no};
 }
 
 Map<String, int> _countrySummary(List<GuestBreakdownEntry> breakdowns) {
   final summary = <String, int>{};
-
-  for (final breakdown in breakdowns) {
-    if (breakdown.isOverseas) {
-      continue;
-    }
-    final label = breakdown.country ?? 'Unspecified';
-    summary[label] = (summary[label] ?? 0) + breakdown.count;
+  for (final b in breakdowns) {
+    if (b.isOverseas) continue;
+    final label = b.country ?? 'Unspecified';
+    summary[label] = (summary[label] ?? 0) + b.count;
   }
 
   final ordered = <String, int>{};
-  for (final label in const [
-    'Philippines',
-    'Others',
-    'Unspecified',
-  ]) {
-    if (summary.containsKey(label)) {
-      ordered[label] = summary[label]!;
-    }
+  for (final label in const ['Philippines', 'Others', 'Unspecified']) {
+    if (summary.containsKey(label)) ordered[label] = summary[label]!;
   }
-
-  for (final entry in summary.entries) {
-    ordered.putIfAbsent(entry.key, () => entry.value);
+  for (final e in summary.entries) {
+    ordered.putIfAbsent(e.key, () => e.value);
   }
-
   return ordered;
 }
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 enum GuestRecordStatus { active, archived }
@@ -79,7 +60,7 @@ enum GuestRecordStatus { active, archived }
 class GuestBreakdownEntry {
   const GuestBreakdownEntry({
     this.country,
-    this.nationality, // ← add this
+    this.nationality,
     this.philippinesRegion,
     required this.sex,
     required this.ageGroup,
@@ -88,7 +69,7 @@ class GuestBreakdownEntry {
   });
 
   final String? country;
-  final String? nationality; // ← add this ('Filipino' | 'Foreign' | null)
+  final String? nationality;
   final String? philippinesRegion;
   final String sex;
   final String ageGroup;
@@ -158,6 +139,14 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   bool _isLoading = true;
   String? _loadError;
 
+  // ── Connectivity state ────────────────────────────────────────────────────
+  // _isOffline: mirrors the current network status, used for the offline strip.
+  // _showOnlineBanner: true only for the brief window after coming back online,
+  // so we can show the "tap to refresh" prompt without forcing an auto-reload.
+  bool _isOffline       = false;
+  bool _showOnlineBanner = false;
+  StreamSubscription<bool>? _connectivitySub;
+
   _Filter _activeFilter = _Filter.active;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
@@ -172,42 +161,69 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   String? _selectedTransport;
 
   final List<String> _purposeOptions = [
-    'All',
-    'Leisure',
-    'Business',
-    'Education',
-    'Medical',
-    'Religious',
-    'Others',
+    'All', 'Leisure', 'Business', 'Education', 'Medical', 'Religious', 'Others',
   ];
   final List<String> _transportOptions = [
-    'All',
-    'Private Car',
-    'Bus',
-    'Van',
-    'Motorcycle',
-    'Tricycle',
-    'Others',
+    'All', 'Private Car', 'Bus', 'Van', 'Motorcycle', 'Tricycle', 'Others',
   ];
 
   static const List<int> _pageSizeOptions = [10, 20, 30];
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
+    _isOffline = !ConnectivityService.instance.isOnline;
+    _subscribeToConnectivity();
     _init();
   }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Connectivity subscription ─────────────────────────────────────────────
+
+  void _subscribeToConnectivity() {
+    _connectivitySub =
+        ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
+      if (!mounted) return;
+
+      if (isOnline && _isOffline) {
+        // Just came back online — show banner, don't auto-refresh data.
+        setState(() {
+          _isOffline        = false;
+          _showOnlineBanner = true;
+        });
+      } else if (!isOnline && !_isOffline) {
+        // Just went offline — show the offline strip, hide the online banner.
+        setState(() {
+          _isOffline        = true;
+          _showOnlineBanner = false;
+        });
+      }
+    });
+  }
+
+  // ── Init & data loading ───────────────────────────────────────────────────
 
   Future<void> _init() async {
     final id = await _api.fetchBusinessId();
     if (!mounted) return;
+
     if (id == null) {
       setState(() {
         _isLoading = false;
-        _loadError = 'Business account not found.';
+        _loadError = 'Business account not found. Please check your connection '
+            'and try again.';
       });
       return;
     }
+
     _businessId = id;
     await _loadRecords();
   }
@@ -222,7 +238,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     if (!mounted) return;
     if (result.isSuccess) {
       setState(() {
-        _records = result.data ?? [];
+        _records   = result.data ?? [];
         _isLoading = false;
       });
     } else {
@@ -233,7 +249,19 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     }
   }
 
-  // ── Date pickers ────────────────────────────────────────────────────────
+  // Called when the user taps "Refresh" on the back-online banner.
+  // If businessId was never resolved (page loaded during a bad moment),
+  // we re-run the full init so fetchBusinessId gets another attempt online.
+  Future<void> _onBannerRefresh() async {
+    setState(() => _showOnlineBanner = false);
+    if (_businessId == null) {
+      await _init();
+    } else {
+      await _loadRecords();
+    }
+  }
+
+  // ── Date pickers ──────────────────────────────────────────────────────────
 
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
     final picked = await showDatePicker(
@@ -280,20 +308,21 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     });
   }
 
-  // ── Actions ─────────────────────────────────────────────────────────────
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   Future<void> _onEdit(GuestRecord record) async {
     final updated = await showEditGuestDialog(context, record: record);
     if (updated == null || !mounted) return;
 
     final result = await _api.updateRecord(
-      recordId: updated.id,
-      checkIn: updated.checkIn,
-      checkOut: updated.checkOut,
-      totalGuests: updated.guests,
-      roomsOccupied: updated.rooms,
-      purposeOfVisit: updated.purpose,
+      recordId:           updated.id,
+      checkIn:            updated.checkIn,
+      checkOut:           updated.checkOut,
+      totalGuests:        updated.guests,
+      roomsOccupied:      updated.rooms,
+      purposeOfVisit:     updated.purpose,
       transportationMode: updated.transport,
-      breakdowns: updated.demographics?.breakdowns ?? [],
+      breakdowns:         updated.demographics?.breakdowns ?? [],
     );
     if (!mounted) return;
 
@@ -322,17 +351,17 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
 
   void _clearAllFilters() {
     setState(() {
-      _checkInFrom = null;
-      _checkOutTo = null;
-      _selectedPurpose = null;
+      _checkInFrom      = null;
+      _checkOutTo       = null;
+      _selectedPurpose  = null;
       _selectedTransport = null;
-      _searchQuery = '';
+      _searchQuery      = '';
       _searchCtrl.clear();
-      _currentPage = 0;
+      _currentPage      = 0;
     });
   }
 
-  // ── Filtering ────────────────────────────────────────────────────────────
+  // ── Filtering ─────────────────────────────────────────────────────────────
 
   bool _matchesAdvancedFilters(GuestRecord r) {
     if (_checkInFrom != null) {
@@ -358,7 +387,7 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
     final q = _searchQuery.toLowerCase();
     return _records.where((r) {
       final matchesStatus = switch (_activeFilter) {
-        _Filter.active => r.status == GuestRecordStatus.active,
+        _Filter.active   => r.status == GuestRecordStatus.active,
         _Filter.archived => r.status == GuestRecordStatus.archived,
       };
       final matchesSearch =
@@ -371,22 +400,17 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
   }
 
   int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
-
   int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
 
   List<GuestRecord> get _pagedRows {
     final start = _clampedPage * _pageSize;
-    final end = (start + _pageSize).clamp(0, _filtered.length);
+    final end   = (start + _pageSize).clamp(0, _filtered.length);
     return _filtered.sublist(start, end);
   }
 
   void _resetPage() => _currentPage = 0;
 
-  @override
-  void dispose() {
-    _searchCtrl.dispose();
-    super.dispose();
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -397,96 +421,209 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isNarrow = constraints.maxWidth < 700;
-          return SingleChildScrollView(
-            padding: EdgeInsets.all(isNarrow ? 16 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _PageHeader(
-                  activeFilter: _activeFilter,
-                  onFilterChanged: (f) => setState(() {
-                    _activeFilter = f;
-                    _resetPage();
-                  }),
-                  showFilters: _showFilters,
-                  onFilterToggle: () =>
-                      setState(() => _showFilters = !_showFilters),
-                  isNarrow: isNarrow,
-                  totalRecords: _filtered.length,
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Connectivity banners (outside scroll so always visible) ──
+              if (_isOffline) const _OfflineBanner(),
+              if (_showOnlineBanner)
+                _OnlineBanner(
+                  onRefresh: _onBannerRefresh,
+                  onDismiss: () => setState(() => _showOnlineBanner = false),
                 ),
-                const SizedBox(height: 16),
-                _SearchBar(
-                  controller: _searchCtrl,
-                  onChanged: (v) => setState(() {
-                    _searchQuery = v;
-                    _resetPage();
-                  }),
-                ),
-                const SizedBox(height: 14),
-                if (_showFilters) ...[
-                  _FiltersSection(
-                    checkInFrom: _checkInFrom,
-                    checkOutTo: _checkOutTo,
-                    selectedPurpose: _selectedPurpose,
-                    selectedTransport: _selectedTransport,
-                    purposeOptions: _purposeOptions,
-                    transportOptions: _transportOptions,
-                    onCheckInFromTap: () => _pickDate(context, true),
-                    onCheckOutToTap: () => _pickDate(context, false),
-                    onPurposeChanged: (v) => setState(() {
-                      _selectedPurpose = v;
-                      _resetPage();
-                    }),
-                    onTransportChanged: (v) => setState(() {
-                      _selectedTransport = v;
-                      _resetPage();
-                    }),
-                    onClearAll: _clearAllFilters,
-                    isNarrow: isNarrow,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                if (_isLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primaryCyan,
-                      ),
-                    ),
-                  )
-                else if (_loadError != null)
-                  _ErrorBanner(message: _loadError!, onRetry: _loadRecords)
-                else
-                  Column(
+
+              // ── Main scrollable content ────────────────────────────────
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _GuestTable(
-                        records: _pagedRows,
+                      _PageHeader(
+                        activeFilter: _activeFilter,
+                        onFilterChanged: (f) => setState(() {
+                          _activeFilter = f;
+                          _resetPage();
+                        }),
+                        showFilters: _showFilters,
+                        onFilterToggle: () =>
+                            setState(() => _showFilters = !_showFilters),
                         isNarrow: isNarrow,
-                        onEdit: _onEdit,
+                        totalRecords: _filtered.length,
                       ),
-                      const SizedBox(height: 12),
-                      Paginator(
-                        currentPage: _clampedPage,
-                        totalPages: _totalPages,
-                        totalItems: _filtered.length,
-                        pageSize: _pageSize,
-                        pageSizeOptions: _pageSizeOptions,
-                        onPageSizeChanged: (size) => setState(() {
-                          _pageSize = size;
-                          _currentPage = 0;
-                        }),
-                        onPageChanged: (page) => setState(() {
-                          _currentPage = page;
+                      const SizedBox(height: 16),
+                      _SearchBar(
+                        controller: _searchCtrl,
+                        onChanged: (v) => setState(() {
+                          _searchQuery = v;
+                          _resetPage();
                         }),
                       ),
+                      const SizedBox(height: 14),
+                      if (_showFilters) ...[
+                        _FiltersSection(
+                          checkInFrom:       _checkInFrom,
+                          checkOutTo:        _checkOutTo,
+                          selectedPurpose:   _selectedPurpose,
+                          selectedTransport: _selectedTransport,
+                          purposeOptions:    _purposeOptions,
+                          transportOptions:  _transportOptions,
+                          onCheckInFromTap:  () => _pickDate(context, true),
+                          onCheckOutToTap:   () => _pickDate(context, false),
+                          onPurposeChanged:  (v) => setState(() {
+                            _selectedPurpose = v;
+                            _resetPage();
+                          }),
+                          onTransportChanged: (v) => setState(() {
+                            _selectedTransport = v;
+                            _resetPage();
+                          }),
+                          onClearAll: _clearAllFilters,
+                          isNarrow:   isNarrow,
+                        ),
+                        const SizedBox(height: 14),
+                      ],
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primaryCyan,
+                            ),
+                          ),
+                        )
+                      else if (_loadError != null)
+                        _ErrorBanner(
+                          message: _loadError!,
+                          onRetry: _businessId == null ? _init : _loadRecords,
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _GuestTable(
+                              records:  _pagedRows,
+                              isNarrow: isNarrow,
+                              onEdit:   _onEdit,
+                            ),
+                            const SizedBox(height: 12),
+                            Paginator(
+                              currentPage:     _clampedPage,
+                              totalPages:      _totalPages,
+                              totalItems:      _filtered.length,
+                              pageSize:        _pageSize,
+                              pageSizeOptions: _pageSizeOptions,
+                              onPageSizeChanged: (size) => setState(() {
+                                _pageSize    = size;
+                                _currentPage = 0;
+                              }),
+                              onPageChanged: (page) =>
+                                  setState(() => _currentPage = page),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
-              ],
-            ),
+                ),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── Offline Banner ───────────────────────────────────────────────────────────
+// Shown as a thin strip at the top when the device is offline.
+// Non-dismissible — it disappears automatically when connectivity returns.
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: const Color(0xFF1A1A2E),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_off_rounded, color: Color(0xFF8A9BB5), size: 14),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'You\'re offline — showing locally saved records.',
+              style: TextStyle(color: Color(0xFF8A9BB5), fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Back-Online Banner ───────────────────────────────────────────────────────
+// Shown once when the device comes back online.
+// Gives the user a manual "Refresh" tap rather than forcing an auto-reload.
+
+class _OnlineBanner extends StatelessWidget {
+  const _OnlineBanner({required this.onRefresh, required this.onDismiss});
+
+  final VoidCallback onRefresh;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primaryCyan.withOpacity(0.08),
+        border: Border(
+          bottom: BorderSide(color: AppColors.primaryCyan.withOpacity(0.25)),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_rounded, color: AppColors.primaryCyan, size: 14),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Back online! Records may have updated.',
+              style: TextStyle(color: AppColors.primaryCyan, fontSize: 12),
+            ),
+          ),
+          GestureDetector(
+            onTap: onRefresh,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryCyan.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.4)),
+              ),
+              child: const Text(
+                'Refresh',
+                style: TextStyle(
+                  color: AppColors.primaryCyan,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(
+              Icons.close_rounded,
+              color: AppColors.primaryCyan,
+              size: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1110,7 +1247,6 @@ class _GuestTable extends StatelessWidget {
   final List<GuestRecord> records;
   final bool isNarrow;
   final ValueChanged<GuestRecord> onEdit;
-  
 
   @override
   Widget build(BuildContext context) {
@@ -1142,15 +1278,9 @@ class _GuestTable extends StatelessWidget {
               return Column(
                 children: [
                   if (isNarrow)
-                    _RecordCard(
-                      record: r,
-                      onEdit: onEdit,
-                    )
+                    _RecordCard(record: r, onEdit: onEdit)
                   else
-                    _RecordRow(
-                      record: r,
-                      onEdit: onEdit,
-                    ),
+                    _RecordRow(record: r, onEdit: onEdit),
                   if (!isLast)
                     const Divider(color: AppColors.cardBorder, height: 1),
                 ],
@@ -1206,14 +1336,10 @@ class _HeaderCell extends StatelessWidget {
 // ─── Table Row (wide) ─────────────────────────────────────────────────────────
 
 class _RecordRow extends StatelessWidget {
-  const _RecordRow({
-    required this.record,
-    required this.onEdit,
-  });
+  const _RecordRow({required this.record, required this.onEdit});
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  
 
   @override
   Widget build(BuildContext context) {
@@ -1306,14 +1432,10 @@ class _RecordRow extends StatelessWidget {
 // ─── Record Card (narrow) ─────────────────────────────────────────────────────
 
 class _RecordCard extends StatelessWidget {
-  const _RecordCard({
-    required this.record,
-    required this.onEdit,
-  });
+  const _RecordCard({required this.record, required this.onEdit});
 
   final GuestRecord record;
   final ValueChanged<GuestRecord> onEdit;
-  
 
   @override
   Widget build(BuildContext context) {
@@ -1502,7 +1624,7 @@ class _RecordDetailModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final demo = record.demographics;
+    final demo     = record.demographics;
     final isNarrow = MediaQuery.of(context).size.width < 560;
 
     return Dialog(
@@ -1605,22 +1727,18 @@ class _RecordDetailModal extends StatelessWidget {
                     else ...[
                       _BreakdownTable(breakdowns: demo.breakdowns),
                       const SizedBox(height: 20),
-
                       const _ModalSectionLabel('Is Overseas'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: _isOverseasSummary(demo.breakdowns)),
                       const SizedBox(height: 20),
-
                       const _ModalSectionLabel('Age Groups'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.ageGroups),
                       const SizedBox(height: 20),
-
                       const _ModalSectionLabel('Sex Distribution'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: demo.sexDistribution),
                       const SizedBox(height: 20),
-
                       const _ModalSectionLabel('Country / Region'),
                       const SizedBox(height: 10),
                       _StatGrid(entries: _countrySummary(demo.breakdowns)),
@@ -1738,14 +1856,13 @@ class _BreakdownTable extends StatelessWidget {
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 520;
 
-        // Narrow: stacked cards
         if (isNarrow) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: breakdowns.map((b) {
-              final isOverseas = b.isOverseas;
-              final yesNoLabel = _displayYesNo(isOverseas);
-              final yesNoColor = isOverseas
+              final isOverseas  = b.isOverseas;
+              final yesNoLabel  = _displayYesNo(isOverseas);
+              final yesNoColor  = isOverseas
                   ? const Color(0xFF3B82F6)
                   : const Color(0xFF10B981);
               return Container(
@@ -1771,7 +1888,6 @@ class _BreakdownTable extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // Is Overseas badge
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -1821,7 +1937,6 @@ class _BreakdownTable extends StatelessWidget {
           );
         }
 
-        // Wide: table layout — Country | Nationality | Region | Is Overseas | Sex | Age | Count
         return Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
@@ -1834,25 +1949,25 @@ class _BreakdownTable extends StatelessWidget {
                 inside: BorderSide(color: AppColors.cardBorder, width: 0.5),
               ),
               columnWidths: const {
-                0: FlexColumnWidth(1), // Country
-                1: FlexColumnWidth(1), // Nationality
-                2: FlexColumnWidth(1), // Region
-                3: FlexColumnWidth(1), // Is Overseas
-                4: FlexColumnWidth(1), // Sex
-                5: FlexColumnWidth(1), // Age Group
-                6: FlexColumnWidth(1), // Count
+                0: FlexColumnWidth(1),
+                1: FlexColumnWidth(1),
+                2: FlexColumnWidth(1),
+                3: FlexColumnWidth(1),
+                4: FlexColumnWidth(1),
+                5: FlexColumnWidth(1),
+                6: FlexColumnWidth(1),
               },
               children: [
                 TableRow(
                   decoration: BoxDecoration(color: AppColors.inputBackground),
                   children: const [
-                    _TCell('Country', isHeader: true),
+                    _TCell('Country',     isHeader: true),
                     _TCell('Nationality', isHeader: true),
-                    _TCell('Region', isHeader: true),
+                    _TCell('Region',      isHeader: true),
                     _TCell('Is Overseas', isHeader: true),
-                    _TCell('Sex', isHeader: true),
-                    _TCell('Age Group', isHeader: true),
-                    _TCell('Count', isHeader: true),
+                    _TCell('Sex',         isHeader: true),
+                    _TCell('Age Group',   isHeader: true),
+                    _TCell('Count',       isHeader: true),
                   ],
                 ),
                 ...breakdowns.map(
@@ -1935,7 +2050,6 @@ class _TCell extends StatelessWidget {
   }
 }
 
-/// Coloured badge cell used for the Is Overseas column.
 class _TCellBadge extends StatelessWidget {
   const _TCellBadge({required this.label, required this.color});
   final String label;

@@ -171,78 +171,83 @@ class _AdminMessagesPageState extends State<AdminMessagesPage> {
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
-  Widget build(BuildContext context) {
-    return AdminLayout(
-      title: 'Messages',
-      selectedIndex: 3,
-      onNavSelected: (_) {},
-      child: _loading
-          ? const LoadingPage()
-          : _fetchError != null
-          ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadMessages)
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final isNarrow = constraints.maxWidth < 900;
-                return SingleChildScrollView(
-                  padding: EdgeInsets.all(isNarrow ? 16 : 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _PageHeader(onCompose: _openCompose),
-                      const SizedBox(height: 16),
-                      _FilterRow(
-                        searchCtrl: _searchCtrl,
-                        onSearchChanged: (v) => setState(() {
-                          _searchQuery = v;
-                          _resetPage();
-                        }),
-                        selectedType: _selectedType,
-                        onTypeChanged: (v) => setState(() {
-                          _selectedType = v!;
-                          _resetPage();
-                        }),
-                        selectedScope: _selectedScope,
-                        onScopeChanged: (v) => setState(() {
-                          _selectedScope = v!;
-                          _resetPage();
-                        }),
-                        typeOptions: _typeOptions,
-                        scopeOptions: _scopeOptions,
+Widget build(BuildContext context) {
+  return AdminLayout(
+    title: 'Messages',
+    selectedIndex: 3,
+    onNavSelected: (_) {},
+    child: _fetchError != null
+        ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadMessages)
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 900;
+              return SingleChildScrollView(
+                padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _PageHeader(onCompose: _openCompose),
+                    const SizedBox(height: 16),
+                    _FilterRow(
+                      searchCtrl: _searchCtrl,
+                      onSearchChanged: (v) => setState(() {
+                        _searchQuery = v;
+                        _resetPage();
+                      }),
+                      selectedType: _selectedType,
+                      onTypeChanged: (v) => setState(() {
+                        _selectedType = v!;
+                        _resetPage();
+                      }),
+                      selectedScope: _selectedScope,
+                      onScopeChanged: (v) => setState(() {
+                        _selectedScope = v!;
+                        _resetPage();
+                      }),
+                      typeOptions: _typeOptions,
+                      scopeOptions: _scopeOptions,
+                    ),
+                    const SizedBox(height: 14),
+                    if (_loading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: CircularProgressIndicator(
+                            color: AppColors.primaryCyan,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    else ...[
+                      _MessagesTable(
+                        rows: _pagedRows,
+                        api: _api,
+                        onRefresh: _loadMessages,
                       ),
-                      const SizedBox(height: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _MessagesTable(
-                            rows: _pagedRows,
-                            api: _api,
-                            onRefresh: _loadMessages,
-                          ),
-                          const SizedBox(height: 12),
-                          Paginator(
-                            currentPage: _clampedPage,
-                            totalPages: _totalPages,
-                            totalItems: _filtered.length,
-                            pageSize: _pageSize,
-                            pageSizeOptions: _pageSizeOptions,
-                            onPageSizeChanged: (size) => setState(() {
-                              _pageSize = size;
-                              _currentPage = 0;
-                            }),
-                            onPageChanged: (page) => setState(() {
-                              _currentPage = page;
-                            }),
-                          ),
-                        ],
+                      const SizedBox(height: 12),
+                      Paginator(
+                        currentPage: _clampedPage,
+                        totalPages: _totalPages,
+                        totalItems: _filtered.length,
+                        pageSize: _pageSize,
+                        pageSizeOptions: _pageSizeOptions,
+                        onPageSizeChanged: (size) => setState(() {
+                          _pageSize = size;
+                          _currentPage = 0;
+                        }),
+                        onPageChanged: (page) => setState(() {
+                          _currentPage = page;
+                        }),
                       ),
                     ],
-                  ),
-                );
-              },
-            ),
-    );
-  }
+                  ],
+                ),
+              );
+            },
+          ),
+  );
 }
+  }
 
 // ─── Page Header ──────────────────────────────────────────────────────────────
 

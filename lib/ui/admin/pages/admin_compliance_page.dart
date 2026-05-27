@@ -233,14 +233,9 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       title: 'Compliance',
       selectedIndex: 4,
       onNavSelected: (_) {},
-      child: _isLoading
-          ? const LoadingPage()
-          : _fetchError != null
-              ? ErrorPage(
-                  statusCode: _errorCode ?? 500,
-                  onRetry: _load,
-                )
-              : _buildContent(),
+      child: _fetchError != null
+          ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _load)
+          : _buildContent(),
     );
   }
 
@@ -288,23 +283,36 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                 }),
               ),
               const SizedBox(height: 14),
-              _ComplianceTable(
-                rows: _pagedRows,
-                onStatusChange: _handleStatusChange,
-              ),
-              const SizedBox(height: 12),
-              Paginator(
-                currentPage: _currentPage,
-                totalPages: _totalPages,
-                totalItems: _filtered.length,
-                pageSize: _pageSize,
-                pageSizeOptions: _pageSizeOptions,
-                onPageSizeChanged: (size) => setState(() {
-                  _pageSize = size;
-                  _currentPage = 0;
-                }),
-                onPageChanged: (p) => setState(() => _currentPage = p),
-              ),
+              if (_isLoading)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryCyan,
+                      strokeWidth: 2,
+                    ),
+                  ),
+                )
+              else
+                _ComplianceTable(
+                  rows: _pagedRows,
+                  onStatusChange: _handleStatusChange,
+                ),
+              if (!_isLoading) ...[
+                const SizedBox(height: 12),
+                Paginator(
+                  currentPage: _currentPage,
+                  totalPages: _totalPages,
+                  totalItems: _filtered.length,
+                  pageSize: _pageSize,
+                  pageSizeOptions: _pageSizeOptions,
+                  onPageSizeChanged: (size) => setState(() {
+                    _pageSize = size;
+                    _currentPage = 0;
+                  }),
+                  onPageChanged: (p) => setState(() => _currentPage = p),
+                ),
+              ],
             ],
           ),
         );

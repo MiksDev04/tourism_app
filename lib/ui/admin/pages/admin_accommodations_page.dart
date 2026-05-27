@@ -323,9 +323,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       title: 'Accommodations',
       selectedIndex: 1,
       onNavSelected: (_) {},
-      child: _isLoading
-          ? const LoadingPage()
-          : _error != null
+      child: _error != null
           ? ErrorPage(
               statusCode: _errorCode ?? 500,
               onRetry: _loadAccommodations,
@@ -365,30 +363,43 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
                           }),
                         ),
                         const SizedBox(height: 14),
-                        isNarrow
-                            ? _AccommodationCardList(
-                                rows: _pagedRows,
-                                onStatusUpdate: _updateStatus,
-                              )
-                            : _AccommodationTable(
-                                rows: _pagedRows,
-                                onStatusUpdate: _updateStatus,
+                        if (_isLoading)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 48),
+                              child: CircularProgressIndicator(
+                                color: AppColors.primaryCyan,
+                                strokeWidth: 2,
                               ),
-                        const SizedBox(height: 12),
-                        Paginator(
-                          currentPage: _clampedPage,
-                          totalPages: _totalPages,
-                          totalItems: _filtered.length,
-                          pageSize: _pageSize,
-                          pageSizeOptions: _pageSizeOptions,
-                          onPageSizeChanged: (size) => setState(() {
-                            _pageSize = size;
-                            _currentPage = 0;
-                          }),
-                          onPageChanged: (page) => setState(() {
-                            _currentPage = page;
-                          }),
-                        ),
+                            ),
+                          )
+                        else if (isNarrow)
+                          _AccommodationCardList(
+                            rows: _pagedRows,
+                            onStatusUpdate: _updateStatus,
+                          )
+                        else
+                          _AccommodationTable(
+                            rows: _pagedRows,
+                            onStatusUpdate: _updateStatus,
+                          ),
+                        if (!_isLoading) ...[
+                          const SizedBox(height: 12),
+                          Paginator(
+                            currentPage: _clampedPage,
+                            totalPages: _totalPages,
+                            totalItems: _filtered.length,
+                            pageSize: _pageSize,
+                            pageSizeOptions: _pageSizeOptions,
+                            onPageSizeChanged: (size) => setState(() {
+                              _pageSize = size;
+                              _currentPage = 0;
+                            }),
+                            onPageChanged: (page) => setState(() {
+                              _currentPage = page;
+                            }),
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -564,9 +564,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       title: 'Dashboard',
       selectedIndex: 0,
       onNavSelected: (_) {},
-      child: _loadingDash
-          ? const LoadingPage()
-          : _dashError != null
+      child: _dashError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _loadDashboard)
           : Stack(
               children: [
@@ -576,7 +574,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     builder: (context, constraints) {
                       final isNarrow = constraints.maxWidth < 600;
                       final isMedium = constraints.maxWidth < 900;
-
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -629,36 +626,47 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             ),
                           ],
                           const SizedBox(height: 20),
-                          _StatCards(
-                            stats: _dashData!.stats,
-                            selectedMonth: _selectedMonth,
-                            selectedYear: _selectedYear,
-                            isNarrow: isNarrow,
-                          ),
-                          const SizedBox(height: 20),
-                          _DonutChartsRow(
-                            genderDist: _dashData!.genderDistribution,
-                            topNationalities: _dashData!.topNationalities,
-                            topRegions: _dashData!.topRegions,
-                            isNarrow: isNarrow,
-                            isMedium: isMedium,
-                          ),
-                          const SizedBox(height: 20),
-                          _TrendCard(
-                            trendData: _trendData,
-                            year1: _trendYear1,
-                            year2: _trendYear2,
-                            isLoading: _loadingTrend,
-                            onYear1Changed: (y) {
-                              setState(() => _trendYear1 = y);
-                              _loadTrend();
-                            },
-                            onYear2Changed: (y) {
-                              setState(() => _trendYear2 = y);
-                              _loadTrend();
-                            },
-                          ),
-                          const SizedBox(height: 32),
+                          if (_loadingDash)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(vertical: 80),
+                                child: CircularProgressIndicator(
+                                  color: AppColors.primaryCyan,
+                                ),
+                              ),
+                            )
+                          else ...[
+                            _StatCards(
+                              stats: _dashData!.stats,
+                              selectedMonth: _selectedMonth,
+                              selectedYear: _selectedYear,
+                              isNarrow: isNarrow,
+                            ),
+                            const SizedBox(height: 20),
+                            _DonutChartsRow(
+                              genderDist: _dashData!.genderDistribution,
+                              topNationalities: _dashData!.topNationalities,
+                              topRegions: _dashData!.topRegions,
+                              isNarrow: isNarrow,
+                              isMedium: isMedium,
+                            ),
+                            const SizedBox(height: 20),
+                            _TrendCard(
+                              trendData: _trendData,
+                              year1: _trendYear1,
+                              year2: _trendYear2,
+                              isLoading: _loadingTrend,
+                              onYear1Changed: (y) {
+                                setState(() => _trendYear1 = y);
+                                _loadTrend();
+                              },
+                              onYear2Changed: (y) {
+                                setState(() => _trendYear2 = y);
+                                _loadTrend();
+                              },
+                            ),
+                            const SizedBox(height: 32),
+                          ],
                         ],
                       );
                     },
@@ -2245,4 +2253,3 @@ class _DonutPainter extends CustomPainter {
   bool shouldRepaint(covariant _DonutPainter old) =>
       old.animValue != animValue || old.hoveredIdx != hoveredIdx;
 }
-

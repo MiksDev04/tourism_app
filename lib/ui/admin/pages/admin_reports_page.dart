@@ -395,9 +395,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       title: 'Report',
       selectedIndex: 2,
       onNavSelected: (_) {},
-      child: _loadingReports
-          ? const LoadingPage()
-          : _fetchError != null
+      child: _fetchError != null
           ? ErrorPage(statusCode: _errorCode ?? 500, onRetry: _fetchReports)
           : LayoutBuilder(
               builder: (context, constraints) {
@@ -463,26 +461,39 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                               : null,
                         ),
                         const SizedBox(height: 12),
-                        _GeneratedReportsTable(
-                          rows: _pagedReports,
-                          isLoading: false,
-                          onDownload: _downloadReport,
-                        ),
-                        const SizedBox(height: 12),
-                        Paginator(
-                          currentPage: _clampedPage,
-                          totalPages: _totalPages,
-                          totalItems: _filteredReports.length,
-                          pageSize: _pageSize,
-                          pageSizeOptions: _pageSizeOptions,
-                          onPageSizeChanged: (size) => setState(() {
-                            _pageSize = size;
-                            _currentPage = 0;
-                          }),
-                          onPageChanged: (page) => setState(() {
-                            _currentPage = page;
-                          }),
-                        ),
+                        if (_loadingReports)
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 48),
+                              child: CircularProgressIndicator(
+                                color: AppColors.primaryCyan,
+                                strokeWidth: 2,
+                              ),
+                            ),
+                          )
+                        else
+                          _GeneratedReportsTable(
+                            rows: _pagedReports,
+                            isLoading: false,
+                            onDownload: _downloadReport,
+                          ),
+                        if (!_loadingReports) ...[
+                          const SizedBox(height: 12),
+                          Paginator(
+                            currentPage: _clampedPage,
+                            totalPages: _totalPages,
+                            totalItems: _filteredReports.length,
+                            pageSize: _pageSize,
+                            pageSizeOptions: _pageSizeOptions,
+                            onPageSizeChanged: (size) => setState(() {
+                              _pageSize = size;
+                              _currentPage = 0;
+                            }),
+                            onPageChanged: (page) => setState(() {
+                              _currentPage = page;
+                            }),
+                          ),
+                        ],
                         const SizedBox(height: 24),
                       ],
                     ),

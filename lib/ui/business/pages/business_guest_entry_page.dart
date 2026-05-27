@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/offline_service.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../../api/business_guest_entry_api.dart';
 
@@ -193,17 +196,74 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
 
   final List<DemographicRow> _rows = [DemographicRow()];
 
+  // ── Connectivity state ────────────────────────────────────────────────────
+  // _isOffline: mirrors the current network status, used for the offline strip.
+  // _showOnlineBanner: true only for the brief window after coming back online,
+  // so we can show the "tap to refresh" prompt without forcing an auto-reload.
+  bool _isOffline        = false;
+  bool _showOnlineBanner = false;
+  StreamSubscription<bool>? _connectivitySub;
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
     _rowErrors = [{}];
+    _isOffline = !ConnectivityService.instance.isOnline;
+    _subscribeToConnectivity();
     _loadBusinessId();
   }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    _totalGuestsCtrl.dispose();
+    _roomsOccupiedCtrl.dispose();
+    _purposeOtherCtrl.dispose();
+    _transportOtherCtrl.dispose();
+    for (final r in _rows) r.dispose();
+    super.dispose();
+  }
+
+  // ── Connectivity subscription ─────────────────────────────────────────────
+
+  void _subscribeToConnectivity() {
+    _connectivitySub =
+        ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
+      if (!mounted) return;
+
+      if (isOnline && _isOffline) {
+        // Just came back online — show banner, don't auto-refresh data.
+        setState(() {
+          _isOffline        = false;
+          _showOnlineBanner = true;
+        });
+      } else if (!isOnline && !_isOffline) {
+        // Just went offline — show the offline strip, hide the online banner.
+        setState(() {
+          _isOffline        = true;
+          _showOnlineBanner = false;
+        });
+      }
+    });
+  }
+
+  // ── Business ID loading ───────────────────────────────────────────────────
 
   Future<void> _loadBusinessId() async {
     final id = await _api.fetchBusinessId();
     if (mounted) setState(() => _businessId = id);
   }
+
+  // Called when the user taps "Refresh" on the back-online banner.
+  // Re-runs _loadBusinessId so it can reach Supabase now that we're online.
+  Future<void> _onBannerRefresh() async {
+    setState(() => _showOnlineBanner = false);
+    await _loadBusinessId();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   int get _nightsCount {
     if (_checkIn == null || _checkOut == null) return 0;
@@ -244,11 +304,11 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     }
   }
 
-  void _showSuccessSnackBar(String message) {
+  void _showSnackBar(String message, {Color? color}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppColors.primaryCyan,
+        backgroundColor: color ?? AppColors.primaryCyan,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -336,21 +396,17 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       final row = _rows[i];
 
       if (row.isOverseas) {
-        // ── Overseas: country / nationality / region must all be null ──────
-        // No location fields to validate — only sex, age, count required.
+        // Overseas: no location fields to validate — only sex, age, count required.
       } else {
-        // ── Domestic ─────────────────────────────────────────────────────
         if (row.country == null) {
           rowErrors[i]['country'] = 'Required';
           hasError = true;
         }
         if (row.country == 'Philippines') {
-          // Nationality required for Philippine entries
           if (row.nationality == null) {
             rowErrors[i]['nationality'] = 'Required';
             hasError = true;
           }
-          // Region is optional per schema (nullable), but validate if needed
         }
       }
 
@@ -368,7 +424,6 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         hasError = true;
       }
 
-      // Duplicate detection — include nationality in the key
       if (row.sex != null && row.ageGroup != null) {
         final key = row.isOverseas
             ? 'overseas|${row.sex}|${row.ageGroup}'
@@ -425,7 +480,6 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         transportationMode: transportValue,
         breakdowns: _rows
             .map((r) => GuestBreakdownData(
-                  // Overseas: country / nationality / region are all null
                   country: r.isOverseas ? null : r.country,
                   nationality: (r.isOverseas || r.country != 'Philippines')
                       ? null
@@ -448,7 +502,17 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
 
     if (result.success) {
       _clearForm();
-      _showSuccessSnackBar('Guest entry saved successfully!');
+      // Show a different message depending on whether we're currently offline.
+      // The API already queued the entry as pending_create when offline, so
+      // the save itself succeeded — we just want to set the user's expectation.
+      if (!ConnectivityService.instance.isOnline) {
+        _showSnackBar(
+          'Entry saved offline — will sync when you\'re back online.',
+          color: const Color(0xFFF59E0B), // amber to signal "pending"
+        );
+      } else {
+        _showSnackBar('Guest entry saved successfully!');
+      }
     } else {
       setState(() => _errors = {
             'submit': result.error ?? 'Failed to save. Please try again.',
@@ -507,15 +571,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     });
   }
 
-  @override
-  void dispose() {
-    _totalGuestsCtrl.dispose();
-    _roomsOccupiedCtrl.dispose();
-    _purposeOtherCtrl.dispose();
-    _transportOtherCtrl.dispose();
-    for (final r in _rows) r.dispose();
-    super.dispose();
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -523,94 +579,208 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       title: 'Guest Entry',
       selectedIndex: 1,
       onNavSelected: (_) {},
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _PageHeader(),
-            const SizedBox(height: 20),
-
-            if (_errors['submit'] != null) ...[
-              _GlobalErrorBanner(message: _errors['submit']!),
-              const SizedBox(height: 12),
-            ],
-            if (_errors['businessId'] != null) ...[
-              _GlobalErrorBanner(message: _errors['businessId']!),
-              const SizedBox(height: 12),
-            ],
-
-            _StayInfoCard(
-              checkIn: _checkIn,
-              checkOut: _checkOut,
-              nights: _nightsCount,
-              totalGuestsCtrl: _totalGuestsCtrl,
-              roomsOccupiedCtrl: _roomsOccupiedCtrl,
-              purpose: _purpose,
-              transport: _transport,
-              showPurposeOther: _showPurposeOther,
-              showTransportOther: _showTransportOther,
-              purposeOtherCtrl: _purposeOtherCtrl,
-              transportOtherCtrl: _transportOtherCtrl,
-              errors: _errors,
-              onPickCheckIn: () => _pickDate(context, true),
-              onPickCheckOut: () => _pickDate(context, false),
-              onPurposeChanged: (v) {
-                setState(() {
-                  _purpose = v;
-                  _showPurposeOther = v == 'Others';
-                  if (!_showPurposeOther) _purposeOtherCtrl.clear();
-                });
-                _clearFieldError('purpose');
-                _clearFieldError('purposeOther');
-              },
-              onTransportChanged: (v) {
-                setState(() {
-                  _transport = v;
-                  _showTransportOther = v == 'Others';
-                  if (!_showTransportOther) _transportOtherCtrl.clear();
-                });
-                _clearFieldError('transport');
-                _clearFieldError('transportOther');
-              },
-              onGuestsChanged: (_) {
-                setState(() {});
-                _clearFieldError('totalGuests');
-                _clearFieldError('demographicSum');
-              },
-              onRoomsChanged: (_) => _clearFieldError('roomsOccupied'),
-              onPurposeOtherChanged: (_) => _clearFieldError('purposeOther'),
-              onTransportOtherChanged: (_) =>
-                  _clearFieldError('transportOther'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Connectivity banners (outside scroll so always visible) ──────
+          if (_isOffline) const _OfflineBanner(),
+          if (_showOnlineBanner)
+            _OnlineBanner(
+              onRefresh: _onBannerRefresh,
+              onDismiss: () => setState(() => _showOnlineBanner = false),
             ),
-            const SizedBox(height: 16),
 
-            _DemographicCard(
-              rows: _rows,
-              total: _totalGuests,
-              currentSum: _demographicTotal,
-              errors: _errors,
-              rowErrors: _rowErrors,
-              onAddRow: _addRow,
-              onRemoveRow: _removeRow,
-              onRowChanged: (int rowIndex, String fieldKey) {
-                setState(() {});
-                _clearRowFieldError(rowIndex, fieldKey);
-                _clearFieldError('demographicSum');
-              },
-            ),
-            const SizedBox(height: 20),
+          // ── Main scrollable content ──────────────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _PageHeader(),
+                  const SizedBox(height: 20),
 
-            _FormActions(
-              isSaving: _isSaving,
-              onClear: () {
-                _clearForm();
-                _showSuccessSnackBar('Form cleared.');
-              },
-              onSave: _save,
+                  if (_errors['submit'] != null) ...[
+                    _GlobalErrorBanner(message: _errors['submit']!),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_errors['businessId'] != null) ...[
+                    _GlobalErrorBanner(message: _errors['businessId']!),
+                    const SizedBox(height: 12),
+                  ],
+
+                  _StayInfoCard(
+                    checkIn: _checkIn,
+                    checkOut: _checkOut,
+                    nights: _nightsCount,
+                    totalGuestsCtrl: _totalGuestsCtrl,
+                    roomsOccupiedCtrl: _roomsOccupiedCtrl,
+                    purpose: _purpose,
+                    transport: _transport,
+                    showPurposeOther: _showPurposeOther,
+                    showTransportOther: _showTransportOther,
+                    purposeOtherCtrl: _purposeOtherCtrl,
+                    transportOtherCtrl: _transportOtherCtrl,
+                    errors: _errors,
+                    onPickCheckIn: () => _pickDate(context, true),
+                    onPickCheckOut: () => _pickDate(context, false),
+                    onPurposeChanged: (v) {
+                      setState(() {
+                        _purpose = v;
+                        _showPurposeOther = v == 'Others';
+                        if (!_showPurposeOther) _purposeOtherCtrl.clear();
+                      });
+                      _clearFieldError('purpose');
+                      _clearFieldError('purposeOther');
+                    },
+                    onTransportChanged: (v) {
+                      setState(() {
+                        _transport = v;
+                        _showTransportOther = v == 'Others';
+                        if (!_showTransportOther) _transportOtherCtrl.clear();
+                      });
+                      _clearFieldError('transport');
+                      _clearFieldError('transportOther');
+                    },
+                    onGuestsChanged: (_) {
+                      setState(() {});
+                      _clearFieldError('totalGuests');
+                      _clearFieldError('demographicSum');
+                    },
+                    onRoomsChanged: (_) => _clearFieldError('roomsOccupied'),
+                    onPurposeOtherChanged: (_) => _clearFieldError('purposeOther'),
+                    onTransportOtherChanged: (_) =>
+                        _clearFieldError('transportOther'),
+                  ),
+                  const SizedBox(height: 16),
+
+                  _DemographicCard(
+                    rows: _rows,
+                    total: _totalGuests,
+                    currentSum: _demographicTotal,
+                    errors: _errors,
+                    rowErrors: _rowErrors,
+                    onAddRow: _addRow,
+                    onRemoveRow: _removeRow,
+                    onRowChanged: (int rowIndex, String fieldKey) {
+                      setState(() {});
+                      _clearRowFieldError(rowIndex, fieldKey);
+                      _clearFieldError('demographicSum');
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  _FormActions(
+                    isSaving: _isSaving,
+                    onClear: () {
+                      _clearForm();
+                      _showSnackBar('Form cleared.');
+                    },
+                    onSave: _save,
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Offline Banner ───────────────────────────────────────────────────────────
+// Shown as a thin strip at the top when the device is offline.
+// Non-dismissible — disappears automatically when connectivity returns.
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: const Color(0xFF1A1A2E),
+      child: const Row(
+        children: [
+          Icon(Icons.wifi_off_rounded, color: Color(0xFF8A9BB5), size: 14),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'You\'re offline — entries will be saved locally and synced later.',
+              style: TextStyle(color: Color(0xFF8A9BB5), fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Back-Online Banner ───────────────────────────────────────────────────────
+// Shown once when the device comes back online.
+// Gives the user a manual "Refresh" tap to re-resolve the business ID
+// rather than forcing an auto-reload mid-form.
+
+class _OnlineBanner extends StatelessWidget {
+  const _OnlineBanner({required this.onRefresh, required this.onDismiss});
+
+  final VoidCallback onRefresh;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.primaryCyan.withOpacity(0.08),
+        border: Border(
+          bottom: BorderSide(color: AppColors.primaryCyan.withOpacity(0.25)),
         ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.wifi_rounded,
+              color: AppColors.primaryCyan, size: 14),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text(
+              'Back online! Tap Refresh to reconnect your account.',
+              style: TextStyle(color: AppColors.primaryCyan, fontSize: 12),
+            ),
+          ),
+          GestureDetector(
+            onTap: onRefresh,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.primaryCyan.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.4)),
+              ),
+              child: const Text(
+                'Refresh',
+                style: TextStyle(
+                  color: AppColors.primaryCyan,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(
+              Icons.close_rounded,
+              color: AppColors.primaryCyan,
+              size: 14,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -742,7 +912,6 @@ class _StayInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Check-in / Check-out / Nights ─────────────────────────────────
           if (isMobile) ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -816,7 +985,6 @@ class _StayInfoCard extends StatelessWidget {
           ],
           const SizedBox(height: 14),
 
-          // ── Total Guests / Rooms ──────────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -849,7 +1017,6 @@ class _StayInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // ── Purpose / Transport ───────────────────────────────────────────
           if (isMobile) ...[
             _FieldCol(
               label: 'Purpose of Visit *',
@@ -1039,7 +1206,6 @@ class _DemographicCard extends StatelessWidget {
           ...List.generate(rows.length, (i) {
             final row  = rows[i];
             final rErr = i < rowErrors.length ? rowErrors[i] : <String, String?>{};
-
             final isPhilippines = !row.isOverseas && row.country == 'Philippines';
 
             return Padding(
@@ -1119,7 +1285,6 @@ class _DesktopDemoRow extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // ── Overseas toggle (always first, always visible) ─────────────────
         Tooltip(
           message: 'Filipino guest living overseas',
           child: SizedBox(
@@ -1132,7 +1297,6 @@ class _DesktopDemoRow extends StatelessWidget {
                   onChanged: (v) {
                     row.isOverseas = v ?? false;
                     if (row.isOverseas) {
-                      // Clear all location fields when toggled overseas
                       row.country     = null;
                       row.nationality = null;
                       row.region      = null;
@@ -1144,7 +1308,7 @@ class _DesktopDemoRow extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                 ),
                 const Text(
-                    'Overseas Fil.',
+                  'Overseas Fil.',
                   style: TextStyle(
                     color: AppColors.textGray,
                     fontSize: 11.5,
@@ -1157,7 +1321,6 @@ class _DesktopDemoRow extends StatelessWidget {
 
         const SizedBox(width: 8),
 
-        // ── Country (disabled when overseas) ──────────────────────────────
         Expanded(
           flex: 3,
           child: _CompactDropWithError(
@@ -1169,7 +1332,6 @@ class _DesktopDemoRow extends StatelessWidget {
               enabled: !row.isOverseas,
               onChanged: (v) {
                 row.country = v;
-                // Reset dependent fields when country changes
                 if (v != 'Philippines') {
                   row.nationality = null;
                   row.region      = null;
@@ -1180,7 +1342,6 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ),
 
-        // ── Nationality (Philippines only, not overseas) ───────────────────
         if (isPhilippines) ...[
           const SizedBox(width: 8),
           Expanded(
@@ -1200,7 +1361,6 @@ class _DesktopDemoRow extends StatelessWidget {
           ),
         ],
 
-        // ── Region (Philippines local only, not overseas) ──────────────────
         if (isPhilippines) ...[
           const SizedBox(width: 8),
           Expanded(
@@ -1222,7 +1382,6 @@ class _DesktopDemoRow extends StatelessWidget {
 
         const SizedBox(width: 8),
 
-        // ── Sex ───────────────────────────────────────────────────────────
         Expanded(
           flex: 2,
           child: _CompactDropWithError(
@@ -1240,7 +1399,6 @@ class _DesktopDemoRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
 
-        // ── Age Group ─────────────────────────────────────────────────────
         Expanded(
           flex: 2,
           child: _CompactDropWithError(
@@ -1258,7 +1416,6 @@ class _DesktopDemoRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
 
-        // ── Count ─────────────────────────────────────────────────────────
         SizedBox(
           width: 60,
           child: _CompactDropWithError(
@@ -1272,7 +1429,6 @@ class _DesktopDemoRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
 
-        // ── Delete ────────────────────────────────────────────────────────
         SizedBox(
           width: 20,
           child: showDelete
@@ -1323,7 +1479,6 @@ class _MobileDemoRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Overseas toggle ──────────────────────────────────────────────
           GestureDetector(
             onTap: () {
               row.isOverseas = !row.isOverseas;
@@ -1374,7 +1529,6 @@ class _MobileDemoRow extends StatelessWidget {
 
           const SizedBox(height: 10),
 
-          // ── Country (disabled when overseas) ──────────────────────────────
           _CompactDropWithError(
             errorText: rowErrors['country'],
             child: _CompactDrop(
@@ -1393,7 +1547,6 @@ class _MobileDemoRow extends StatelessWidget {
             ),
           ),
 
-          // ── Nationality + Region (Philippines only) ────────────────────
           if (isPhilippines) ...[
             const SizedBox(height: 8),
             Row(
@@ -1433,7 +1586,6 @@ class _MobileDemoRow extends StatelessWidget {
 
           const SizedBox(height: 8),
 
-          // ── Sex + Age Group + Count ────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -1725,9 +1877,9 @@ class _AddRowButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               Icon(Icons.add, color: Colors.white, size: 16),
               SizedBox(width: 8),
               Text('Add Row',
@@ -1769,7 +1921,6 @@ class _CompactDropWithError extends StatelessWidget {
 //  INPUT WIDGETS — all sized to _kFieldHeight (40 px)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Shared InputDecoration for text / number fields.
 InputDecoration _lightDecoration({String? hint, bool hasError = false}) {
   final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
   final focusColor  = hasError ? AppColors.accentRed : _kInputFocused;
@@ -1794,8 +1945,6 @@ InputDecoration _lightDecoration({String? hint, bool hasError = false}) {
     ),
   );
 }
-
-// ── Date picker field ─────────────────────────────────────────────────────────
 
 class _EntryDateField extends StatelessWidget {
   const _EntryDateField({
@@ -1846,8 +1995,6 @@ class _EntryDateField extends StatelessWidget {
   }
 }
 
-// ── Read-only field ───────────────────────────────────────────────────────────
-
 class _EntryReadOnlyField extends StatelessWidget {
   const _EntryReadOnlyField({required this.value});
   final String value;
@@ -1868,8 +2015,6 @@ class _EntryReadOnlyField extends StatelessWidget {
     );
   }
 }
-
-// ── Number input field ────────────────────────────────────────────────────────
 
 class _EntryNumberField extends StatelessWidget {
   const _EntryNumberField({
@@ -1899,8 +2044,6 @@ class _EntryNumberField extends StatelessWidget {
   }
 }
 
-// ── Text input field ──────────────────────────────────────────────────────────
-
 class _EntryTextField extends StatelessWidget {
   const _EntryTextField({
     required this.controller,
@@ -1926,8 +2069,6 @@ class _EntryTextField extends StatelessWidget {
     );
   }
 }
-
-// ── Dropdown field (Purpose / Transport) ──────────────────────────────────────
 
 class _EntryDropdownField extends StatelessWidget {
   const _EntryDropdownField({
@@ -1986,8 +2127,6 @@ class _EntryDropdownField extends StatelessWidget {
   }
 }
 
-// ── Compact dropdown for demographic rows ─────────────────────────────────────
-
 class _CompactDrop extends StatelessWidget {
   const _CompactDrop({
     required this.hint,
@@ -2044,8 +2183,6 @@ class _CompactDrop extends StatelessWidget {
     );
   }
 }
-
-// ── Compact count field for demographic rows ──────────────────────────────────
 
 class _CompactCountField extends StatelessWidget {
   const _CompactCountField({
