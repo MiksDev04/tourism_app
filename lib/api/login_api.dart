@@ -235,11 +235,22 @@ class LoginApi {
     } catch (e) {
       debugPrint('❌ Login error: ${e.runtimeType} — $e');
       final msg = e.toString().toLowerCase();
-      if (msg.contains('network') ||
-          msg.contains('socket') ||
-          msg.contains('connection')) {
+      if (msg.contains('network')) {
         return LoginResult.err(
-          'No internet connection. Please go online to sign in.',
+          'Network problem. Please check your internet and try again.',
+        );
+      }
+      if (msg.contains('socket') ||
+          msg.contains('database') ||
+          msg.contains('db') ||
+          msg.contains('postgres')) {
+        return LoginResult.err(
+          'Server connection problem. The app could not reach the database service. Please try again later.',
+        );
+      }
+      if (msg.contains('connection')) {
+        return LoginResult.err(
+          'Connection problem. Please check your internet and try again.',
         );
       }
       return LoginResult.err('Something went wrong. Please try again.');

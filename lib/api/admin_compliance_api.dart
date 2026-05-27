@@ -144,20 +144,5 @@ class AdminComplianceApi {
         .toList();
   }
 
-  /// Updates the [status] of a business by [id].
-  static Future<void> updateBusinessStatus(
-    String id,
-    BusinessStatusLevel status,
-  ) async {
-    final String statusStr = switch (status) {
-      BusinessStatusLevel.approved => 'approved',
-      BusinessStatusLevel.warning => 'warning',
-      BusinessStatusLevel.suspended => 'suspended',
-    };
 
-    await _supabase
-        .from('businesses')
-        .update({'status': statusStr})
-        .eq('id', id);
-  }
 }

@@ -10,22 +10,22 @@ enum BusinessLine {
   hotel,
   resort,
   motel,
-  pensionInn,
-  youthHostel,
+  pension_inn,
+  youth_hostel,
+  apartment,   // ✅ added
   others;
 
-  String get dbValue => switch (this) {
-    BusinessLine.youthHostel => 'pensionHouse',
-    _ => name,
-  };
+  // ✅ all values now just use their name — matches DB enum exactly
+  String get dbValue => name;
 
   String get label => switch (this) {
     BusinessLine.hotel        => 'Hotel',
     BusinessLine.resort       => 'Resort',
-    BusinessLine.motel   => 'Motel',
-    BusinessLine.pensionInn         => 'Pension Inn',
-    BusinessLine.youthHostel => 'Youth Hostel',
-    BusinessLine.others        => 'Others',
+    BusinessLine.motel        => 'Motel',
+    BusinessLine.pension_inn  => 'Pension Inn',
+    BusinessLine.youth_hostel => 'Youth Hostel',
+    BusinessLine.apartment    => 'Apartment',
+    BusinessLine.others       => 'Others',
   };
 
   static BusinessLine fromDb(String v) => BusinessLine.values.firstWhere(
@@ -35,34 +35,33 @@ enum BusinessLine {
 }
 
 enum BusinessType {
-  soleProprietorship,
+  sole_proprietorship,
   partnership,
   corporation,
   cooperative;
 
-  String get dbValue => switch (this) {
-    BusinessType.soleProprietorship => 'sole_proprietorship',
-    _ => name,
-  };
+  // ✅ all values use name — matches DB enum exactly (sole_proprietorship, not 'Sole Proprietorship')
+  String get dbValue => name;
 
   String get label => switch (this) {
-    BusinessType.soleProprietorship => 'Sole Proprietorship',
-    BusinessType.partnership        => 'Partnership',
-    BusinessType.corporation        => 'Corporation',
-    BusinessType.cooperative        => 'Cooperative',
+    BusinessType.sole_proprietorship => 'Sole Proprietorship',
+    BusinessType.partnership         => 'Partnership',
+    BusinessType.corporation         => 'Corporation',
+    BusinessType.cooperative         => 'Cooperative',
   };
 
   static BusinessType fromDb(String v) => BusinessType.values.firstWhere(
     (e) => e.dbValue == v,
-    orElse: () => BusinessType.soleProprietorship,
+    orElse: () => BusinessType.sole_proprietorship,
   );
 }
 
 enum BusinessStatus {
   pending,
   approved,
-  rejected,
-  suspended;
+  rejected,    
+  warning;
+
 
   static BusinessStatus fromDb(String v) => BusinessStatus.values.firstWhere(
     (e) => e.name == v,

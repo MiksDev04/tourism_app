@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:tourism_app/ui/shared/pages/loading_page.dart';
+// import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/pages/error_page.dart';
@@ -24,7 +24,6 @@ const _businessStatusOptions = [
   'All Business Statuses',
   'Approved',
   'Warning',
-  'Suspended',
 ];
 
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
@@ -190,42 +189,6 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
     }
   }
 
-  // ── Status change handler ──────────────────────────────────────────────────
-  Future<void> _handleStatusChange(
-    BusinessActivityRecord record,
-    BusinessStatusLevel newStatus,
-  ) async {
-    // Optimistic update
-    setState(() {
-      final idx = _allRecords.indexWhere((r) => r.id == record.id);
-      if (idx != -1) {
-        _allRecords[idx] = _allRecords[idx].copyWith(businessStatus: newStatus);
-      }
-    });
-
-    try {
-      await AdminComplianceApi.updateBusinessStatus(record.id, newStatus);
-    } catch (e) {
-      // Revert on failure
-      setState(() {
-        final idx = _allRecords.indexWhere((r) => r.id == record.id);
-        if (idx != -1) {
-          _allRecords[idx] = _allRecords[idx].copyWith(
-            businessStatus: record.businessStatus,
-          );
-        }
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update status: $e'),
-            backgroundColor: AppColors.accentRed,
-          ),
-        );
-      }
-    }
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -294,10 +257,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                   ),
                 )
               else
-                _ComplianceTable(
-                  rows: _pagedRows,
-                  onStatusChange: _handleStatusChange,
-                ),
+                _ComplianceTable(rows: _pagedRows),
               if (!_isLoading) ...[
                 const SizedBox(height: 12),
                 Paginator(
@@ -659,11 +619,9 @@ class _DropdownFilter extends StatelessWidget {
 // ─── Compliance Table ─────────────────────────────────────────────────────────
 
 class _ComplianceTable extends StatelessWidget {
-  const _ComplianceTable({required this.rows, required this.onStatusChange});
+  const _ComplianceTable({required this.rows});
 
   final List<BusinessActivityRecord> rows;
-  final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
-  onStatusChange;
 
   @override
   Widget build(BuildContext context) {
@@ -692,10 +650,7 @@ class _ComplianceTable extends StatelessWidget {
               itemCount: rows.length,
               separatorBuilder: (_, __) =>
                   const Divider(color: AppColors.cardBorder, height: 1),
-              itemBuilder: (_, i) => _ComplianceRow(
-                record: rows[i],
-                onStatusChange: onStatusChange,
-              ),
+              itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
             ),
         ],
       ),
@@ -725,13 +680,12 @@ class _TableHeader extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(flex: 3, child: _HeaderCell('Business')),
-                Expanded(flex: 2, child: _HeaderCell('Business Line')),
+                Expanded(flex: 3, child: _HeaderCell('Business Line')),
                 Expanded(flex: 2, child: _HeaderCell('Business Status')),
                 Expanded(flex: 3, child: _HeaderCell('Activity Status')),
                 Expanded(flex: 2, child: _HeaderCell('Records')),
                 Expanded(flex: 2, child: _HeaderCell('Guests')),
                 Expanded(flex: 3, child: _HeaderCell('Last Activity')),
-                SizedBox(width: 44, child: _HeaderCell('')),
               ],
             ),
           );
@@ -761,11 +715,9 @@ class _HeaderCell extends StatelessWidget {
 // ─── Compliance Row ───────────────────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
-  const _ComplianceRow({required this.record, required this.onStatusChange});
+  const _ComplianceRow({required this.record});
 
   final BusinessActivityRecord record;
-  final Future<void> Function(BusinessActivityRecord, BusinessStatusLevel)
-  onStatusChange;
 
   String _formatLastActivity(DateTime? dt) {
     if (dt == null) return '—';
@@ -789,15 +741,7 @@ class _ComplianceRow extends StatelessWidget {
   String _formatNumber(int n) =>
       n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
 
-  void _showStatusModal(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (_) => _StatusChangeDialog(
-        record: record,
-        onConfirm: (newStatus) => onStatusChange(record, newStatus),
-      ),
-    );
-  }
+ 
 
   @override
   Widget build(BuildContext context) {
@@ -836,7 +780,6 @@ class _ComplianceRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _ActionButton(onTap: () => _showStatusModal(context)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -901,7 +844,7 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 2,
+                  flex: 3,
                   child: Text(
                     record.businessLineLabel,
                     style: const TextStyle(
@@ -956,48 +899,11 @@ class _ComplianceRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(
-                  width: 44,
-                  child: _ActionButton(onTap: () => _showStatusModal(context)),
-                ),
               ],
             ),
           );
         }
       },
-    );
-  }
-}
-
-// ─── Action Button ────────────────────────────────────────────────────────────
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Manage Status',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: AppColors.cardBackground,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.cardBorder),
-          ),
-          child: const Icon(
-            Icons.tune_rounded,
-            size: 15,
-            color: AppColors.textGray,
-          ),
-        ),
-      ),
     );
   }
 }

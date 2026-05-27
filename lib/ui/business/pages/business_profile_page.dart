@@ -57,7 +57,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final _registrationCtrl    = TextEditingController();
 
   // ── Business dropdowns ────────────────────────────────────────────────────
-  BusinessType _selectedBusinessType = BusinessType.soleProprietorship;
+  BusinessType _selectedBusinessType = BusinessType.sole_proprietorship;
   List<BusinessLine> _selectedLines  = [BusinessLine.hotel];
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -276,8 +276,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
           ? const Center(child: CircularProgressIndicator())
           : _isOffline
               ? OfflineState(onRetry: _loadData)
-              : _loadError != null
-                  ? _ErrorView(error: _loadError!, onRetry: _loadData)
                   : LayoutBuilder(
                       builder: (context, constraints) {
                         final isNarrow = constraints.maxWidth < 600;
@@ -326,7 +324,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
                                     selectedLines:        _selectedLines,
                                     onBusinessTypeChanged: (v) => setState(
                                       () => _selectedBusinessType =
-                                          v ?? BusinessType.soleProprietorship),
+                                          v ?? BusinessType.sole_proprietorship),
                                     onLinesChanged: (v) =>
                                         setState(() => _selectedLines = v),
                                     isSaving:  _isSavingBusiness,
@@ -468,7 +466,7 @@ class _StatusBadge extends StatelessWidget {
       BusinessStatus.rejected  => (
         const Color(0xFF3B0D0D), const Color(0xFF5C1A1A),
         const Color(0xFFF87171), const Color(0xFFF87171), 'Rejected'),
-      BusinessStatus.suspended => (
+      BusinessStatus.warning => (
         const Color(0xFF3B2A0D), const Color(0xFF5C3F1A),
         const Color(0xFFFBBF24), const Color(0xFFFBBF24), 'Suspended'),
       BusinessStatus.pending   => (

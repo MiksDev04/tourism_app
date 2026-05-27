@@ -9,7 +9,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as p;
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
-import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../../api/admin_dashboard_api.dart';
@@ -627,14 +626,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           ],
                           const SizedBox(height: 20),
                           if (_loadingDash)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.symmetric(vertical: 80),
-                                child: CircularProgressIndicator(
-                                  color: AppColors.primaryCyan,
-                                ),
-                              ),
-                            )
+                            const _LoadingSection(height: 100)
                           else ...[
                             _StatCards(
                               stats: _dashData!.stats,
@@ -665,8 +657,23 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                                 _loadTrend();
                               },
                             ),
-                            const SizedBox(height: 32),
                           ],
+                          const SizedBox(height: 20),
+                          _TrendCard(
+                            trendData: _trendData,
+                            year1: _trendYear1,
+                            year2: _trendYear2,
+                            isLoading: _loadingTrend,
+                            onYear1Changed: (y) {
+                              setState(() => _trendYear1 = y);
+                              _loadTrend();
+                            },
+                            onYear2Changed: (y) {
+                              setState(() => _trendYear2 = y);
+                              _loadTrend();
+                            },
+                          ),
+                          const SizedBox(height: 32),
                         ],
                       );
                     },
@@ -683,6 +690,22 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
               ],
             ),
+    );
+  }
+}
+
+class _LoadingSection extends StatelessWidget {
+  const _LoadingSection({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryCyan),
+      ),
     );
   }
 }
