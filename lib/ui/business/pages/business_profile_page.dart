@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../shared/layouts/business_layout.dart';
+import '../widgets/offline_state.dart';
 import '../../../router/app_router.dart';
 import '../../../api/business_profile_api.dart';
 
@@ -17,23 +21,27 @@ class BusinessProfilePage extends StatefulWidget {
 class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final _api = BusinessProfileApi();
 
-  // ── Load state ───────────────────────────────────────────────────────────────
+  // ── Connectivity ──────────────────────────────────────────────────────────
+  bool _isOffline = false;
+  StreamSubscription<bool>? _connectivitySub;
+
+  // ── Load state ────────────────────────────────────────────────────────────
   bool _isLoading = true;
   String? _loadError;
   ProfileModel? _profile;
   BusinessModel? _business;
 
-  // ── Save state ───────────────────────────────────────────────────────────────
+  // ── Save state ────────────────────────────────────────────────────────────
   bool _isSavingAccount  = false;
   bool _isSavingBusiness = false;
 
-  // ── Account controllers ──────────────────────────────────────────────────────
+  // ── Account controllers ───────────────────────────────────────────────────
   final _fullNameCtrl = TextEditingController();
   final _usernameCtrl = TextEditingController();
   final _emailCtrl    = TextEditingController();
   final _phoneCtrl    = TextEditingController();
 
-  // ── Business controllers ─────────────────────────────────────────────────────
+  // ── Business controllers ──────────────────────────────────────────────────
   final _businessNameCtrl    = TextEditingController();
   final _tradenameCtrl       = TextEditingController();
   final _ownerFirstCtrl      = TextEditingController();
@@ -48,18 +56,22 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   final _permitNumberCtrl    = TextEditingController();
   final _registrationCtrl    = TextEditingController();
 
-  // ── Business dropdowns ───────────────────────────────────────────────────────
+  // ── Business dropdowns ────────────────────────────────────────────────────
   BusinessType _selectedBusinessType = BusinessType.soleProprietorship;
   List<BusinessLine> _selectedLines  = [BusinessLine.hotel];
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
+    _subscribeConnectivity();
     _loadData();
   }
 
   @override
   void dispose() {
+    _connectivitySub?.cancel();
     for (final c in [
       _fullNameCtrl, _usernameCtrl, _emailCtrl, _phoneCtrl,
       _businessNameCtrl, _tradenameCtrl, _ownerFirstCtrl, _ownerMiddleCtrl,
@@ -70,24 +82,60 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     super.dispose();
   }
 
-  // ── Data loading ─────────────────────────────────────────────────────────────
+  // ── Connectivity subscription ─────────────────────────────────────────────
+
+  void _subscribeConnectivity() {
+    _connectivitySub =
+        ConnectivityService.instance.onlineStream.listen((isOnline) {
+      if (!mounted || !isOnline || !_isOffline || _isLoading) return;
+      // Was showing offline state, connection restored → auto-retry.
+      setState(() => _isOffline = false);
+      _loadData();
+    });
+  }
+
+  // ── Data loading ──────────────────────────────────────────────────────────
 
   Future<void> _loadData() async {
     setState(() { _isLoading = true; _loadError = null; });
+
+    // ── Pre-check connectivity ─────────────────────────────────────────────
+    final online = await ConnectivityService.instance.isOnline;
+    if (!mounted) return;
+    if (!online) {
+      setState(() { _isOffline = true; _isLoading = false; });
+      return;
+    }
+    setState(() => _isOffline = false);
+
+    // ── Fetch ──────────────────────────────────────────────────────────────
     try {
       final results = await Future.wait([
         _api.fetchProfile(),
         _api.fetchBusiness(),
       ]);
+      if (!mounted) return;
       _profile  = results[0] as ProfileModel;
       _business = results[1] as BusinessModel?;
       _populate();
     } on ProfileApiException catch (e) {
+      if (!mounted) return;
+      if (isNetworkError(e)) {
+        setState(() { _isOffline = true; _isLoading = false; });
+        return;
+      }
       _loadError = e.message;
     } catch (e) {
+      if (!mounted) return;
+      if (isNetworkError(e)) {
+        setState(() { _isOffline = true; _isLoading = false; });
+        return;
+      }
       _loadError = 'Unexpected error: $e';
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      // Only clear loading when we're not in the offline state
+      // (offline path already sets _isLoading = false and returns early).
+      if (mounted && !_isOffline) setState(() => _isLoading = false);
     }
   }
 
@@ -120,7 +168,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     });
   }
 
-  // ── Save actions ─────────────────────────────────────────────────────────────
+  // ── Save actions ──────────────────────────────────────────────────────────
 
   Future<void> _saveAccountInfo() async {
     setState(() => _isSavingAccount = true);
@@ -176,7 +224,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     }
   }
 
-  // ── Dialog launchers ─────────────────────────────────────────────────────────
+  // ── Dialog launchers ──────────────────────────────────────────────────────
 
   void _showChangePasswordDialog() {
     showDialog(
@@ -203,7 +251,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ── Snackbar helper ──────────────────────────────────────────────────────────
+  // ── Snackbar helper ───────────────────────────────────────────────────────
 
   void _showSnack(String msg, {bool isError = true}) {
     if (!mounted) return;
@@ -216,7 +264,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     );
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -226,71 +274,73 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       onNavSelected: (_) {},
       child: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _loadError != null
-              ? _ErrorView(error: _loadError!, onRetry: _loadData)
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isNarrow = constraints.maxWidth < 600;
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.all(isNarrow ? 16 : 24),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _PageHeader(),
-                              const SizedBox(height: 20),
-                              _BusinessCard(business: _business),
-                              const SizedBox(height: 16),
-                              _AccountInfoCard(
-                                fullNameCtrl: _fullNameCtrl,
-                                usernameCtrl: _usernameCtrl,
-                                emailCtrl:    _emailCtrl,
-                                phoneCtrl:    _phoneCtrl,
-                                isSaving:     _isSavingAccount,
-                                onSave:       _saveAccountInfo,
-                                isNarrow:     isNarrow,
+          : _isOffline
+              ? OfflineState(onRetry: _loadData)
+              : _loadError != null
+                  ? _ErrorView(error: _loadError!, onRetry: _loadData)
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 600;
+                        return SingleChildScrollView(
+                          padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _PageHeader(),
+                                  const SizedBox(height: 20),
+                                  _BusinessCard(business: _business),
+                                  const SizedBox(height: 16),
+                                  _AccountInfoCard(
+                                    fullNameCtrl: _fullNameCtrl,
+                                    usernameCtrl: _usernameCtrl,
+                                    emailCtrl:    _emailCtrl,
+                                    phoneCtrl:    _phoneCtrl,
+                                    isSaving:     _isSavingAccount,
+                                    onSave:       _saveAccountInfo,
+                                    isNarrow:     isNarrow,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _SecurityCard(
+                                    onChangePassword: _showChangePasswordDialog,
+                                    onChangeEmail:    _showChangeEmailDialog,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _BusinessInfoCard(
+                                    businessNameCtrl:   _businessNameCtrl,
+                                    tradenameCtrl:      _tradenameCtrl,
+                                    ownerFirstCtrl:     _ownerFirstCtrl,
+                                    ownerMiddleCtrl:    _ownerMiddleCtrl,
+                                    ownerLastCtrl:      _ownerLastCtrl,
+                                    totalRoomsCtrl:     _totalRoomsCtrl,
+                                    streetCtrl:         _streetCtrl,
+                                    barangayCtrl:       _barangayCtrl,
+                                    cityCtrl:           _cityCtrl,
+                                    provinceCtrl:       _provinceCtrl,
+                                    regionCtrl:         _regionCtrl,
+                                    permitNumberCtrl:   _permitNumberCtrl,
+                                    registrationCtrl:   _registrationCtrl,
+                                    selectedBusinessType: _selectedBusinessType,
+                                    selectedLines:        _selectedLines,
+                                    onBusinessTypeChanged: (v) => setState(
+                                      () => _selectedBusinessType =
+                                          v ?? BusinessType.soleProprietorship),
+                                    onLinesChanged: (v) =>
+                                        setState(() => _selectedLines = v),
+                                    isSaving:  _isSavingBusiness,
+                                    onSave:    _saveBusinessInfo,
+                                    isNarrow:  isNarrow,
+                                    hasRecord: _business != null,
+                                  ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                              _SecurityCard(
-                                onChangePassword: _showChangePasswordDialog,
-                                onChangeEmail:    _showChangeEmailDialog,
-                              ),
-                              const SizedBox(height: 16),
-                              _BusinessInfoCard(
-                                businessNameCtrl:   _businessNameCtrl,
-                                tradenameCtrl:      _tradenameCtrl,
-                                ownerFirstCtrl:     _ownerFirstCtrl,
-                                ownerMiddleCtrl:    _ownerMiddleCtrl,
-                                ownerLastCtrl:      _ownerLastCtrl,
-                                totalRoomsCtrl:     _totalRoomsCtrl,
-                                streetCtrl:         _streetCtrl,
-                                barangayCtrl:       _barangayCtrl,
-                                cityCtrl:           _cityCtrl,
-                                provinceCtrl:       _provinceCtrl,
-                                regionCtrl:         _regionCtrl,
-                                permitNumberCtrl:   _permitNumberCtrl,
-                                registrationCtrl:   _registrationCtrl,
-                                selectedBusinessType: _selectedBusinessType,
-                                selectedLines:        _selectedLines,
-                                onBusinessTypeChanged: (v) => setState(
-                                  () => _selectedBusinessType =
-                                      v ?? BusinessType.soleProprietorship),
-                                onLinesChanged: (v) =>
-                                    setState(() => _selectedLines = v),
-                                isSaving:  _isSavingBusiness,
-                                onSave:    _saveBusinessInfo,
-                                isNarrow:  isNarrow,
-                                hasRecord: _business != null,
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                        );
+                      },
+                    ),
     );
   }
 }
@@ -327,25 +377,23 @@ class _ErrorView extends StatelessWidget {
 class _PageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    return Row(
+    return const Row(
       children: [
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Profile & Settings',
               style: TextStyle(
                   color: AppColors.textWhite,
                   fontSize: 22,
                   fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Manage your account and business information',
               style: TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
-            
           ],
         ),
       ],
@@ -474,7 +522,7 @@ class _AccountInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(
+          const _SectionTitle(
               icon: Icons.person_outline_rounded, label: 'Account Information'),
           const SizedBox(height: 20),
           if (isNarrow) ...[
@@ -535,7 +583,7 @@ class _SecurityCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(icon: Icons.lock_outline_rounded, label: 'Security'),
+          const _SectionTitle(icon: Icons.lock_outline_rounded, label: 'Security'),
           const SizedBox(height: 20),
           _SecurityRow(
             icon: Icons.password_outlined,
@@ -671,11 +719,11 @@ class _BusinessInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SectionTitle(icon: Icons.store_outlined, label: 'Business Information'),
+          const _SectionTitle(icon: Icons.store_outlined, label: 'Business Information'),
           const SizedBox(height: 20),
 
-          // ── Business Identity ───────────────────────────────────────────────
-          _SubLabel(label: 'Identity'),
+          // ── Business Identity ─────────────────────────────────────────────
+          const _SubLabel(label: 'Identity'),
           const SizedBox(height: 12),
           if (isNarrow) ...[
             _LabeledField(label: 'Business Name',
@@ -743,8 +791,8 @@ class _BusinessInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── Owner ───────────────────────────────────────────────────────────
-          _SubLabel(label: 'Owner'),
+          // ── Owner ─────────────────────────────────────────────────────────
+          const _SubLabel(label: 'Owner'),
           const SizedBox(height: 12),
           if (isNarrow) ...[
             _LabeledField(label: 'First Name',
@@ -769,8 +817,8 @@ class _BusinessInfoCard extends StatelessWidget {
           ],
           const SizedBox(height: 20),
 
-          // ── Address ─────────────────────────────────────────────────────────
-          _SubLabel(label: 'Address'),
+          // ── Address ───────────────────────────────────────────────────────
+          const _SubLabel(label: 'Address'),
           const SizedBox(height: 12),
           _LabeledField(
             label: 'Street',
@@ -809,8 +857,8 @@ class _BusinessInfoCard extends StatelessWidget {
           ],
           const SizedBox(height: 20),
 
-          // ── Registration ────────────────────────────────────────────────────
-          _SubLabel(label: 'Registration'),
+          // ── Registration ──────────────────────────────────────────────────
+          const _SubLabel(label: 'Registration'),
           const SizedBox(height: 12),
           if (isNarrow) ...[
             _LabeledField(label: 'Permit Number',
@@ -916,18 +964,15 @@ class _PasswordChangeDialog extends StatefulWidget {
 }
 
 class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
-  // step 1 = send OTP | step 2 = verify OTP | step 3 = enter passwords
   int _step = 1;
   bool _loading  = false;
   String? _error;
 
-  // ── PIN controllers & focus (step 2) ─────────────────────────────────────────
   final List<TextEditingController> _pinCtrl =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _pinFocus =
       List.generate(6, (_) => FocusNode());
 
-  // ── Password controllers (step 3) ────────────────────────────────────────────
   final _oldPassCtrl  = TextEditingController();
   final _newPassCtrl  = TextEditingController();
   final _confPassCtrl = TextEditingController();
@@ -945,9 +990,7 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
     super.dispose();
   }
 
-  void _clearPins() {
-    for (final c in _pinCtrl) c.clear();
-  }
+  void _clearPins() { for (final c in _pinCtrl) c.clear(); }
 
   Future<void> _sendOtp() async {
     setState(() { _loading = true; _error = null; });
@@ -955,7 +998,6 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
       await widget.api.sendPasswordChangeOtp();
       if (!mounted) return;
       setState(() { _loading = false; _step = 2; });
-      // Auto-focus first PIN box after transition
       WidgetsBinding.instance.addPostFrameCallback(
           (_) => _pinFocus[0].requestFocus());
     } on ProfileApiException catch (e) {
@@ -1066,13 +1108,11 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
   bool _loading = false;
   String? _error;
 
-  // ── PIN controllers & focus (step 2) ─────────────────────────────────────────
   final List<TextEditingController> _pinCtrl =
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _pinFocus =
       List.generate(6, (_) => FocusNode());
 
-  // ── New email controller (step 3) ────────────────────────────────────────────
   final _newEmailCtrl = TextEditingController();
 
   @override
@@ -1083,9 +1123,7 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
     super.dispose();
   }
 
-  void _clearPins() {
-    for (final c in _pinCtrl) c.clear();
-  }
+  void _clearPins() { for (final c in _pinCtrl) c.clear(); }
 
   Future<void> _sendOtp() async {
     setState(() { _loading = true; _error = null; });
@@ -1307,8 +1345,6 @@ class _StepSendOtp extends StatelessWidget {
   }
 }
 
-// ─── Step 2: Verify OTP — 6-box PIN design (copied from AdminProfilePage) ─────
-
 class _StepVerifyOtp extends StatefulWidget {
   const _StepVerifyOtp({
     required this.pinCtrl,
@@ -1319,16 +1355,10 @@ class _StepVerifyOtp extends StatefulWidget {
     required this.onResend,
   });
 
-  /// 6 controllers owned by the parent dialog state.
   final List<TextEditingController> pinCtrl;
-
-  /// 6 focus nodes owned by the parent dialog state.
   final List<FocusNode> pinFocus;
-
   final bool loading;
   final String? error;
-
-  /// Called with the 6-digit OTP string when the user taps Verify.
   final ValueChanged<String> onVerify;
   final VoidCallback onResend;
 
@@ -1346,7 +1376,7 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
     if (value.isEmpty && index > 0) {
       widget.pinFocus[index - 1].requestFocus();
     }
-    setState(() {}); // rebuild so Verify button enables/disables
+    setState(() {});
   }
 
   @override
@@ -1354,7 +1384,6 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // ── Icon + subtitle ───────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -1374,8 +1403,6 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
           style: TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
         const SizedBox(height: 22),
-
-        // ── PIN boxes ─────────────────────────────────────────────────────────
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(6, (i) => Container(
@@ -1418,29 +1445,20 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
             ),
           )),
         ),
-
-        // ── Error banner ──────────────────────────────────────────────────────
         if (widget.error != null) ...[
           const SizedBox(height: 14),
           _ErrorBanner(widget.error!),
         ],
-
         const SizedBox(height: 22),
-
-        // ── Verify button ─────────────────────────────────────────────────────
         _ActionButton(
           icon:     Icons.verified_outlined,
           label:    'Verify Code',
           isSaving: widget.loading,
-          // Enabled only when all 6 boxes are filled
           onPressed: _otpValue.length == 6 && !widget.loading
               ? () => widget.onVerify(_otpValue)
               : () {},
         ),
-
         const SizedBox(height: 10),
-
-        // ── Resend link ───────────────────────────────────────────────────────
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -1457,8 +1475,6 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
     );
   }
 }
-
-// ─── Step 3a: New Password ────────────────────────────────────────────────────
 
 class _StepNewPassword extends StatelessWidget {
   const _StepNewPassword({
@@ -1524,8 +1540,6 @@ class _StepNewPassword extends StatelessWidget {
     );
   }
 }
-
-// ─── Step 3b: New Email ───────────────────────────────────────────────────────
 
 class _StepNewEmail extends StatelessWidget {
   const _StepNewEmail({
@@ -1694,7 +1708,7 @@ class _InputField extends StatelessWidget {
   }
 }
 
-// ─── Readonly Field (email) ───────────────────────────────────────────────────
+// ─── Readonly Field ───────────────────────────────────────────────────────────
 
 class _ReadonlyField extends StatelessWidget {
   const _ReadonlyField({required this.controller});

@@ -1,11 +1,15 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../api/messages_api.dart';
+import '../../../core/services/connectivity_service.dart';
 import '../../../core/services/session_service.dart';
 import '../widgets/message_view_dialog.dart';
 import '../../shared/layouts/business_layout.dart';
+import '../widgets/offline_state.dart';
 import '../../shared/widgets/paginator.dart';
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
@@ -18,21 +22,7 @@ enum _Filter { all, compliance, announcement, general }
 /// standard header block (letterhead, date, salutation lines) and returning
 /// the first non-empty body line(s).
 String _letterPreview(String content) {
-  // Skip lines that are pure header / boilerplate. We look for the first
-  // line that comes after the salutation ("Dear ...") or after a blank
-  // line following a known header keyword. Fallback: just return the raw
-  // content (which is already trimmed by maxLines overflow in the card).
   final lines = content.split('\n');
-
-  // Common header sentinel words — skip everything up to and including them.
-  const headerSentinels = {
-    'REPUBLIC OF THE PHILIPPINES',
-    'CITY OF SAN PABLO',
-    'OFFICE OF TOURISM',
-    'COMPLIANCE NOTICE',
-    'ANNOUNCEMENT',
-    'GENERAL NOTICE',
-  };
 
   bool pastHeader = false;
   final preview = StringBuffer();
@@ -41,17 +31,14 @@ String _letterPreview(String content) {
     final line = raw.trim();
 
     if (!pastHeader) {
-      // Treat the "Dear …," salutation as the end of the header block.
       if (line.startsWith('Dear ')) {
         pastHeader = true;
       }
       continue;
     }
 
-    // Skip blank separator lines immediately after the salutation.
     if (line.isEmpty && preview.isEmpty) continue;
 
-    // Stop accumulating once we hit the closing block.
     if (line.startsWith('This notice is duly issued') ||
         line.startsWith('Respectfully') ||
         line.startsWith('---')) {
@@ -61,7 +48,6 @@ String _letterPreview(String content) {
     if (preview.isNotEmpty) preview.write(' ');
     preview.write(line);
 
-    // Two sentences is plenty for a card preview.
     if (preview.length > 180) break;
   }
 
@@ -81,6 +67,11 @@ class BusinessMessagesPage extends StatefulWidget {
 class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   final _api = MessagesApi();
 
+  // ── Connectivity ──────────────────────────────────────────────────────────
+  bool _isOffline = false;
+  StreamSubscription<bool>? _connectivitySub;
+
+  // ── Filter / pagination ───────────────────────────────────────────────────
   _Filter _activeFilter = _Filter.all;
   int _currentPage = 0;
   int _pageSize = 10;
@@ -88,7 +79,6 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   List<InboxMessage> _messages = [];
 
   /// Optimistic local read tracking for this session.
-  /// Keyed on `InboxMessage.recipientId` (message_recipients.id).
   final Set<String> _locallyRead = {};
 
   bool    _isLoading  = true;
@@ -97,10 +87,35 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
 
   static const List<int> _pageSizeOptions = [10, 20, 30];
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
+    _subscribeConnectivity();
     _initSession();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
+  }
+
+  // ── Connectivity subscription ─────────────────────────────────────────────
+
+  void _subscribeConnectivity() {
+    _connectivitySub =
+        ConnectivityService.instance.onlineStream.listen((isOnline) {
+      if (!mounted || !isOnline || !_isOffline || _isLoading) return;
+      // Was showing offline state, connection restored → auto-retry.
+      setState(() => _isOffline = false);
+      if (_businessId != null) {
+        _loadData();
+      } else {
+        _initSession();
+      }
+    });
   }
 
   // ── Session + Data Loading ────────────────────────────────────────────────
@@ -127,6 +142,16 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
       _error     = null;
     });
 
+    // ── Pre-check connectivity ─────────────────────────────────────────────
+    final online = await ConnectivityService.instance.isOnline;
+    if (!mounted) return;
+    if (!online) {
+      setState(() { _isOffline = true; _isLoading = false; });
+      return;
+    }
+    setState(() => _isOffline = false);
+
+    // ── Fetch ──────────────────────────────────────────────────────────────
     try {
       final messages = await _api.fetchInbox(_businessId!);
       if (mounted) {
@@ -136,7 +161,10 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      if (isNetworkError(e)) {
+        setState(() { _isOffline = true; _isLoading = false; });
+      } else {
         setState(() {
           _error     = 'Failed to load messages. Please try again.';
           _isLoading = false;
@@ -227,9 +255,10 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
   }
 
   Widget _buildBody(bool isNarrow) {
-    if (_isLoading) return const _LoadingState();
-    if (_error != null) return _ErrorState(message: _error!, onRetry: _loadData);
-    if (_filtered.isEmpty) return const _EmptyState();
+    if (_isLoading)          return const _LoadingState();
+    if (_isOffline)          return OfflineState(onRetry: _loadData);
+    if (_error != null)      return _ErrorState(message: _error!, onRetry: _loadData);
+    if (_filtered.isEmpty)   return const _EmptyState();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,7 +269,7 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
               padding: const EdgeInsets.only(bottom: 10),
               child: _MessageCard(
                 message:  msg,
-                preview:  _letterPreview(msg.content),  // extracted body snippet
+                preview:  _letterPreview(msg.content),
                 isRead:   _isRead(msg),
                 isNarrow: isNarrow,
                 onTap:    () => _openMessage(msg),
@@ -418,7 +447,7 @@ class _MessageCard extends StatelessWidget {
   });
 
   final InboxMessage message;
-  final String       preview;   // extracted body snippet, not the raw letter
+  final String       preview;
   final bool         isRead;
   final bool         isNarrow;
   final VoidCallback onTap;
@@ -466,7 +495,6 @@ class _WideLayout extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Envelope icon
         Padding(
           padding: const EdgeInsets.only(top: 2, right: 14),
           child: Icon(
@@ -475,8 +503,6 @@ class _WideLayout extends StatelessWidget {
             size:  20,
           ),
         ),
-
-        // Content
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -522,8 +548,6 @@ class _WideLayout extends StatelessWidget {
             ],
           ),
         ),
-
-        // Right side: type badge + broadcast tag + date
         const SizedBox(width: 16),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -563,7 +587,6 @@ class _NarrowLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Top row: icon + badge + broadcast + date
         Row(
           children: [
             Icon(
@@ -588,8 +611,6 @@ class _NarrowLayout extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
-
-        // Subject
         Row(
           children: [
             Expanded(
@@ -615,8 +636,6 @@ class _NarrowLayout extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-
-        // Body preview
         Text(
           preview,
           style: const TextStyle(
