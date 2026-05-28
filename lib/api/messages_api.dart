@@ -113,8 +113,7 @@ class MessageBadgeController {
     if (_isRefreshing) return;
     _isRefreshing = true;
     try {
-      final session = SessionService.instance.current ??
-          await SessionService.instance.loadAndCache();
+      final session = await SessionService.instance.loadAndCache();
       final businessId = session?.businessId;
 
       if (businessId == null) {

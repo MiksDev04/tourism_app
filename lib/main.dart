@@ -10,6 +10,16 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io';
 import 'app.dart';
 
+class _AppLifecycleSyncObserver extends WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        ConnectivityService.instance.isOnline) {
+      SyncService.instance.sync();
+    }
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -30,8 +40,13 @@ void main() async {
   await LocalDatabase.instance.database;
   ConnectivityService.instance.startWatching();
   SyncService.instance.listenForConnectivity();
+  WidgetsBinding.instance.addObserver(_AppLifecycleSyncObserver());
 
   await SessionService.instance.loadAndCache();
+
+  if (ConnectivityService.instance.isOnline) {
+    await SyncService.instance.sync();
+  }
 
   if (!kIsWeb) {
     await windowManager.ensureInitialized();

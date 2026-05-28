@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tourism_app/core/database/local_database.dart';
 import 'package:tourism_app/core/services/offline_service.dart';
+import 'package:tourism_app/core/services/session_service.dart';
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -106,14 +107,73 @@ class BusinessDashboardApi {
   }
 
   // ===========================================================================
+  // PUBLIC — resolveBusinessId
+  // ===========================================================================
+
+  Future<String?> resolveBusinessId({bool preferOnline = false}) async {
+    if (preferOnline || ConnectivityService.instance.isOnline) {
+      try {
+        final online = await _resolveBusinessIdOnline();
+        if (online != null && online.isNotEmpty) return online;
+      } catch (_) {
+        // Fall through to local/session fallback.
+      }
+    }
+
+    final cachedSession =
+        SessionService.instance.current ??
+        await SessionService.instance.loadAndCache();
+    final fromSession = cachedSession?.businessId;
+    if (fromSession != null && fromSession.isNotEmpty) return fromSession;
+
+    return _resolveBusinessIdFromLocalDb();
+  }
+
+  Future<String?> _resolveBusinessIdOnline() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return null;
+
+    final response = await _supabase
+        .from('businesses')
+        .select('id')
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+    final id = response?['id'] as String?;
+    if (id == null || id.isEmpty) return null;
+    return id;
+  }
+
+  Future<String?> _resolveBusinessIdFromLocalDb() async {
+    final db = await LocalDatabase.instance.database;
+    final rows = await db.query(
+      LocalDatabase.tableLocalBusinesses,
+      columns: ['id'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return rows.first['id'] as String?;
+  }
+
+  // ===========================================================================
   // PUBLIC — fetchBusinessDetails
   // ===========================================================================
 
-  Future<BusinessDetails> fetchBusinessDetails(String businessId) async {
-    if (!ConnectivityService.instance.isOnline) {
-      return _fetchBusinessDetailsOffline(businessId);
+  Future<BusinessDetails> fetchBusinessDetails(
+    String businessId, {
+    bool preferOnline = false,
+  }) async {
+    final tryOnline = preferOnline || ConnectivityService.instance.isOnline;
+
+    if (tryOnline) {
+      try {
+        return await _fetchBusinessDetailsOnline(businessId);
+      } catch (_) {
+        // Reconnect policy: fallback to SQLite immediately.
+      }
     }
-    return _fetchBusinessDetailsOnline(businessId);
+
+    return _fetchBusinessDetailsOffline(businessId);
   }
 
   Future<BusinessDetails> _fetchBusinessDetailsOnline(String businessId) async {
@@ -196,16 +256,24 @@ class BusinessDashboardApi {
     required int totalRooms,
     required int month,
     required int year,
+    bool preferOnline = false,
   }) async {
-    if (!ConnectivityService.instance.isOnline) {
-      return _fetchDashboardDataOffline(
-        businessId: businessId,
-        totalRooms: totalRooms,
-        month: month,
-        year: year,
-      );
+    final tryOnline = preferOnline || ConnectivityService.instance.isOnline;
+
+    if (tryOnline) {
+      try {
+        return await _fetchDashboardDataOnline(
+          businessId: businessId,
+          totalRooms: totalRooms,
+          month: month,
+          year: year,
+        );
+      } catch (_) {
+        // Reconnect policy: fallback to SQLite immediately.
+      }
     }
-    return _fetchDashboardDataOnline(
+
+    return _fetchDashboardDataOffline(
       businessId: businessId,
       totalRooms: totalRooms,
       month: month,
@@ -491,14 +559,25 @@ class BusinessDashboardApi {
   Future<Map<int, List<MonthlyCount>>> fetchYearlyComparison({
     required String businessId,
     required List<int> years,
+    bool preferOnline = false,
   }) async {
-    if (!ConnectivityService.instance.isOnline) {
-      return _fetchYearlyComparisonOffline(
-        businessId: businessId,
-        years: years,
-      );
+    final tryOnline = preferOnline || ConnectivityService.instance.isOnline;
+
+    if (tryOnline) {
+      try {
+        return await _fetchYearlyComparisonOnline(
+          businessId: businessId,
+          years: years,
+        );
+      } catch (_) {
+        // Reconnect policy: fallback to SQLite immediately.
+      }
     }
-    return _fetchYearlyComparisonOnline(businessId: businessId, years: years);
+
+    return _fetchYearlyComparisonOffline(
+      businessId: businessId,
+      years: years,
+    );
   }
 
   Future<Map<int, List<MonthlyCount>>> _fetchYearlyComparisonOnline({

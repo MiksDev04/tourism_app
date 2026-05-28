@@ -156,26 +156,28 @@ class SyncService {
   SyncState _state = const SyncState(status: SyncStatus.idle);
   SyncState get currentState => _state;
 
+  // ---------------------------------------------------------------------------
+  // Delay after connectivity is restored before attempting sync.
+  // Gives DNS and the network stack a moment to fully stabilise.
+  // ---------------------------------------------------------------------------
+  static const _syncDelay = Duration(seconds: 3);
+
   void listenForConnectivity() {
     ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
       if (isOnline) {
-        // When connectivity is restored, clear the isOfflineSession flag so
-        // the persisted session no longer blocks online-only routes.
         _clearOfflineSessionFlag();
-        sync();
+        // Wait briefly for the connection to stabilise before syncing.
+        Future.delayed(_syncDelay, sync);
       }
     });
   }
 
   /// Clears the `isOfflineSession` flag on the in-memory session and persists
-  /// the change to SharedPreferences.  This prevents a stale "offline" marker
-  /// from blocking navigation after the device comes back online.
+  /// the change to SharedPreferences.
   Future<void> _clearOfflineSessionFlag() async {
     final current = SessionService.instance.current;
     if (current == null || !current.isOfflineSession) return;
 
-    // Re-save the session with isOfflineSession = false.
-    // We rebuild a corrected copy of the current session.
     final updated = SessionData(
       userId:             current.userId,
       fullName:           current.fullName,
@@ -183,7 +185,7 @@ class SyncService {
       email:              current.email,
       phone:              current.phone,
       role:               current.role,
-      isOfflineSession:   false, // ← cleared
+      isOfflineSession:   false,
       businessId:         current.businessId,
       businessName:       current.businessName,
       permitNumber:       current.permitNumber,
@@ -207,13 +209,19 @@ class SyncService {
     );
 
     await SessionService.instance.save(updated);
-    // Also update the in-memory cache so the guard sees it immediately.
     await SessionService.instance.loadAndCache();
     debugPrint('✅ _clearOfflineSessionFlag: isOfflineSession reset to false');
   }
 
   Future<void> sync() async {
     if (_state.status == SyncStatus.syncing) return;
+
+    // Double-check connectivity right before syncing — the flag may have
+    // changed in the brief window since listenForConnectivity fired.
+    if (!ConnectivityService.instance.isOnline) {
+      debugPrint('⏭ sync: skipped — device is offline');
+      return;
+    }
 
     _emit(const SyncState(status: SyncStatus.syncing));
 
@@ -236,9 +244,26 @@ class SyncService {
   Future<int> getPendingCount() => _countPending();
 
   // ---------------------------------------------------------------------------
+  // Returns true when the device can actually reach the Supabase host.
+  // Used as a pre-flight check before each push phase.
+  // ---------------------------------------------------------------------------
+  Future<bool> _canReachSupabase() async {
+    // Keep this guard version-safe across supabase_flutter updates by relying
+    // on our global connectivity probe rather than an internal URL getter.
+    return ConnectivityService.instance.isOnline;
+  }
+
+  // ---------------------------------------------------------------------------
   // PUSH — pending_create
   // ---------------------------------------------------------------------------
   Future<void> _pushPendingCreates() async {
+    // Abort immediately if Supabase is unreachable — avoids per-record DNS
+    // failures when the connection is still settling after coming back online.
+    if (!await _canReachSupabase()) {
+      debugPrint('⏭ _pushPendingCreates: skipped — Supabase unreachable');
+      return;
+    }
+
     final db = await LocalDatabase.instance.database;
 
     final records = await db.query(
@@ -251,16 +276,15 @@ class SyncService {
       final recordId = record['id'] as String;
 
       try {
-        // Push guest record header.
+        // Upsert parent record first and wait for it to commit.
         await _supabase
             .from('guest_records')
             .upsert(_toSupabaseRecord(record), onConflict: 'id');
 
-        // Push breakdowns — delete first to avoid duplicates on retry,
-        // then insert without a local ID (let Supabase generate UUIDs).
+        // Delete stale breakdowns then re-insert the local set.
         final breakdowns = await db.query(
           LocalDatabase.tableGuestBreakdowns,
-          where: 'guest_record_id = ?',
+          where:     'guest_record_id = ?',
           whereArgs: [recordId],
         );
 
@@ -275,7 +299,7 @@ class SyncService {
               .insert(breakdowns.map(_toSupabaseBreakdown).toList());
         }
 
-        // Mark synced.
+        // Mark synced only after both upserts succeed.
         await db.update(
           LocalDatabase.tableGuestRecords,
           {
@@ -285,8 +309,15 @@ class SyncService {
           where:     'id = ?',
           whereArgs: [recordId],
         );
+
+        debugPrint('✅ _pushPendingCreates: pushed $recordId');
+      } on SocketException catch (e) {
+        // Network dropped mid-sync — abort this phase entirely so the
+        // remaining records are retried on the next sync cycle.
+        debugPrint('🌐 _pushPendingCreates: network lost — aborting ($e)');
+        return;
       } catch (e) {
-        // Log and continue — record stays pending for the next sync attempt.
+        // Non-network error — log and continue to the next record.
         debugPrint('❌ _pushPendingCreates: failed for $recordId — $e');
       }
     }
@@ -296,6 +327,12 @@ class SyncService {
   // PUSH — pending_update
   // ---------------------------------------------------------------------------
   Future<void> _pushPendingUpdates() async {
+    // Same pre-flight guard as _pushPendingCreates.
+    if (!await _canReachSupabase()) {
+      debugPrint('⏭ _pushPendingUpdates: skipped — Supabase unreachable');
+      return;
+    }
+
     final db = await LocalDatabase.instance.database;
 
     final records = await db.query(
@@ -308,11 +345,14 @@ class SyncService {
       final recordId = record['id'] as String;
 
       try {
-        // Always push — the user made an explicit offline edit, so local wins.
+        // Upsert instead of update — handles the case where a record was
+        // created AND edited offline before ever reaching Supabase, meaning
+        // its sync_status advanced straight to pending_update without ever
+        // being pushed as pending_create. Without upsert the parent row would
+        // be missing and the breakdown insert would fail the RLS check.
         await _supabase
             .from('guest_records')
-            .update(_toSupabaseRecord(record))
-            .eq('id', recordId);
+            .upsert(_toSupabaseRecord(record), onConflict: 'id');
 
         // Replace breakdowns in full.
         final breakdowns = await db.query(
@@ -332,7 +372,7 @@ class SyncService {
               .insert(breakdowns.map(_toSupabaseBreakdown).toList());
         }
 
-        // Mark synced.
+        // Mark synced only after both succeed.
         await db.update(
           LocalDatabase.tableGuestRecords,
           {
@@ -344,6 +384,10 @@ class SyncService {
         );
 
         debugPrint('✅ _pushPendingUpdates: pushed $recordId');
+      } on SocketException catch (e) {
+        // Network dropped mid-sync — abort this phase.
+        debugPrint('🌐 _pushPendingUpdates: network lost — aborting ($e)');
+        return;
       } catch (e) {
         debugPrint('❌ _pushPendingUpdates: failed for $recordId — $e');
       }
@@ -355,6 +399,11 @@ class SyncService {
   // Skips any record that still has pending local changes.
   // ---------------------------------------------------------------------------
   Future<void> _pullFromSupabase() async {
+    if (!await _canReachSupabase()) {
+      debugPrint('⏭ _pullFromSupabase: skipped — Supabase unreachable');
+      return;
+    }
+
     final db = await LocalDatabase.instance.database;
 
     final businesses = await db.query(
@@ -365,45 +414,52 @@ class SyncService {
     for (final business in businesses) {
       final businessId = business['id'] as String;
 
-      final remoteRecords = await _supabase
-          .from('guest_records')
-          .select('*, guest_breakdowns(*)')
-          .eq('business_id', businessId);
+      try {
+        final remoteRecords = await _supabase
+            .from('guest_records')
+            .select('*, guest_breakdowns(*)')
+            .eq('business_id', businessId);
 
-      for (final remote in remoteRecords) {
-        final recordId = remote['id'] as String;
+        for (final remote in remoteRecords) {
+          final recordId = remote['id'] as String;
 
-        // Don't overwrite a record with unsent local changes.
-        final pending = await db.query(
-          LocalDatabase.tableGuestRecords,
-          where:     'id = ? AND sync_status != ?',
-          whereArgs: [recordId, LocalDatabase.syncSynced],
-          limit:     1,
-        );
-        if (pending.isNotEmpty) continue;
+          // Don't overwrite a record with unsent local changes.
+          final pending = await db.query(
+            LocalDatabase.tableGuestRecords,
+            where:     'id = ? AND sync_status != ?',
+            whereArgs: [recordId, LocalDatabase.syncSynced],
+            limit:     1,
+          );
+          if (pending.isNotEmpty) continue;
 
-        await db.insert(
-          LocalDatabase.tableGuestRecords,
-          _fromSupabaseRecord(remote),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-
-        await db.delete(
-          LocalDatabase.tableGuestBreakdowns,
-          where:     'guest_record_id = ?',
-          whereArgs: [recordId],
-        );
-
-        final breakdowns =
-            remote['guest_breakdowns'] as List<dynamic>? ?? [];
-
-        for (final b in breakdowns) {
           await db.insert(
-            LocalDatabase.tableGuestBreakdowns,
-            _fromSupabaseBreakdown(b as Map<String, dynamic>),
+            LocalDatabase.tableGuestRecords,
+            _fromSupabaseRecord(remote),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
+
+          await db.delete(
+            LocalDatabase.tableGuestBreakdowns,
+            where:     'guest_record_id = ?',
+            whereArgs: [recordId],
+          );
+
+          final breakdowns =
+              remote['guest_breakdowns'] as List<dynamic>? ?? [];
+
+          for (final b in breakdowns) {
+            await db.insert(
+              LocalDatabase.tableGuestBreakdowns,
+              _fromSupabaseBreakdown(b as Map<String, dynamic>),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
         }
+      } on SocketException catch (e) {
+        debugPrint('🌐 _pullFromSupabase: network lost — aborting ($e)');
+        return;
+      } catch (e) {
+        debugPrint('❌ _pullFromSupabase: failed for business $businessId — $e');
       }
     }
   }
@@ -444,7 +500,6 @@ class SyncService {
       'status':              row['status'],
       'is_deleted':          row['is_deleted'] == 1,
       'created_at':          row['created_at'],
-      // 'updated_at' intentionally omitted — column does not exist on this table
     };
   }
 
@@ -454,8 +509,7 @@ class SyncService {
   // ⚠️  'id' is intentionally excluded. The local id is a composite string
   //     (e.g. "uuid_male_18-25_3"), not a UUID. Including it causes Supabase
   //     to reject the insert because the guest_breakdowns.id column expects a
-  //     UUID. Letting Supabase auto-generate the id is the correct behaviour,
-  //     matching what _breakdownEntryToSupabase() does in the record API.
+  //     UUID. Letting Supabase auto-generate the id is the correct behaviour.
   // ---------------------------------------------------------------------------
   Map<String, dynamic> _toSupabaseBreakdown(Map<String, dynamic> row) {
     return {

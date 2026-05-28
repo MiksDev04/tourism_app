@@ -110,25 +110,22 @@ class _BusinessMessagesPageState extends State<BusinessMessagesPage> {
       if (!mounted || !isOnline || !_isOffline || _isLoading) return;
       // Was showing offline state, connection restored → auto-retry.
       setState(() => _isOffline = false);
-      if (_businessId != null) {
-        _loadData();
-      } else {
-        _initSession();
-      }
+      _loadData();
     });
   }
 
   // ── Session + Data Loading ────────────────────────────────────────────────
 
   Future<void> _initSession() async {
-    final session = SessionService.instance.current ??
-        await SessionService.instance.loadAndCache();
-    if (!mounted) return;
-    setState(() => _businessId = session?.businessId);
     _loadData();
   }
 
   Future<void> _loadData() async {
+    final session = await SessionService.instance.loadAndCache();
+    if (!mounted) return;
+
+    setState(() => _businessId = session?.businessId);
+
     if (_businessId == null) {
       setState(() {
         _error     = 'No business account found for this user.';

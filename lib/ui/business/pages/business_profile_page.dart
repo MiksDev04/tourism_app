@@ -6,7 +6,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/services/connectivity_service.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../widgets/offline_state.dart';
-import '../../../router/app_router.dart';
 import '../../../api/business_profile_api.dart';
 
 // ─── Business Profile Page ────────────────────────────────────────────────────
@@ -27,7 +26,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
 
   // ── Load state ────────────────────────────────────────────────────────────
   bool _isLoading = true;
-  String? _loadError;
   ProfileModel? _profile;
   BusinessModel? _business;
 
@@ -66,6 +64,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   void initState() {
     super.initState();
     _subscribeConnectivity();
+    unawaited(_primeConnectivityState());
     _loadData();
   }
 
@@ -87,17 +86,41 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   void _subscribeConnectivity() {
     _connectivitySub =
         ConnectivityService.instance.onlineStream.listen((isOnline) {
-      if (!mounted || !isOnline || !_isOffline || _isLoading) return;
-      // Was showing offline state, connection restored → auto-retry.
+      if (!mounted) return;
+
+      if (!isOnline) {
+        if (_isOffline) return;
+        setState(() {
+          _isOffline = true;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      if (!_isOffline) return;
+
+      // Connection restored while the page was offline → clear the offline
+      // state and refresh the profile data.
       setState(() => _isOffline = false);
-      _loadData();
+      if (!_isLoading) _loadData();
     });
+  }
+
+  Future<void> _primeConnectivityState() async {
+    final online = await ConnectivityService.instance.isOnline;
+    if (!mounted) return;
+    if (!online) {
+      setState(() {
+        _isOffline = true;
+        _isLoading = false;
+      });
+    }
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
   Future<void> _loadData() async {
-    setState(() { _isLoading = true; _loadError = null; });
+    setState(() { _isLoading = true; });
 
     // ── Pre-check connectivity ─────────────────────────────────────────────
     final online = await ConnectivityService.instance.isOnline;
@@ -124,14 +147,12 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
         setState(() { _isOffline = true; _isLoading = false; });
         return;
       }
-      _loadError = e.message;
     } catch (e) {
       if (!mounted) return;
       if (isNetworkError(e)) {
         setState(() { _isOffline = true; _isLoading = false; });
         return;
       }
-      _loadError = 'Unexpected error: $e';
     } finally {
       // Only clear loading when we're not in the offline state
       // (offline path already sets _isLoading = false and returns early).
@@ -272,100 +293,73 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       title: 'Profile',
       selectedIndex: 5,
       onNavSelected: (_) {},
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _isOffline
-              ? OfflineState(onRetry: _loadData)
-                  : LayoutBuilder(
-                      builder: (context, constraints) {
-                        final isNarrow = constraints.maxWidth < 600;
-                        return SingleChildScrollView(
-                          padding: EdgeInsets.all(isNarrow ? 16 : 24),
-                          child: Center(
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 560),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _PageHeader(),
-                                  const SizedBox(height: 20),
-                                  _BusinessCard(business: _business),
-                                  const SizedBox(height: 16),
-                                  _AccountInfoCard(
-                                    fullNameCtrl: _fullNameCtrl,
-                                    usernameCtrl: _usernameCtrl,
-                                    emailCtrl:    _emailCtrl,
-                                    phoneCtrl:    _phoneCtrl,
-                                    isSaving:     _isSavingAccount,
-                                    onSave:       _saveAccountInfo,
-                                    isNarrow:     isNarrow,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _SecurityCard(
-                                    onChangePassword: _showChangePasswordDialog,
-                                    onChangeEmail:    _showChangeEmailDialog,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _BusinessInfoCard(
-                                    businessNameCtrl:   _businessNameCtrl,
-                                    tradenameCtrl:      _tradenameCtrl,
-                                    ownerFirstCtrl:     _ownerFirstCtrl,
-                                    ownerMiddleCtrl:    _ownerMiddleCtrl,
-                                    ownerLastCtrl:      _ownerLastCtrl,
-                                    totalRoomsCtrl:     _totalRoomsCtrl,
-                                    streetCtrl:         _streetCtrl,
-                                    barangayCtrl:       _barangayCtrl,
-                                    cityCtrl:           _cityCtrl,
-                                    provinceCtrl:       _provinceCtrl,
-                                    regionCtrl:         _regionCtrl,
-                                    permitNumberCtrl:   _permitNumberCtrl,
-                                    registrationCtrl:   _registrationCtrl,
-                                    selectedBusinessType: _selectedBusinessType,
-                                    selectedLines:        _selectedLines,
-                                    onBusinessTypeChanged: (v) => setState(
-                                      () => _selectedBusinessType =
-                                          v ?? BusinessType.sole_proprietorship),
-                                    onLinesChanged: (v) =>
-                                        setState(() => _selectedLines = v),
-                                    isSaving:  _isSavingBusiness,
-                                    onSave:    _saveBusinessInfo,
-                                    isNarrow:  isNarrow,
-                                    hasRecord: _business != null,
-                                  ),
-                                ],
+      child: _isOffline
+          ? OfflineState(onRetry: _loadData)
+          : _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isNarrow = constraints.maxWidth < 600;
+                    return SingleChildScrollView(
+                      padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _PageHeader(),
+                              const SizedBox(height: 20),
+                              _BusinessCard(business: _business),
+                              const SizedBox(height: 16),
+                              _AccountInfoCard(
+                                fullNameCtrl: _fullNameCtrl,
+                                usernameCtrl: _usernameCtrl,
+                                emailCtrl:    _emailCtrl,
+                                phoneCtrl:    _phoneCtrl,
+                                isSaving:     _isSavingAccount,
+                                onSave:       _saveAccountInfo,
+                                isNarrow:     isNarrow,
                               ),
-                            ),
+                              const SizedBox(height: 16),
+                              _SecurityCard(
+                                onChangePassword: _showChangePasswordDialog,
+                                onChangeEmail:    _showChangeEmailDialog,
+                              ),
+                              const SizedBox(height: 16),
+                              _BusinessInfoCard(
+                                businessNameCtrl:   _businessNameCtrl,
+                                tradenameCtrl:      _tradenameCtrl,
+                                ownerFirstCtrl:     _ownerFirstCtrl,
+                                ownerMiddleCtrl:    _ownerMiddleCtrl,
+                                ownerLastCtrl:      _ownerLastCtrl,
+                                totalRoomsCtrl:     _totalRoomsCtrl,
+                                streetCtrl:         _streetCtrl,
+                                barangayCtrl:       _barangayCtrl,
+                                cityCtrl:           _cityCtrl,
+                                provinceCtrl:       _provinceCtrl,
+                                regionCtrl:         _regionCtrl,
+                                permitNumberCtrl:   _permitNumberCtrl,
+                                registrationCtrl:   _registrationCtrl,
+                                selectedBusinessType: _selectedBusinessType,
+                                selectedLines:        _selectedLines,
+                                onBusinessTypeChanged: (v) => setState(
+                                  () => _selectedBusinessType =
+                                      v ?? BusinessType.sole_proprietorship),
+                                onLinesChanged: (v) =>
+                                    setState(() => _selectedLines = v),
+                                isSaving:  _isSavingBusiness,
+                                onSave:    _saveBusinessInfo,
+                                isNarrow:  isNarrow,
+                                hasRecord: _business != null,
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-    );
-  }
-}
-
-// ─── Error View ───────────────────────────────────────────────────────────────
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.error, required this.onRetry});
-  final String error;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(error,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 14)),
-          const SizedBox(height: 16),
-          TextButton(
-            onPressed: onRetry,
-            child: const Text('Retry',
-                style: TextStyle(color: AppColors.primaryCyan)),
-          ),
-        ],
-      ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }

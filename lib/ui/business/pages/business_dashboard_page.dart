@@ -1,6 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'dart:async';                                          // ← added
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -10,7 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as p;
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/offline_service.dart';         // ← added
+import '../../../core/services/offline_service.dart';
 import '../../shared/layouts/business_layout.dart';
 import '../../../api/business_dashboard_api.dart';
 import '../../../core/services/session_service.dart';
@@ -58,7 +58,7 @@ class BusinessDashboardPage extends StatefulWidget {
 class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   final _api = BusinessDashboardApi();
 
-  // Business info loaded from SessionService
+  // Business info
   String? _businessId;
   String _businessName = '';
   List<String> _businessLine = [];
@@ -67,7 +67,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
   // ── Filter state ──────────────────────────────────────────────────────────
 
-  int _selectedMonth = DateTime.now().month; // 0 = all year
+  int _selectedMonth = DateTime.now().month;
   int _selectedYear  = DateTime.now().year;
 
   int _trendYear1 = DateTime.now().year - 1;
@@ -83,28 +83,29 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   String? _dashError;
 
   // ── Connectivity state ────────────────────────────────────────────────────
-  // _isOffline        — mirrors the current network status; drives the offline strip.
-  // _showOnlineBanner — true only for the brief window after coming back online,
-  //                     so the user gets a manual "Refresh" prompt instead of an
-  //                     automatic reload.
+  // _isOffline drives the offline strip shown at the top.
+  // When connectivity returns we silently reload data — no manual banner needed.
 
-  bool _isOffline        = false;
-  bool _showOnlineBanner = false;
+  bool _isOffline = false;
   StreamSubscription<bool>? _connectivitySub;
+  bool _isReconnectReloading = false;
+  bool _showOnlineBanner = false;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _isOffline = !ConnectivityService.instance.isOnline;   // ← added
-    _subscribeToConnectivity();                            // ← added
+    // Capture initial state synchronously so the banner is correct on first
+    // frame — before initState's async work completes.
+    _isOffline = !ConnectivityService.instance.isOnline;
+    _subscribeToConnectivity();
     _initBusinessFromSession();
   }
 
   @override
   void dispose() {
-    _connectivitySub?.cancel();                            // ← added
+    _connectivitySub?.cancel();
     super.dispose();
   }
 
@@ -116,60 +117,95 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       if (!mounted) return;
 
       if (isOnline && _isOffline) {
-        // Just came back online — show the banner and refresh the dashboard.
+        // Just came back online — update the banner flag and silently reload
+        // from Supabase so the data is fresh without any user interaction.
         setState(() {
-          _isOffline        = false;
+          _isOffline = false;
           _showOnlineBanner = true;
         });
-        _refreshAfterReconnect();
+        _reloadAll(preferOnline: true, refreshBusinessContext: true);
       } else if (!isOnline && !_isOffline) {
-        // Just went offline — show the offline strip, hide the online banner.
+        // Just went offline — show the strip.
         setState(() {
-          _isOffline        = true;
+          _isOffline = true;
           _showOnlineBanner = false;
         });
       }
     });
   }
 
-  // ── Banner refresh ────────────────────────────────────────────────────────
+  // ── Silent reload after reconnect ─────────────────────────────────────────
+  // Re-fetches dashboard + trend concurrently. Business details are only
+  // re-fetched if _businessId was never resolved (page opened while offline).
 
-  // Called when the user taps "Refresh" on the back-online banner.
-  // If businessId was never resolved (e.g. page loaded while offline),
-  // re-run the full init so business details and dashboard data refresh.
-  Future<void> _onBannerRefresh() async {
-    setState(() => _showOnlineBanner = false);
-    await _refreshDashboardFromSession();
-  }
-
-  Future<void> _refreshAfterReconnect() async {
+  Future<void> _reloadAll({
+    bool preferOnline = false,
+    bool refreshBusinessContext = false,
+  }) async {
     if (!mounted) return;
 
-    await _refreshDashboardFromSession();
+    // Prevent overlapping reconnect-triggered reloads.
+    if (_isReconnectReloading) return;
+    _isReconnectReloading = true;
 
-    
-  }
+    try {
+      if (refreshBusinessContext || _businessId == null) {
+        await _refreshBusinessContext(preferOnline: preferOnline);
+      }
 
-  Future<void> _refreshDashboardFromSession() async {
-    await _initBusinessFromSession();
+      // If we still have no businessId, attempt one normal init path.
+      if (_businessId == null) {
+        await _initBusinessFromSession();
+        return;
+      }
+
+      // Otherwise just refresh the two data sections in parallel.
+      await Future.wait([
+        _loadDashboard(preferOnline: preferOnline),
+        _loadTrend(preferOnline: preferOnline),
+      ]);
+    } finally {
+      if (mounted && preferOnline) {
+        setState(() => _showOnlineBanner = false);
+      }
+      _isReconnectReloading = false;
+    }
   }
 
   // ── Init & data loading ───────────────────────────────────────────────────
 
   Future<void> _initBusinessFromSession() async {
+    await _refreshBusinessContext();
+
+    if (!mounted) return;
+    // Run both fetches concurrently — they are independent.
+    await Future.wait([_loadDashboard(), _loadTrend()]);
+  }
+
+  Future<void> _refreshBusinessContext({bool preferOnline = false}) async {
     final session =
         SessionService.instance.current ??
         await SessionService.instance.loadAndCache();
+
+    final resolvedBusinessId =
+        await _api.resolveBusinessId(preferOnline: preferOnline) ??
+        session?.businessId;
+
     if (!mounted) return;
     setState(() {
-      _businessId   = session?.businessId;
+      _businessId   = resolvedBusinessId;
       _businessName = session?.businessName ?? '';
       _businessLine = session?.businessLine ?? const [];
+      _address      = session?.street ?? _address;
+      _totalRooms   = session?.totalRooms ?? _totalRooms;
     });
 
     if (_businessId != null) {
       try {
-        final details = await _api.fetchBusinessDetails(_businessId!);
+        final details = await _api.fetchBusinessDetails(
+          _businessId!,
+          preferOnline: preferOnline,
+        );
         if (!mounted) return;
         setState(() {
           _address      = details.address;
@@ -182,14 +218,9 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         // Keep defaults if the lookup fails.
       }
     }
-
-    if (!mounted) return;
-    await _loadDashboard();
-    if (!mounted) return;
-    await _loadTrend();
   }
 
-  Future<void> _loadDashboard() async {
+  Future<void> _loadDashboard({bool preferOnline = false}) async {
     if (!mounted) return;
     setState(() {
       _loadingDash = true;
@@ -202,6 +233,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
         totalRooms: _totalRooms,
         month:      _selectedMonth,
         year:       _selectedYear,
+        preferOnline: preferOnline,
       );
       if (mounted) setState(() => _dashData = data);
     } catch (e) {
@@ -211,7 +243,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     }
   }
 
-  Future<void> _loadTrend() async {
+  Future<void> _loadTrend({bool preferOnline = false}) async {
     if (!mounted) return;
     setState(() => _loadingTrend = true);
     try {
@@ -219,10 +251,11 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       final data = await _api.fetchYearlyComparison(
         businessId: _businessId!,
         years:      [_trendYear1, _trendYear2],
+        preferOnline: preferOnline,
       );
       if (mounted) setState(() => _trendData = data);
     } catch (_) {
-      // trend is non-critical; silently fail
+      // Non-critical; silently fail.
     } finally {
       if (mounted) setState(() => _loadingTrend = false);
     }
@@ -243,11 +276,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
   }
 
   String _pdfSafe(String s) => s
-    .replaceAll('–', '-')
-    .replaceAll('—', '-')
-    .replaceAll('\u2013', '-')
-    .replaceAll('\u2014', '-');
-
+      .replaceAll('–', '-')
+      .replaceAll('—', '-')
+      .replaceAll('\u2013', '-')
+      .replaceAll('\u2014', '-');
 
   String _csvCell(String value) {
     if (value.contains(',') || value.contains('"') || value.contains('\n')) {
@@ -400,7 +432,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
           build: (_) => [
             pw.Text(
               'Summary',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -423,7 +458,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             pw.SizedBox(height: 16),
             pw.Text(
               'Sex Distribution',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -449,7 +487,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             pw.SizedBox(height: 16),
             pw.Text(
               'Top Countries',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
@@ -466,12 +507,17 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             pw.SizedBox(height: 16),
             pw.Text(
               'Top Local Regions (Philippine Visitors)',
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
               headers: ['Region', 'Guests'],
-              data: d.topRegions.map((r) => [r.region, '${r.count}']).toList(),
+              data: d.topRegions
+                  .map((r) => [r.region, '${r.count}'])
+                  .toList(),
               cellStyle: const pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -481,7 +527,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             pw.SizedBox(height: 16),
             pw.Text(
               _pdfSafe('Tourist Trend – $_trendYear1 vs $_trendYear2'),
-              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.SizedBox(height: 4),
             pw.Text(
@@ -490,7 +539,11 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
             ),
             pw.SizedBox(height: 8),
             pw.Table.fromTextArray(
-              headers: ['Month', '$_trendYear1 Guests', '$_trendYear2 Guests'],
+              headers: [
+                'Month',
+                '$_trendYear1 Guests',
+                '$_trendYear2 Guests',
+              ],
               data: List.generate(12, (i) {
                 final y1Count = i < y1Data.length ? y1Data[i].count : 0;
                 final y2Count = i < y2Data.length ? y2Data[i].count : 0;
@@ -548,7 +601,10 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                   height: 52,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                      colors: [
+                        AppColors.gradientStart,
+                        AppColors.gradientEnd,
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -646,18 +702,15 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       title: 'Dashboard',
       selectedIndex: 0,
       onNavSelected: (_) {},
-      // ── Wrap everything in a Column so banners sit above the scroll area ──
       child: Column(
         children: [
-          // ── Connectivity banners (always visible, never scroll away) ───────
+          // Offline strip — shown whenever the device has no connectivity.
+          // Disappears automatically when connection returns and data reloads.
           if (_isOffline) const _OfflineBanner(),
-          if (_showOnlineBanner)
-            _OnlineBanner(
-              onRefresh: _onBannerRefresh,
-              onDismiss: () => setState(() => _showOnlineBanner = false),
-            ),
 
-          // ── Main content ───────────────────────────────────────────────────
+          if (_showOnlineBanner) const _OnlineBanner(),
+
+          // Main scrollable content.
           Expanded(
             child: Stack(
               children: [
@@ -679,8 +732,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                             ),
                             const SizedBox(height: 16),
                             _FilterRow(
-                              selectedMonth: _selectedMonth,
-                              selectedYear:  _selectedYear,
+                              selectedMonth:  _selectedMonth,
+                              selectedYear:   _selectedYear,
                               onMonthChanged: (m) {
                                 setState(() => _selectedMonth = m);
                                 _loadDashboard();
@@ -706,8 +759,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                                 ),
                                 const SizedBox(width: 16),
                                 _FilterRow(
-                                  selectedMonth: _selectedMonth,
-                                  selectedYear:  _selectedYear,
+                                  selectedMonth:  _selectedMonth,
+                                  selectedYear:   _selectedYear,
                                   onMonthChanged: (m) {
                                     setState(() => _selectedMonth = m);
                                     _loadDashboard();
@@ -729,8 +782,8 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
                             _ErrorSection(message: _dashError!)
                           else ...[
                             _StatCards(
-                              stats:          _dashData!.stats,
-                              selectedMonth:  _selectedMonth,
+                              stats:         _dashData!.stats,
+                              selectedMonth: _selectedMonth,
                             ),
                             const SizedBox(height: 20),
                             _DonutChartsRow(
@@ -781,9 +834,9 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
   static String _monthName(int m) => const [
     '',
-    'January', 'February', 'March',     'April',
-    'May',     'June',     'July',      'August',
-    'September','October', 'November',  'December',
+    'January', 'February', 'March',      'April',
+    'May',     'June',     'July',       'August',
+    'September','October', 'November',   'December',
   ][m];
 
   static String _monthShort(int m) => const [
@@ -794,8 +847,9 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 }
 
 // ─── Offline Banner ───────────────────────────────────────────────────────────
-// Shown as a thin strip at the top when the device is offline.
-// Non-dismissible — disappears automatically when connectivity returns.
+// Thin strip shown while the device is offline.
+// Disappears automatically once connectivity is restored and data has reloaded —
+// no user action required.
 
 class _OfflineBanner extends StatelessWidget {
   const _OfflineBanner();
@@ -822,15 +876,11 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-// ─── Back-Online Banner ───────────────────────────────────────────────────────
-// Shown once when the device comes back online.
-// Gives the user a manual "Refresh" tap rather than forcing an auto-reload.
+// ─── Back-Online Banner ──────────────────────────────────────────────────────
+// Shown briefly when the device reconnects and the dashboard auto-refreshes.
 
 class _OnlineBanner extends StatelessWidget {
-  const _OnlineBanner({required this.onRefresh, required this.onDismiss});
-
-  final VoidCallback onRefresh;
-  final VoidCallback onDismiss;
+  const _OnlineBanner();
 
   @override
   Widget build(BuildContext context) {
@@ -843,44 +893,15 @@ class _OnlineBanner extends StatelessWidget {
           bottom: BorderSide(color: AppColors.primaryCyan.withOpacity(0.25)),
         ),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Icon(Icons.wifi_rounded, color: AppColors.primaryCyan, size: 14),
-          const SizedBox(width: 8),
-          const Expanded(
+          Icon(Icons.wifi_rounded, color: AppColors.primaryCyan, size: 14),
+          SizedBox(width: 8),
+          Expanded(
             child: Text(
-              'Back online! Dashboard data may have updated.',
+              'Back online! Refreshing dashboard data...'
+              ,
               style: TextStyle(color: AppColors.primaryCyan, fontSize: 12),
-            ),
-          ),
-          GestureDetector(
-            onTap: onRefresh,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primaryCyan.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: AppColors.primaryCyan.withOpacity(0.4),
-                ),
-              ),
-              child: const Text(
-                'Refresh',
-                style: TextStyle(
-                  color: AppColors.primaryCyan,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onDismiss,
-            child: const Icon(
-              Icons.close_rounded,
-              color: AppColors.primaryCyan,
-              size: 14,
             ),
           ),
         ],
@@ -1003,7 +1024,10 @@ class _HotelHeader extends StatelessWidget {
             runSpacing: 6,
             children: businessLines.map((line) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.primaryCyan.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -1363,7 +1387,7 @@ class _DonutChartsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final sexCard      = _sexDonut(dist: sexDist);
+        final sexCard       = _sexDonut(dist: sexDist);
         final countriesCard = _CountriesDonut(countries: topCountries);
         final regionsCard   = _RegionsDonut(regions: topRegions);
 
@@ -1690,7 +1714,9 @@ class _TouristTrendCard extends StatelessWidget {
             SizedBox(
               height: chartHeight,
               child: const Center(
-                child: CircularProgressIndicator(color: AppColors.primaryCyan),
+                child: CircularProgressIndicator(
+                  color: AppColors.primaryCyan,
+                ),
               ),
             )
           else
@@ -1746,7 +1772,9 @@ class _YearPill extends StatelessWidget {
             if (v != null) onChanged(v);
           },
           items: years
-              .map((y) => DropdownMenuItem<int>(value: y, child: Text('$y')))
+              .map(
+                (y) => DropdownMenuItem<int>(value: y, child: Text('$y')),
+              )
               .toList(),
         ),
       ),
@@ -1823,12 +1851,12 @@ class _ComparisonBarChartState extends State<_ComparisonBarChart>
             animation: _ctrl,
             builder: (_, __) => CustomPaint(
               painter: _ComparisonBarPainter(
-                year1:         widget.year1,
-                year2:         widget.year2,
-                year1Data:     widget.year1Data,
-                year2Data:     widget.year2Data,
-                animValue:     _ctrl.value,
-                hoveredMonth:  _hoveredMonth,
+                year1:          widget.year1,
+                year2:          widget.year2,
+                year1Data:      widget.year1Data,
+                year2Data:      widget.year2Data,
+                animValue:      _ctrl.value,
+                hoveredMonth:   _hoveredMonth,
                 hoveredIsYear2: _hoveredIsYear2,
               ),
               size: constraints.biggest,
@@ -1937,7 +1965,7 @@ class _ComparisonBarPainter extends CustomPainter {
     final effectiveMax = maxVal == 0 ? 10.0 : (maxVal * 1.25).ceilToDouble();
 
     final gridPaint = Paint()
-      ..color      = AppColors.cardBorder
+      ..color       = AppColors.cardBorder
       ..strokeWidth = 0.5;
     final labelStyle = TextStyle(
       color:    AppColors.textSubtle,
@@ -1959,8 +1987,8 @@ class _ComparisonBarPainter extends CustomPainter {
     for (int i = 0; i < 12; i++) {
       final groupX = leftPad + i * groupW + groupW / 2 - barW - gap / 2;
 
-      final v1    = year1Data[i].count;
-      final h1    = (v1 / effectiveMax) * chartH * animValue;
+      final v1     = year1Data[i].count;
+      final h1     = (v1 / effectiveMax) * chartH * animValue;
       final isHov1 = hoveredMonth == i && !hoveredIsYear2;
 
       if (h1 > 0) {
@@ -1984,10 +2012,10 @@ class _ComparisonBarPainter extends CustomPainter {
         );
       }
 
-      final v2    = year2Data[i].count;
-      final h2    = (v2 / effectiveMax) * chartH * animValue;
+      final v2     = year2Data[i].count;
+      final h2     = (v2 / effectiveMax) * chartH * animValue;
       final isHov2 = hoveredMonth == i && hoveredIsYear2;
-      final x2    = groupX + barW + gap;
+      final x2     = groupX + barW + gap;
 
       if (h2 > 0) {
         final rect2  = Rect.fromLTWH(x2, chartH - h2, barW, h2);
@@ -2011,11 +2039,11 @@ class _ComparisonBarPainter extends CustomPainter {
       }
 
       if (hoveredMonth == i) {
-        final isY2    = hoveredIsYear2;
-        final hov     = isY2 ? h2 : h1;
-        final hovVal  = isY2 ? v2 : v1;
-        final hovYear = isY2 ? year2 : year1;
-        final hovX    = isY2 ? x2 : groupX;
+        final isY2     = hoveredIsYear2;
+        final hov      = isY2 ? h2 : h1;
+        final hovVal   = isY2 ? v2 : v1;
+        final hovYear  = isY2 ? year2 : year1;
+        final hovX     = isY2 ? x2 : groupX;
         final hovColor = isY2 ? _color2 : _color1;
         _drawTooltip(
           canvas,
@@ -2107,8 +2135,8 @@ class _ComparisonBarPainter extends CustomPainter {
     canvas.drawRRect(
       bgRect,
       Paint()
-        ..color      = color.withOpacity(0.6)
-        ..style      = PaintingStyle.stroke
+        ..color       = color.withOpacity(0.6)
+        ..style       = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
     tp.paint(canvas, Offset(tx + 7, ty + 4));
@@ -2420,11 +2448,11 @@ class _DonutPainter extends CustomPainter {
 
     double startAngle = -math.pi / 2;
     for (int i = 0; i < segments.length; i++) {
-      final seg          = segments[i];
-      final sweep        = seg.value * 2 * math.pi * animValue;
-      final isHov        = hoveredIdx == i;
+      final seg           = segments[i];
+      final sweep         = seg.value * 2 * math.pi * animValue;
+      final isHov         = hoveredIdx == i;
       final currentStroke = isHov ? strokeW + 5 : strokeW;
-      final color        = seg.isEmpty
+      final color         = seg.isEmpty
           ? seg.color.withOpacity(0.15)
           : (isHov ? seg.color : seg.color.withOpacity(0.85));
       final paint = Paint()
