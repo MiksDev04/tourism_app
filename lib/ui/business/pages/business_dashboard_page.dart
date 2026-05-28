@@ -116,11 +116,12 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
       if (!mounted) return;
 
       if (isOnline && _isOffline) {
-        // Just came back online — show banner, don't auto-refresh data.
+        // Just came back online — show the banner and refresh the dashboard.
         setState(() {
           _isOffline        = false;
           _showOnlineBanner = true;
         });
+        _refreshAfterReconnect();
       } else if (!isOnline && !_isOffline) {
         // Just went offline — show the offline strip, hide the online banner.
         setState(() {
@@ -143,6 +144,22 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     } else {
       await _loadDashboard();
       await _loadTrend();
+    }
+  }
+
+  Future<void> _refreshAfterReconnect() async {
+    if (!mounted) return;
+
+    if (_businessId == null) {
+      await _initBusinessFromSession();
+    } else {
+      await _loadDashboard();
+      if (!mounted) return;
+      await _loadTrend();
+    }
+
+    if (mounted) {
+      setState(() => _showOnlineBanner = false);
     }
   }
 

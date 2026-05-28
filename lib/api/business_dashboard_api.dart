@@ -89,7 +89,7 @@ class BusinessDetails {
 
 class BusinessDashboardApi {
   BusinessDashboardApi({SupabaseClient? client})
-      : _supabase = client ?? Supabase.instance.client;
+    : _supabase = client ?? Supabase.instance.client;
 
   final SupabaseClient _supabase;
 
@@ -100,8 +100,8 @@ class BusinessDashboardApi {
       return ('$year-01-01', '$year-12-31');
     }
     final lastDay = DateTime(year, month + 1, 0).day;
-    final mm      = month.toString().padLeft(2, '0');
-    final dd      = lastDay.toString().padLeft(2, '0');
+    final mm = month.toString().padLeft(2, '0');
+    final dd = lastDay.toString().padLeft(2, '0');
     return ('$year-$mm-01', '$year-$mm-$dd');
   }
 
@@ -124,37 +124,47 @@ class BusinessDashboardApi {
         .maybeSingle();
 
     if (response == null) {
-      return const BusinessDetails(address: '', totalRooms: 0, businessLine: []);
+      return const BusinessDetails(
+        address: '',
+        totalRooms: 0,
+        businessLine: [],
+      );
     }
 
-    final street          = (response['street'] as String?) ?? '';
+    final street = (response['street'] as String?) ?? '';
     final rawBusinessLine = response['business_line'];
-    final businessLine    = rawBusinessLine is List
+    final businessLine = rawBusinessLine is List
         ? rawBusinessLine.map((v) => v.toString()).toList()
         : <String>[];
 
     return BusinessDetails(
-      address:      street,
-      totalRooms:   (response['total_rooms'] as int?) ?? 0,
+      address: street,
+      totalRooms: (response['total_rooms'] as int?) ?? 0,
       businessLine: businessLine,
     );
   }
 
-  Future<BusinessDetails> _fetchBusinessDetailsOffline(String businessId) async {
-    final db   = await LocalDatabase.instance.database;
+  Future<BusinessDetails> _fetchBusinessDetailsOffline(
+    String businessId,
+  ) async {
+    final db = await LocalDatabase.instance.database;
     final rows = await db.query(
       LocalDatabase.tableLocalBusinesses,
-      where:     'id = ?',
+      where: 'id = ?',
       whereArgs: [businessId],
-      limit:     1,
+      limit: 1,
     );
 
     if (rows.isEmpty) {
-      return const BusinessDetails(address: '', totalRooms: 0, businessLine: []);
+      return const BusinessDetails(
+        address: '',
+        totalRooms: 0,
+        businessLine: [],
+      );
     }
 
-    final row             = rows.first;
-    final street          = (row['street'] as String?) ?? '';
+    final row = rows.first;
+    final street = (row['street'] as String?) ?? '';
     final rawBusinessLine = row['business_line'] as String?;
 
     // business_line is stored as a JSON string e.g. '["Hotel","Resort"]'
@@ -171,8 +181,8 @@ class BusinessDashboardApi {
     }
 
     return BusinessDetails(
-      address:      street,
-      totalRooms:   (row['total_rooms'] as int?) ?? 0,
+      address: street,
+      totalRooms: (row['total_rooms'] as int?) ?? 0,
       businessLine: businessLine,
     );
   }
@@ -180,7 +190,6 @@ class BusinessDashboardApi {
   // ===========================================================================
   // PUBLIC — fetchDashboardData
   // ===========================================================================
-
 
   Future<DashboardData> fetchDashboardData({
     required String businessId,
@@ -192,15 +201,15 @@ class BusinessDashboardApi {
       return _fetchDashboardDataOffline(
         businessId: businessId,
         totalRooms: totalRooms,
-        month:      month,
-        year:       year,
+        month: month,
+        year: year,
       );
     }
     return _fetchDashboardDataOnline(
       businessId: businessId,
       totalRooms: totalRooms,
-      month:      month,
-      year:       year,
+      month: month,
+      year: year,
     );
   }
 
@@ -214,27 +223,27 @@ class BusinessDashboardApi {
     required int month,
     required int year,
   }) async {
-    final (start, end)         = _dateRange(month, year);
+    final (start, end) = _dateRange(month, year);
     final (yearStart, yearEnd) = _dateRange(0, year);
 
     final periodRecords = await _fetchGuestRecordsOnline(
       businessId: businessId,
-      startDate:  start,
-      endDate:    end,
+      startDate: start,
+      endDate: end,
     );
 
     final yearRecords = (month == 0)
         ? periodRecords
         : await _fetchGuestRecordsOnline(
             businessId: businessId,
-            startDate:  yearStart,
-            endDate:    yearEnd,
+            startDate: yearStart,
+            endDate: yearEnd,
           );
 
     final stats = _computeStats(
       periodRecords: periodRecords,
-      yearRecords:   yearRecords,
-      totalRooms:    totalRooms,
+      yearRecords: yearRecords,
+      totalRooms: totalRooms,
     );
 
     final recordIds = periodRecords
@@ -288,27 +297,27 @@ class BusinessDashboardApi {
     required int month,
     required int year,
   }) async {
-    final (start, end)         = _dateRange(month, year);
+    final (start, end) = _dateRange(month, year);
     final (yearStart, yearEnd) = _dateRange(0, year);
 
     final periodRecords = await _fetchGuestRecordsOffline(
       businessId: businessId,
-      startDate:  start,
-      endDate:    end,
+      startDate: start,
+      endDate: end,
     );
 
     final yearRecords = (month == 0)
         ? periodRecords
         : await _fetchGuestRecordsOffline(
             businessId: businessId,
-            startDate:  yearStart,
-            endDate:    yearEnd,
+            startDate: yearStart,
+            endDate: yearEnd,
           );
 
     final stats = _computeStats(
       periodRecords: periodRecords,
-      yearRecords:   yearRecords,
-      totalRooms:    totalRooms,
+      yearRecords: yearRecords,
+      totalRooms: totalRooms,
     );
 
     final recordIds = periodRecords
@@ -326,12 +335,19 @@ class BusinessDashboardApi {
     required String startDate,
     required String endDate,
   }) async {
-    final db   = await LocalDatabase.instance.database;
+    final db = await LocalDatabase.instance.database;
     final rows = await db.query(
       LocalDatabase.tableGuestRecords,
-      columns:   ['id', 'check_in', 'check_out', 'total_guests', 'rooms_occupied'],
-      where:     'business_id = ? AND is_deleted = 0 AND status = ? '
-                 'AND check_in >= ? AND check_in <= ?',
+      columns: [
+        'id',
+        'check_in',
+        'check_out',
+        'total_guests',
+        'rooms_occupied',
+      ],
+      where:
+          'business_id = ? AND is_deleted = 0 AND status = ? '
+          'AND check_in >= ? AND check_in <= ?',
       whereArgs: [businessId, 'active', startDate, endDate],
     );
     // Convert Map<String, Object?> to Map<String, dynamic>
@@ -377,26 +393,32 @@ class BusinessDashboardApi {
 
     double avgStay = 0;
     if (periodRecords.isNotEmpty) {
-      double totalNights  = 0;
-      int validStayCount  = 0;
+      double totalNights = 0;
+      int totalGuests = 0;
+
       for (final r in periodRecords) {
-        final checkInText  = _stringValue(r, 'check_in');
+        final checkInText = _stringValue(r, 'check_in');
         final checkOutText = _stringValue(r, 'check_out');
         if (checkInText == null || checkOutText == null) continue;
-        final checkIn  = DateTime.tryParse(checkInText);
+        final checkIn = DateTime.tryParse(checkInText);
         final checkOut = DateTime.tryParse(checkOutText);
         if (checkIn == null || checkOut == null) continue;
-        totalNights += checkOut.difference(checkIn).inDays;
-        validStayCount++;
+
+        final nights = checkOut.difference(checkIn).inDays;
+        final guestCount = (_intValue(r, 'total_guests')) ?? 0;
+
+        totalNights += nights * guestCount; // weight by guests
+        totalGuests += guestCount; // count persons, not bookings
       }
-      if (validStayCount > 0) avgStay = totalNights / validStayCount;
+
+      if (totalGuests > 0) avgStay = totalNights / totalGuests;
     }
 
     return DashboardStats(
       guestsThisMonth: guestsThisMonth,
-      guestsThisYear:  guestsThisYear,
+      guestsThisYear: guestsThisYear,
       avgLengthOfStay: avgStay,
-      totalRooms:      totalRooms,
+      totalRooms: totalRooms,
     );
   }
 
@@ -425,12 +447,13 @@ class BusinessDashboardApi {
       countryMap[country] =
           (countryMap[country] ?? 0) + ((_intValue(b, 'count')) ?? 0);
     }
-    final topCountries = (countryMap.entries
-            .map((e) => CountryCount(country: e.key, count: e.value))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topCountries =
+        (countryMap.entries
+                .map((e) => CountryCount(country: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
 
     // Top 5 local regions
     final regionMap = <String, int>{};
@@ -441,22 +464,23 @@ class BusinessDashboardApi {
             (regionMap[region] ?? 0) + ((_intValue(b, 'count')) ?? 0);
       }
     }
-    final topRegions = (regionMap.entries
-            .map((e) => RegionCount(region: e.key, count: e.value))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topRegions =
+        (regionMap.entries
+                .map((e) => RegionCount(region: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
 
     return DashboardData(
-      stats:           stats,
+      stats: stats,
       sexDistribution: SexDistribution(
-        male:   male,
+        male: male,
         female: female,
-        other:  genderOther,
+        other: genderOther,
       ),
       topCountries: topCountries,
-      topRegions:   topRegions,
+      topRegions: topRegions,
     );
   }
 
@@ -471,13 +495,10 @@ class BusinessDashboardApi {
     if (!ConnectivityService.instance.isOnline) {
       return _fetchYearlyComparisonOffline(
         businessId: businessId,
-        years:      years,
+        years: years,
       );
     }
-    return _fetchYearlyComparisonOnline(
-      businessId: businessId,
-      years:      years,
-    );
+    return _fetchYearlyComparisonOnline(businessId: businessId, years: years);
   }
 
   Future<Map<int, List<MonthlyCount>>> _fetchYearlyComparisonOnline({
@@ -488,10 +509,10 @@ class BusinessDashboardApi {
 
     for (final year in years) {
       final (start, end) = _dateRange(0, year);
-      final records      = await _fetchGuestRecordsOnline(
+      final records = await _fetchGuestRecordsOnline(
         businessId: businessId,
-        startDate:  start,
-        endDate:    end,
+        startDate: start,
+        endDate: end,
       );
       result[year] = _recordsToMonthly(records);
     }
@@ -507,10 +528,10 @@ class BusinessDashboardApi {
 
     for (final year in years) {
       final (start, end) = _dateRange(0, year);
-      final records      = await _fetchGuestRecordsOffline(
+      final records = await _fetchGuestRecordsOffline(
         businessId: businessId,
-        startDate:  start,
-        endDate:    end,
+        startDate: start,
+        endDate: end,
       );
       result[year] = _recordsToMonthly(records);
     }
@@ -525,8 +546,8 @@ class BusinessDashboardApi {
       if (checkInText == null) continue;
       final parsed = DateTime.tryParse(checkInText);
       if (parsed == null) continue;
-      final m      = parsed.month;
-      monthMap[m]  = (monthMap[m] ?? 0) + ((_intValue(r, 'total_guests')) ?? 0);
+      final m = parsed.month;
+      monthMap[m] = (monthMap[m] ?? 0) + ((_intValue(r, 'total_guests')) ?? 0);
     }
     return List.generate(
       12,
@@ -549,13 +570,13 @@ class BusinessDashboardApi {
     final records = ConnectivityService.instance.isOnline
         ? await _fetchGuestRecordsOnline(
             businessId: businessId,
-            startDate:  start,
-            endDate:    end,
+            startDate: start,
+            endDate: end,
           )
         : await _fetchGuestRecordsOffline(
             businessId: businessId,
-            startDate:  start,
-            endDate:    end,
+            startDate: start,
+            endDate: end,
           );
 
     final recordIds = records
@@ -587,15 +608,15 @@ class BusinessDashboardApi {
       final rec = recordMap[recordId];
       if (rec == null) continue;
       final row = [
-        _stringValue(rec, 'check_in')           ?? '',
-        _stringValue(rec, 'check_out')           ?? '',
-        _intValue(rec, 'total_guests')           ?? 0,
-        _intValue(rec, 'rooms_occupied')         ?? 0,
-        _csvCell(_stringValue(b, 'country')      ?? 'Unknown'),
+        _stringValue(rec, 'check_in') ?? '',
+        _stringValue(rec, 'check_out') ?? '',
+        _intValue(rec, 'total_guests') ?? 0,
+        _intValue(rec, 'rooms_occupied') ?? 0,
+        _csvCell(_stringValue(b, 'country') ?? 'Unknown'),
         _csvCell(_stringValue(b, 'philippines_region') ?? ''),
-        _stringValue(b, 'sex')                   ?? '',
-        _stringValue(b, 'age_group')             ?? '',
-        _intValue(b, 'count')                    ?? 0,
+        _stringValue(b, 'sex') ?? '',
+        _stringValue(b, 'age_group') ?? '',
+        _intValue(b, 'count') ?? 0,
       ];
       buf.writeln(row.join(','));
     }
@@ -616,13 +637,21 @@ class BusinessDashboardApi {
     return int.tryParse(value?.toString() ?? '');
   }
 
-  String _csvCell(String value) =>
-      value.contains(',') ? '"$value"' : value;
+  String _csvCell(String value) => value.contains(',') ? '"$value"' : value;
 
   String _monthName(int month) => const [
     '',
-    'January', 'February', 'March',     'April',
-    'May',     'June',     'July',      'August',
-    'September','October', 'November',  'December',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
   ][month];
 }
