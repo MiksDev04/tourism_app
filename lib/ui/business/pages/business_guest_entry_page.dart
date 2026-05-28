@@ -9,12 +9,12 @@ import '../../../api/business_guest_entry_api.dart';
 
 // ─── Light input colours ──────────────────────────────────────────────────────
 
-const _kInputFill    = Color(0xFFF8FAFC);
-const _kInputBorder  = Color(0xFFD1D5DB);
+const _kInputFill = Color(0xFFF8FAFC);
+const _kInputBorder = Color(0xFFD1D5DB);
 const _kInputFocused = Color(0xFF3B82F6);
-const _kDropBg       = Color(0xFFFFFFFF);
-const _kInputText    = Color(0xFF111827);
-const _kInputHint    = Color(0xFF9CA3AF);
+const _kDropBg = Color(0xFFFFFFFF);
+const _kInputText = Color(0xFF111827);
+const _kInputHint = Color(0xFF9CA3AF);
 const _kReadOnlyFill = Color(0xFFEFF2F5);
 
 /// Single source-of-truth height for every input, dropdown, and read-only field.
@@ -24,16 +24,17 @@ const _kFieldHeight = 40.0;
 
 class DemographicRow {
   DemographicRow()
-      : country = null,
-        nationality = null,
-        region = null,
-        sex = null,
-        ageGroup = null,
-        isOverseas = false,
-        countCtrl = TextEditingController(text: '');
+    : country = null,
+      nationality = null,
+      region = null,
+      sex = null,
+      ageGroup = null,
+      isOverseas = false,
+      countCtrl = TextEditingController(text: '');
 
   String? country;
-  String? nationality;   // 'Filipino' | 'Foreign' — only when country = Philippines
+  String?
+  nationality; // 'Filipino' | 'Foreign' — only when country = Philippines
   String? region;
   String? sex;
   String? ageGroup;
@@ -181,17 +182,17 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
 
   DateTime? _checkIn;
   DateTime? _checkOut;
-  final _totalGuestsCtrl   = TextEditingController();
+  final _totalGuestsCtrl = TextEditingController();
   final _roomsOccupiedCtrl = TextEditingController();
   String? _purpose;
   String? _transport;
-  final _purposeOtherCtrl   = TextEditingController();
+  final _purposeOtherCtrl = TextEditingController();
   final _transportOtherCtrl = TextEditingController();
-  bool _showPurposeOther   = false;
+  bool _showPurposeOther = false;
   bool _showTransportOther = false;
   bool _isSaving = false;
 
-  Map<String, String?> _errors   = {};
+  Map<String, String?> _errors = {};
   List<Map<String, String?>> _rowErrors = [];
 
   final List<DemographicRow> _rows = [DemographicRow()];
@@ -200,7 +201,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   // _isOffline: mirrors the current network status, used for the offline strip.
   // _showOnlineBanner: true only for the brief window after coming back online,
   // so we can show the "tap to refresh" prompt without forcing an auto-reload.
-  bool _isOffline        = false;
+  bool _isOffline = false;
   bool _showOnlineBanner = false;
   StreamSubscription<bool>? _connectivitySub;
 
@@ -229,24 +230,25 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   // ── Connectivity subscription ─────────────────────────────────────────────
 
   void _subscribeToConnectivity() {
-    _connectivitySub =
-        ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
-      if (!mounted) return;
+    _connectivitySub = ConnectivityService.instance.onConnectivityChanged.listen(
+      (isOnline) {
+        if (!mounted) return;
 
-      if (isOnline && _isOffline) {
-        // Just came back online — show banner, don't auto-refresh data.
-        setState(() {
-          _isOffline        = false;
-          _showOnlineBanner = true;
-        });
-      } else if (!isOnline && !_isOffline) {
-        // Just went offline — show the offline strip, hide the online banner.
-        setState(() {
-          _isOffline        = true;
-          _showOnlineBanner = false;
-        });
-      }
-    });
+        if (isOnline && _isOffline) {
+          // Just came back online — show banner, don't auto-refresh data.
+          setState(() {
+            _isOffline = false;
+            _showOnlineBanner = true;
+          });
+        } else if (!isOnline && !_isOffline) {
+          // Just went offline — show the offline strip, hide the online banner.
+          setState(() {
+            _isOffline = true;
+            _showOnlineBanner = false;
+          });
+        }
+      },
+    );
   }
 
   // ── Business ID loading ───────────────────────────────────────────────────
@@ -261,6 +263,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   Future<void> _onBannerRefresh() async {
     setState(() => _showOnlineBanner = false);
     await _loadBusinessId();
+    SyncService.instance
+        .sync(); // fire-and-forget; flushes any pending_create records
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -276,9 +280,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   int get _totalGuests => int.tryParse(_totalGuestsCtrl.text) ?? 0;
 
   void _addRow() => setState(() {
-        _rows.add(DemographicRow());
-        _rowErrors.add({});
-      });
+    _rows.add(DemographicRow());
+    _rowErrors.add({});
+  });
 
   void _removeRow(int index) {
     if (_rows.length <= 1) return;
@@ -324,7 +328,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       _transport = null;
       _purposeOtherCtrl.clear();
       _transportOtherCtrl.clear();
-      _showPurposeOther   = false;
+      _showPurposeOther = false;
       _showTransportOther = false;
       _errors = {};
       for (final r in _rows) r.dispose();
@@ -336,9 +340,9 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
   }
 
   bool _validateAndSetErrors() {
-    final errors    = <String, String?>{};
+    final errors = <String, String?>{};
     final rowErrors = List.generate(_rows.length, (_) => <String, String?>{});
-    bool hasError   = false;
+    bool hasError = false;
 
     if (_checkIn == null) {
       errors['checkIn'] = 'Please select a check-in date.';
@@ -444,7 +448,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     }
 
     setState(() {
-      _errors    = errors;
+      _errors = errors;
       _rowErrors = rowErrors;
     });
 
@@ -456,18 +460,22 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     if (!isValid) return;
 
     if (_businessId == null) {
-      setState(() => _errors = {
-            'businessId': 'Business account not found. Please try again.',
-          });
+      setState(
+        () => _errors = {
+          'businessId': 'Business account not found. Please try again.',
+        },
+      );
       return;
     }
 
     setState(() => _isSaving = true);
 
-    final purposeValue =
-        _purpose == 'Others' ? _purposeOtherCtrl.text.trim() : _purpose!;
-    final transportValue =
-        _transport == 'Others' ? _transportOtherCtrl.text.trim() : _transport!;
+    final purposeValue = _purpose == 'Others'
+        ? _purposeOtherCtrl.text.trim()
+        : _purpose!;
+    final transportValue = _transport == 'Others'
+        ? _transportOtherCtrl.text.trim()
+        : _transport!;
 
     final result = await _api.saveGuestEntry(
       GuestEntryData(
@@ -479,20 +487,21 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
         purposeOfVisit: purposeValue,
         transportationMode: transportValue,
         breakdowns: _rows
-            .map((r) => GuestBreakdownData(
-                  country: r.isOverseas ? null : r.country,
-                  nationality: (r.isOverseas || r.country != 'Philippines')
-                      ? null
-                      : r.nationality,
-                  philippinesRegion:
-                      (!r.isOverseas && r.country == 'Philippines')
-                          ? r.region
-                          : null,
-                  sex: r.sex!,
-                  ageGroup: r.ageGroup!,
-                  count: int.parse(r.countCtrl.text),
-                  isOverseas: r.isOverseas,
-                ))
+            .map(
+              (r) => GuestBreakdownData(
+                country: r.isOverseas ? null : r.country,
+                nationality: (r.isOverseas || r.country != 'Philippines')
+                    ? null
+                    : r.nationality,
+                philippinesRegion: (!r.isOverseas && r.country == 'Philippines')
+                    ? r.region
+                    : null,
+                sex: r.sex!,
+                ageGroup: r.ageGroup!,
+                count: int.parse(r.countCtrl.text),
+                isOverseas: r.isOverseas,
+              ),
+            )
             .toList(),
       ),
     );
@@ -502,38 +511,30 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
 
     if (result.success) {
       _clearForm();
-      // Show a different message depending on whether we're currently offline.
-      // The API already queued the entry as pending_create when offline, so
-      // the save itself succeeded — we just want to set the user's expectation.
-      if (!ConnectivityService.instance.isOnline) {
-        _showSnackBar(
-          'Entry saved offline — will sync when you\'re back online.',
-          color: const Color(0xFFF59E0B), // amber to signal "pending"
-        );
-      } else {
+      if (result.syncedToCloud) {
         _showSnackBar('Guest entry saved successfully!');
+      } else {
+        // Either offline, or online but Supabase failed — record is safe locally.
+        _showSnackBar(
+          ConnectivityService.instance.isOnline
+              ? 'Entry saved — will sync in the background.'
+              : 'Entry saved offline — will sync when you\'re back online.',
+          color: const Color(0xFFF59E0B), // amber = "pending"
+        );
       }
-    } else {
-      setState(() => _errors = {
-            'submit': result.error ?? 'Failed to save. Please try again.',
-          });
     }
   }
 
   Future<void> _pickDate(BuildContext context, bool isCheckIn) async {
-    final now       = DateTime.now();
-    final today     = DateTime(now.year, now.month, now.day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final firstDate = isCheckIn
         ? DateTime(2020)
-        : (_checkIn != null
-            ? _checkIn!.add(const Duration(days: 1))
-            : today);
-    final lastDate    = isCheckIn ? today : today.add(const Duration(days: 730));
+        : (_checkIn != null ? _checkIn!.add(const Duration(days: 1)) : today);
+    final lastDate = isCheckIn ? today : today.add(const Duration(days: 730));
     final initialDate = isCheckIn
         ? today
-        : (_checkIn != null
-            ? _checkIn!.add(const Duration(days: 1))
-            : today);
+        : (_checkIn != null ? _checkIn!.add(const Duration(days: 1)) : today);
 
     final picked = await showDatePicker(
       context: context,
@@ -648,7 +649,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
                       _clearFieldError('demographicSum');
                     },
                     onRoomsChanged: (_) => _clearFieldError('roomsOccupied'),
-                    onPurposeOtherChanged: (_) => _clearFieldError('purposeOther'),
+                    onPurposeOtherChanged: (_) =>
+                        _clearFieldError('purposeOther'),
                     onTransportOtherChanged: (_) =>
                         _clearFieldError('transportOther'),
                   ),
@@ -741,8 +743,11 @@ class _OnlineBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.wifi_rounded,
-              color: AppColors.primaryCyan, size: 14),
+          const Icon(
+            Icons.wifi_rounded,
+            color: AppColors.primaryCyan,
+            size: 14,
+          ),
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
@@ -753,13 +758,13 @@ class _OnlineBanner extends StatelessWidget {
           GestureDetector(
             onTap: onRefresh,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.primaryCyan.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                    color: AppColors.primaryCyan.withOpacity(0.4)),
+                  color: AppColors.primaryCyan.withOpacity(0.4),
+                ),
               ),
               child: const Text(
                 'Refresh',
@@ -832,8 +837,11 @@ class _GlobalErrorBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded,
-              color: AppColors.accentRed, size: 16),
+          Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.accentRed,
+            size: 16,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -904,8 +912,9 @@ class _StayInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final nightsLabel =
-        nights > 0 ? '$nights night${nights > 1 ? 's' : ''}' : '—';
+    final nightsLabel = nights > 0
+        ? '$nights night${nights > 1 ? 's' : ''}'
+        : '—';
 
     return _SectionCard(
       title: 'Stay Information',
@@ -1168,14 +1177,14 @@ class _DemographicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile   = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.of(context).size.width < 600;
     final totalLabel = total > 0 ? '$total' : '?';
-    final sumMatch   = total > 0 && currentSum == total;
-    final sumColor   = currentSum == 0
+    final sumMatch = total > 0 && currentSum == total;
+    final sumColor = currentSum == 0
         ? AppColors.textGray
         : sumMatch
-            ? const Color(0xFF00C48C)
-            : AppColors.accentRed;
+        ? const Color(0xFF00C48C)
+        : AppColors.accentRed;
     final sumError = errors['demographicSum'];
 
     return _SectionCard(
@@ -1204,9 +1213,12 @@ class _DemographicCard extends StatelessWidget {
           ],
 
           ...List.generate(rows.length, (i) {
-            final row  = rows[i];
-            final rErr = i < rowErrors.length ? rowErrors[i] : <String, String?>{};
-            final isPhilippines = !row.isOverseas && row.country == 'Philippines';
+            final row = rows[i];
+            final rErr = i < rowErrors.length
+                ? rowErrors[i]
+                : <String, String?>{};
+            final isPhilippines =
+                !row.isOverseas && row.country == 'Philippines';
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -1234,8 +1246,7 @@ class _DemographicCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: const [
-              Icon(Icons.lightbulb_outline,
-                  color: Color(0xFFD4A017), size: 13),
+              Icon(Icons.lightbulb_outline, color: Color(0xFFD4A017), size: 13),
               SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1297,9 +1308,9 @@ class _DesktopDemoRow extends StatelessWidget {
                   onChanged: (v) {
                     row.isOverseas = v ?? false;
                     if (row.isOverseas) {
-                      row.country     = null;
+                      row.country = null;
                       row.nationality = null;
-                      row.region      = null;
+                      row.region = null;
                     }
                     onChanged('isOverseas');
                   },
@@ -1309,10 +1320,7 @@ class _DesktopDemoRow extends StatelessWidget {
                 ),
                 const Text(
                   'Overseas Fil.',
-                  style: TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 11.5,
-                  ),
+                  style: TextStyle(color: AppColors.textGray, fontSize: 11.5),
                 ),
               ],
             ),
@@ -1334,7 +1342,7 @@ class _DesktopDemoRow extends StatelessWidget {
                 row.country = v;
                 if (v != 'Philippines') {
                   row.nationality = null;
-                  row.region      = null;
+                  row.region = null;
                 }
                 onChanged('country');
               },
@@ -1434,8 +1442,11 @@ class _DesktopDemoRow extends StatelessWidget {
           child: showDelete
               ? GestureDetector(
                   onTap: onDelete,
-                  child: const Icon(Icons.delete_rounded,
-                      color: AppColors.accentRed, size: 16),
+                  child: const Icon(
+                    Icons.delete_rounded,
+                    color: AppColors.accentRed,
+                    size: 16,
+                  ),
                 )
               : const SizedBox.shrink(),
         ),
@@ -1483,9 +1494,9 @@ class _MobileDemoRow extends StatelessWidget {
             onTap: () {
               row.isOverseas = !row.isOverseas;
               if (row.isOverseas) {
-                row.country     = null;
+                row.country = null;
                 row.nationality = null;
-                row.region      = null;
+                row.region = null;
               }
               onChanged('isOverseas');
             },
@@ -1499,14 +1510,17 @@ class _MobileDemoRow extends StatelessWidget {
                     onChanged: (v) {
                       row.isOverseas = v ?? false;
                       if (row.isOverseas) {
-                        row.country     = null;
+                        row.country = null;
                         row.nationality = null;
-                        row.region      = null;
+                        row.region = null;
                       }
                       onChanged('isOverseas');
                     },
                     activeColor: const Color(0xFF3B82F6),
-                    side: const BorderSide(color: Color(0xFF6B7280), width: 1.4),
+                    side: const BorderSide(
+                      color: Color(0xFF6B7280),
+                      width: 1.4,
+                    ),
                     visualDensity: VisualDensity.compact,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -1520,8 +1534,11 @@ class _MobileDemoRow extends StatelessWidget {
                 if (showDelete)
                   GestureDetector(
                     onTap: onDelete,
-                    child: const Icon(Icons.delete_rounded,
-                        color: AppColors.accentRed, size: 16),
+                    child: const Icon(
+                      Icons.delete_rounded,
+                      color: AppColors.accentRed,
+                      size: 16,
+                    ),
                   ),
               ],
             ),
@@ -1540,7 +1557,7 @@ class _MobileDemoRow extends StatelessWidget {
                 row.country = v;
                 if (v != 'Philippines') {
                   row.nationality = null;
-                  row.region      = null;
+                  row.region = null;
                 }
                 onChanged('country');
               },
@@ -1664,10 +1681,15 @@ class _FormActions extends StatelessWidget {
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
               )
-            : const Icon(Icons.person_add_rounded,
-                size: 17, color: Colors.white),
+            : const Icon(
+                Icons.person_add_rounded,
+                size: 17,
+                color: Colors.white,
+              ),
         label: Text(
           isSaving ? 'Saving...' : 'Save Guest Entry',
           style: const TextStyle(
@@ -1680,8 +1702,7 @@ class _FormActions extends StatelessWidget {
           backgroundColor: const Color(0xFF3B82F6),
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
         ),
       ),
     );
@@ -1693,8 +1714,7 @@ class _FormActions extends StatelessWidget {
         style: OutlinedButton.styleFrom(
           side: const BorderSide(color: AppColors.cardBorder),
           foregroundColor: AppColors.textGray,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
           padding: const EdgeInsets.symmetric(horizontal: 22),
         ),
         child: const Text(
@@ -1758,19 +1778,23 @@ class _SectionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        )),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
-                      Text(subtitle!,
-                          style: const TextStyle(
-                            color: AppColors.primaryCyan,
-                            fontSize: 11.5,
-                          )),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          color: AppColors.primaryCyan,
+                          fontSize: 11.5,
+                        ),
+                      ),
                     ],
                   ],
                 ),
@@ -1789,11 +1813,7 @@ class _SectionCard extends StatelessWidget {
 // ─── Field Column ─────────────────────────────────────────────────────────────
 
 class _FieldCol extends StatelessWidget {
-  const _FieldCol({
-    required this.label,
-    required this.child,
-    this.errorText,
-  });
+  const _FieldCol({required this.label, required this.child, this.errorText});
 
   final String label;
   final Widget child;
@@ -1804,12 +1824,14 @@ class _FieldCol extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-              color: AppColors.textGray,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            )),
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppColors.textGray,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         const SizedBox(height: 6),
         child,
         if (errorText != null) ...[
@@ -1831,16 +1853,17 @@ class _InlineError extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(Icons.error_outline_rounded,
-            size: 12, color: AppColors.accentRed),
+        Icon(Icons.error_outline_rounded, size: 12, color: AppColors.accentRed),
         const SizedBox(width: 5),
         Expanded(
-          child: Text(message,
-              style: const TextStyle(
-                color: AppColors.accentRed,
-                fontSize: 11,
-                height: 1.3,
-              )),
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: AppColors.accentRed,
+              fontSize: 11,
+              height: 1.3,
+            ),
+          ),
         ),
       ],
     );
@@ -1882,12 +1905,14 @@ class _AddRowButton extends StatelessWidget {
             children: [
               Icon(Icons.add, color: Colors.white, size: 16),
               SizedBox(width: 8),
-              Text('Add Row',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  )),
+              Text(
+                'Add Row',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -1923,7 +1948,7 @@ class _CompactDropWithError extends StatelessWidget {
 
 InputDecoration _lightDecoration({String? hint, bool hasError = false}) {
   final borderColor = hasError ? AppColors.accentRed : _kInputBorder;
-  final focusColor  = hasError ? AppColors.accentRed : _kInputFocused;
+  final focusColor = hasError ? AppColors.accentRed : _kInputFocused;
   return InputDecoration(
     hintText: hint,
     hintStyle: const TextStyle(color: _kInputHint, fontSize: 13),
@@ -1964,9 +1989,7 @@ class _EntryDateField extends StatelessWidget {
         height: _kFieldHeight,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: hasError
-              ? AppColors.accentRed.withOpacity(0.04)
-              : _kInputFill,
+          color: hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: hasError ? AppColors.accentRed : _kInputBorder,
@@ -2010,8 +2033,10 @@ class _EntryReadOnlyField extends StatelessWidget {
         border: Border.all(color: _kInputBorder),
       ),
       alignment: Alignment.centerLeft,
-      child: Text(value,
-          style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13)),
+      child: Text(
+        value,
+        style: const TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+      ),
     );
   }
 }
@@ -2090,9 +2115,7 @@ class _EntryDropdownField extends StatelessWidget {
       height: _kFieldHeight,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: hasError
-            ? AppColors.accentRed.withOpacity(0.04)
-            : _kInputFill,
+        color: hasError ? AppColors.accentRed.withOpacity(0.04) : _kInputFill,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: hasError ? AppColors.accentRed : _kInputBorder,
@@ -2103,8 +2126,10 @@ class _EntryDropdownField extends StatelessWidget {
           isDense: true,
           value: value,
           isExpanded: true,
-          hint: Text(hint,
-              style: const TextStyle(color: _kInputHint, fontSize: 13)),
+          hint: Text(
+            hint,
+            style: const TextStyle(color: _kInputHint, fontSize: 13),
+          ),
           dropdownColor: _kDropBg,
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,
@@ -2113,12 +2138,15 @@ class _EntryDropdownField extends StatelessWidget {
           ),
           style: const TextStyle(color: _kInputText, fontSize: 13),
           items: items
-              .map((e) => DropdownMenuItem<String>(
-                    value: e,
-                    child: Text(e,
-                        style: const TextStyle(
-                            color: _kInputText, fontSize: 13)),
-                  ))
+              .map(
+                (e) => DropdownMenuItem<String>(
+                  value: e,
+                  child: Text(
+                    e,
+                    style: const TextStyle(color: _kInputText, fontSize: 13),
+                  ),
+                ),
+              )
               .toList(),
           onChanged: onChanged,
         ),
@@ -2143,12 +2171,13 @@ class _CompactDrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveValue =
-        (value != null && items.contains(value)) ? value : null;
-    final fillColor   = enabled ? _kInputFill : _kReadOnlyFill;
-    final textColor   = enabled ? _kInputText : const Color(0xFF9CA3AF);
-    final hintColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
-    final iconColor   = enabled ? _kInputHint : const Color(0xFFD1D5DB);
+    final effectiveValue = (value != null && items.contains(value))
+        ? value
+        : null;
+    final fillColor = enabled ? _kInputFill : _kReadOnlyFill;
+    final textColor = enabled ? _kInputText : const Color(0xFF9CA3AF);
+    final hintColor = enabled ? _kInputHint : const Color(0xFFD1D5DB);
+    final iconColor = enabled ? _kInputHint : const Color(0xFFD1D5DB);
     final borderColor = enabled ? _kInputBorder : const Color(0xFFE5E7EB);
 
     return Container(
@@ -2162,21 +2191,27 @@ class _CompactDrop extends StatelessWidget {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: effectiveValue,
-          hint: Text(hint,
-              style: TextStyle(color: hintColor, fontSize: 12.5)),
+          hint: Text(hint, style: TextStyle(color: hintColor, fontSize: 12.5)),
           style: TextStyle(color: textColor, fontSize: 12.5),
           dropdownColor: _kDropBg,
-          icon: Icon(Icons.keyboard_arrow_down_rounded,
-              color: iconColor, size: 16),
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: iconColor,
+            size: 16,
+          ),
           isExpanded: true,
           isDense: true,
           onChanged: enabled ? onChanged : null,
           items: items
-              .map((e) => DropdownMenuItem<String>(
-                    value: e,
-                    child: Text(e,
-                        style: TextStyle(color: textColor, fontSize: 12.5)),
-                  ))
+              .map(
+                (e) => DropdownMenuItem<String>(
+                  value: e,
+                  child: Text(
+                    e,
+                    style: TextStyle(color: textColor, fontSize: 12.5),
+                  ),
+                ),
+              )
               .toList(),
         ),
       ),
@@ -2214,8 +2249,10 @@ class _CompactCountField extends StatelessWidget {
               ? AppColors.accentRed.withOpacity(0.04)
               : _kInputFill,
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 6, vertical: 11),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 11,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(7),
             borderSide: BorderSide(color: borderColor),

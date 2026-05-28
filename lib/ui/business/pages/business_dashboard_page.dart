@@ -136,31 +136,22 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
 
   // Called when the user taps "Refresh" on the back-online banner.
   // If businessId was never resolved (e.g. page loaded while offline),
-  // re-run the full init so fetchBusinessId gets another attempt online.
+  // re-run the full init so business details and dashboard data refresh.
   Future<void> _onBannerRefresh() async {
     setState(() => _showOnlineBanner = false);
-    if (_businessId == null) {
-      await _initBusinessFromSession();
-    } else {
-      await _loadDashboard();
-      await _loadTrend();
-    }
+    await _refreshDashboardFromSession();
   }
 
   Future<void> _refreshAfterReconnect() async {
     if (!mounted) return;
 
-    if (_businessId == null) {
-      await _initBusinessFromSession();
-    } else {
-      await _loadDashboard();
-      if (!mounted) return;
-      await _loadTrend();
-    }
+    await _refreshDashboardFromSession();
 
-    if (mounted) {
-      setState(() => _showOnlineBanner = false);
-    }
+    
+  }
+
+  Future<void> _refreshDashboardFromSession() async {
+    await _initBusinessFromSession();
   }
 
   // ── Init & data loading ───────────────────────────────────────────────────
@@ -256,6 +247,7 @@ class _BusinessDashboardPageState extends State<BusinessDashboardPage> {
     .replaceAll('—', '-')
     .replaceAll('\u2013', '-')
     .replaceAll('\u2014', '-');
+
 
   String _csvCell(String value) {
     if (value.contains(',') || value.contains('"') || value.contains('\n')) {

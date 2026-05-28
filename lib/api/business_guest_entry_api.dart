@@ -10,9 +10,17 @@ import 'package:tourism_app/core/services/session_service.dart';
 class GuestEntryResult {
   final bool success;
   final String? error;
+  final bool syncedToCloud; // true only when Supabase confirmed the write
 
-  const GuestEntryResult._({required this.success, this.error});
-  factory GuestEntryResult.ok() => const GuestEntryResult._(success: true);
+  const GuestEntryResult._({
+    required this.success,
+    this.error,
+    this.syncedToCloud = false,
+  });
+
+  factory GuestEntryResult.ok({bool syncedToCloud = false}) =>
+      GuestEntryResult._(success: true, syncedToCloud: syncedToCloud);
+
   factory GuestEntryResult.err(String error) =>
       GuestEntryResult._(success: false, error: error);
 }
@@ -103,66 +111,80 @@ class BusinessGuestEntryApi {
   // ONLINE — existing Supabase flow, then mirror to SQLite as 'synced'.
   // ---------------------------------------------------------------------------
   Future<GuestEntryResult> _saveOnline(GuestEntryData data) async {
-    try {
-      final checkInStr  = data.checkIn.toIso8601String().split('T').first;
-      final checkOutStr = data.checkOut.toIso8601String().split('T').first;
+  final guestRecordId = _generateId();
+  final checkInStr  = data.checkIn.toIso8601String().split('T').first;
+  final checkOutStr = data.checkOut.toIso8601String().split('T').first;
+  final now         = DateTime.now().toUtc().toIso8601String();
 
-      // 1. Insert into Supabase
-      final record = await _supabase
-          .from('guest_records')
-          .insert({
-            'business_id':         data.businessId,
-            'check_in':            checkInStr,
-            'check_out':           checkOutStr,
-            'total_guests':        data.totalGuests,
-            'rooms_occupied':      data.roomsOccupied,
-            'purpose_of_visit':    data.purposeOfVisit,
-            'transportation_mode': data.transportationMode,
-            'status':              'active',
-            'is_deleted':          false,
-          })
-          .select('id, created_at')
-          .single();
-
-      final guestRecordId = record['id'] as String;
-      final createdAt     = record['created_at'] as String?;
-
-      final breakdownRows = data.breakdowns.map((b) => {
-            'guest_record_id':    guestRecordId,
-            'is_overseas':        b.isOverseas,
-            'country':            b.country,
-            'nationality':        b.nationality,
-            'philippines_region': b.philippinesRegion,
-            'sex':                _mapSex(b.sex),
-            'age_group':          _mapAgeGroup(b.ageGroup),
-            'count':              b.count,
-          }).toList();
-
-      // 2. Insert breakdowns into Supabase
-      await _supabase.from('guest_breakdowns').insert(breakdownRows);
-
-      // 3. Mirror to local SQLite as 'synced'
-      await _upsertLocalRecord(
-        recordId:          guestRecordId,
-        businessId:        data.businessId,
-        checkIn:           checkInStr,
-        checkOut:          checkOutStr,
-        totalGuests:       data.totalGuests,
-        roomsOccupied:     data.roomsOccupied,
-        purposeOfVisit:    data.purposeOfVisit,
-        transportationMode: data.transportationMode,
-        createdAt:         createdAt,
-        syncStatus:        LocalDatabase.syncSynced,
-        localUpdatedAt:    null,
-      );
-      await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
-
-      return GuestEntryResult.ok();
-    } catch (e) {
-      debugPrint('❌ saveGuestEntry (online) error: $e');
-      return GuestEntryResult.err('Failed to save guest entry. Please try again.');
-    }
+  // ── Step 1: SQLite first (safe local copy, pending_create) ───────────────
+  try {
+    await _upsertLocalRecord(
+      recordId:           guestRecordId,
+      businessId:         data.businessId,
+      checkIn:            checkInStr,
+      checkOut:           checkOutStr,
+      totalGuests:        data.totalGuests,
+      roomsOccupied:      data.roomsOccupied,
+      purposeOfVisit:     data.purposeOfVisit,
+      transportationMode: data.transportationMode,
+      createdAt:          now,
+      syncStatus:         LocalDatabase.syncPendingCreate,
+      localUpdatedAt:     now,
+    );
+    await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
+  } catch (e) {
+    debugPrint('❌ _saveOnline: local write failed — $e');
+    return GuestEntryResult.err('Failed to save guest entry. Please try again.');
   }
+
+  // ── Step 2: Push to Supabase ─────────────────────────────────────────────
+  try {
+    await _supabase.from('guest_records').insert({
+      'id':                  guestRecordId,
+      'business_id':         data.businessId,
+      'check_in':            checkInStr,
+      'check_out':           checkOutStr,
+      'total_guests':        data.totalGuests,
+      'rooms_occupied':      data.roomsOccupied,
+      'purpose_of_visit':    data.purposeOfVisit,
+      'transportation_mode': data.transportationMode,
+      'status':              'active',
+      'is_deleted':          false,
+      'created_at':          now,
+    });
+
+    await _supabase.from('guest_breakdowns').insert(
+      data.breakdowns.map((b) => {
+        'guest_record_id':    guestRecordId,
+        'is_overseas':        b.isOverseas,
+        'country':            b.country,
+        'nationality':        b.nationality,
+        'philippines_region': b.philippinesRegion,
+        'sex':                _mapSex(b.sex),
+        'age_group':          _mapAgeGroup(b.ageGroup),
+        'count':              b.count,
+      }).toList(),
+    );
+
+    // ── Step 3: Mark synced in SQLite ──────────────────────────────────────
+    final db = await LocalDatabase.instance.database;
+    await db.update(
+      LocalDatabase.tableGuestRecords,
+      {
+        'sync_status':      LocalDatabase.syncSynced,
+        'local_updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      where:     'id = ?',
+      whereArgs: [guestRecordId],
+    );
+
+    return GuestEntryResult.ok(syncedToCloud: true);
+  } catch (e) {
+    // Supabase failed — record stays pending_create; SyncService will retry.
+    debugPrint('⚠️ _saveOnline: Supabase insert failed, queued for sync — $e');
+    return GuestEntryResult.ok(syncedToCloud: false);
+  }
+}
 
   // ---------------------------------------------------------------------------
   // OFFLINE — write only to SQLite, tagged as 'pending_create'.

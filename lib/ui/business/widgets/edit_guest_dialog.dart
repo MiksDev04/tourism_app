@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../pages/business_guest_records_page.dart';
+import 'dart:async';
+import '../../../core/services/offline_service.dart';
 
 // ─── Light input colours ──────────────────────────────────────────────────────
 
@@ -95,6 +97,10 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
   late final TextEditingController _roomsCtrl;
   late String _purpose;
   late String _transport;
+
+  // ── Connectivity ──────────────────────────────────────────────────────────
+  bool _isOffline = false;
+  StreamSubscription<bool>? _connectivitySub;
   final TextEditingController _purposeOtherCtrl = TextEditingController();
   final TextEditingController _transportOtherCtrl = TextEditingController();
   bool _showPurposeOther = false;
@@ -281,6 +287,12 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     }
 
     _rowErrors = List.generate(_demoRows.length, (_) => {});
+
+    _isOffline = !ConnectivityService.instance.isOnline;
+    _connectivitySub = ConnectivityService.instance.onConnectivityChanged
+        .listen((isOnline) {
+          if (mounted) setState(() => _isOffline = !isOnline);
+        });
   }
 
   List<DemographicEntry> _convertFromBreakdowns(
@@ -325,6 +337,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     _roomsCtrl.dispose();
     _purposeOtherCtrl.dispose();
     _transportOtherCtrl.dispose();
+    _connectivitySub?.cancel();
     super.dispose();
   }
 
@@ -544,7 +557,6 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
         : _transport;
 
     final breakdowns = _demoRows
-        // Overseas rows have no country (dropdown disabled) — isOverseas alone is enough.
         .where((e) => (e.isOverseas || e.country.isNotEmpty) && e.count > 0)
         .map(
           (e) => GuestBreakdownEntry(
@@ -584,9 +596,7 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                 b.philippinesRegion != 'N/A')
           ? 'PH – ${b.philippinesRegion}'
           : (b.country ?? '');
-      if (key.isNotEmpty) {
-        countries[key] = (countries[key] ?? 0) + b.count;
-      }
+      if (key.isNotEmpty) countries[key] = (countries[key] ?? 0) + b.count;
     }
 
     final demographics = GuestDemographics(
@@ -609,7 +619,25 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       demographics: demographics,
     );
 
+    // Capture before pop — context becomes invalid after dismiss.
+    final messenger = ScaffoldMessenger.of(context);
+    final isOnline = ConnectivityService.instance.isOnline;
+
     Navigator.of(context).pop(updated);
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          isOnline
+              ? 'Guest record updated successfully!'
+              : 'Changes saved offline — will sync when you\'re back online.',
+        ),
+        backgroundColor: isOnline
+            ? AppColors.primaryCyan
+            : const Color(0xFFF59E0B),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   // ─── Build ────────────────────────────────────────────────────────────────
@@ -644,6 +672,34 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _TitleBar(onClose: () => Navigator.of(context).pop()),
+              if (_isOffline)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  color: const Color(0xFF1A1A2E),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.wifi_off_rounded,
+                        color: Color(0xFF8A9BB5),
+                        size: 14,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'You\'re offline — changes will be saved locally and synced later.',
+                          style: TextStyle(
+                            color: Color(0xFF8A9BB5),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Flexible(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.all(isNarrow ? 14 : 20),

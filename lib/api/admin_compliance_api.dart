@@ -144,5 +144,21 @@ class AdminComplianceApi {
         .toList();
   }
 
+  /// Updates the [status] column of a business row in [businesses].
+  /// Only [approved] and [warning] are valid targets per business rules.
+  static Future<void> updateBusinessStatus(
+    String businessId,
+    BusinessStatusLevel newStatus,
+  ) async {
+    final raw = switch (newStatus) {
+      BusinessStatusLevel.approved => 'approved',
+      BusinessStatusLevel.warning => 'warning',
+      BusinessStatusLevel.suspended => 'suspended',
+    };
 
+    await _supabase
+        .from('businesses')
+        .update({'status': raw})
+        .eq('id', businessId);
+  }
 }

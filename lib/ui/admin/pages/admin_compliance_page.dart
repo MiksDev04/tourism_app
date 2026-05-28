@@ -3,7 +3,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-// import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/pages/error_page.dart';
@@ -105,6 +104,35 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  // ── Status change ──────────────────────────────────────────────────────────
+
+  /// Opens the Manage Status modal for [record].
+  void _openActionDialog(BusinessActivityRecord record) {
+    showDialog(
+      context: context,
+      builder: (_) => _StatusChangeDialog(
+        record: record,
+        onConfirm: (newStatus) => _handleStatusChange(record, newStatus),
+      ),
+    );
+  }
+
+  /// Calls the API and optimistically updates local state.
+  Future<void> _handleStatusChange(
+    BusinessActivityRecord record,
+    BusinessStatusLevel newStatus,
+  ) async {
+    await AdminComplianceApi.updateBusinessStatus(record.id, newStatus);
+    if (mounted) {
+      setState(() {
+        final idx = _allRecords.indexWhere((r) => r.id == record.id);
+        if (idx != -1) {
+          _allRecords[idx] = _allRecords[idx].copyWith(businessStatus: newStatus);
+        }
+      });
     }
   }
 
@@ -257,7 +285,10 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                   ),
                 )
               else
-                _ComplianceTable(rows: _pagedRows),
+                _ComplianceTable(
+                  rows: _pagedRows,
+                  onAction: _openActionDialog,
+                ),
               if (!_isLoading) ...[
                 const SizedBox(height: 12),
                 Paginator(
@@ -619,9 +650,13 @@ class _DropdownFilter extends StatelessWidget {
 // ─── Compliance Table ─────────────────────────────────────────────────────────
 
 class _ComplianceTable extends StatelessWidget {
-  const _ComplianceTable({required this.rows});
+  const _ComplianceTable({
+    required this.rows,
+    required this.onAction,
+  });
 
   final List<BusinessActivityRecord> rows;
+  final ValueChanged<BusinessActivityRecord> onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -650,7 +685,10 @@ class _ComplianceTable extends StatelessWidget {
               itemCount: rows.length,
               separatorBuilder: (_, __) =>
                   const Divider(color: AppColors.cardBorder, height: 1),
-              itemBuilder: (_, i) => _ComplianceRow(record: rows[i]),
+              itemBuilder: (_, i) => _ComplianceRow(
+                record: rows[i],
+                onAction: onAction,
+              ),
             ),
         ],
       ),
@@ -686,6 +724,7 @@ class _TableHeader extends StatelessWidget {
                 Expanded(flex: 2, child: _HeaderCell('Records')),
                 Expanded(flex: 2, child: _HeaderCell('Guests')),
                 Expanded(flex: 3, child: _HeaderCell('Last Activity')),
+                Expanded(flex: 2, child: _HeaderCell('Action')),
               ],
             ),
           );
@@ -715,9 +754,13 @@ class _HeaderCell extends StatelessWidget {
 // ─── Compliance Row ───────────────────────────────────────────────────────────
 
 class _ComplianceRow extends StatelessWidget {
-  const _ComplianceRow({required this.record});
+  const _ComplianceRow({
+    required this.record,
+    required this.onAction,
+  });
 
   final BusinessActivityRecord record;
+  final ValueChanged<BusinessActivityRecord> onAction;
 
   String _formatLastActivity(DateTime? dt) {
     if (dt == null) return '—';
@@ -741,7 +784,22 @@ class _ComplianceRow extends StatelessWidget {
   String _formatNumber(int n) =>
       n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
 
- 
+  Widget _buildActionButton() {
+    return OutlinedButton.icon(
+      onPressed: () => onAction(record),
+      icon: const Icon(Icons.manage_accounts_rounded, size: 14),
+      label: const Text('Manage', style: TextStyle(fontSize: 12)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primaryCyan,
+        side: BorderSide(color: AppColors.primaryCyan.withOpacity(0.4)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -780,6 +838,7 @@ class _ComplianceRow extends StatelessWidget {
                         ],
                       ),
                     ),
+                    _buildActionButton(),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -899,6 +958,13 @@ class _ComplianceRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildActionButton(),
+                  ),
+                ),
               ],
             ),
           );
@@ -911,7 +977,10 @@ class _ComplianceRow extends StatelessWidget {
 // ─── Status Change Dialog ─────────────────────────────────────────────────────
 
 class _StatusChangeDialog extends StatefulWidget {
-  const _StatusChangeDialog({required this.record, required this.onConfirm});
+  const _StatusChangeDialog({
+    required this.record,
+    required this.onConfirm,
+  });
 
   final BusinessActivityRecord record;
   final Future<void> Function(BusinessStatusLevel) onConfirm;
@@ -924,15 +993,32 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
   late BusinessStatusLevel _selected;
   bool _isSaving = false;
 
-  // Warning and Suspended are only available when activity is inactive/noActivity
-  bool get _restrictedOptionsEnabled =>
-      widget.record.activityStatus == ActivityStatus.inactive ||
-      widget.record.activityStatus == ActivityStatus.noActivity;
+  // ── Business rules ─────────────────────────────────────────────────────────
+
+  /// Inactive or No Activity + currently Approved → admin can escalate to Warning.
+  bool get _canSetWarning =>
+      (widget.record.activityStatus == ActivityStatus.inactive ||
+          widget.record.activityStatus == ActivityStatus.noActivity) &&
+      widget.record.businessStatus == BusinessStatusLevel.approved;
+
+  /// Currently Warning → admin can revert to Approved.
+  bool get _canSetApproved =>
+      widget.record.businessStatus == BusinessStatusLevel.warning;
+
+  /// True when at least one action is available.
+  bool get _hasAction => _canSetWarning || _canSetApproved;
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.record.businessStatus;
+    // Pre-select the only available target so Confirm works immediately.
+    if (_canSetWarning) {
+      _selected = BusinessStatusLevel.warning;
+    } else if (_canSetApproved) {
+      _selected = BusinessStatusLevel.approved;
+    } else {
+      _selected = widget.record.businessStatus;
+    }
   }
 
   Future<void> _confirm() async {
@@ -971,7 +1057,7 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(
-                      Icons.tune_rounded,
+                      Icons.manage_accounts_rounded,
                       color: AppColors.primaryCyan,
                       size: 18,
                     ),
@@ -1003,9 +1089,8 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed: _isSaving
-                        ? null
-                        : () => Navigator.of(context).pop(),
+                    onPressed:
+                        _isSaving ? null : () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded, size: 18),
                     color: AppColors.textGray,
                     padding: EdgeInsets.zero,
@@ -1030,8 +1115,8 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
               ),
               const SizedBox(height: 16),
 
-              // ── Restriction Notice ─────────────────────────────────────────
-              if (!_restrictedOptionsEnabled) ...[
+              // ── No-action restriction notice ───────────────────────────────
+              if (!_hasAction) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1052,10 +1137,12 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                         color: AppColors.accentOrange,
                       ),
                       const SizedBox(width: 8),
-                      Expanded(
+                      const Expanded(
                         child: Text(
-                          'Warning and Suspended statuses are only available for establishments with Inactive or No Activity.',
-                          style: const TextStyle(
+                          'No status change is available. Warning can only be set for '
+                          'Inactive or No Activity businesses, and only when their '
+                          'current status is Approved.',
+                          style: TextStyle(
                             color: AppColors.accentOrange,
                             fontSize: 11.5,
                           ),
@@ -1064,113 +1151,121 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                // ── Close only ───────────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      side: BorderSide(color: AppColors.cardBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: const Text('Close', style: TextStyle(fontSize: 13)),
+                  ),
+                ),
               ],
 
-              // ── Status Selector ────────────────────────────────────────────
-              const Text(
-                'Set New Status',
-                style: TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+              // ── Available action option(s) ─────────────────────────────────
+              if (_hasAction) ...[
+                const Text(
+                  'Available Action',
+                  style: TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              _StatusOption(
-                label: 'Approved',
-                description: 'Business is in good standing.',
-                icon: Icons.check_circle_outline_rounded,
-                color: AppColors.accentGreen,
-                isSelected: _selected == BusinessStatusLevel.approved,
-                isEnabled: true,
-                onTap: () =>
-                    setState(() => _selected = BusinessStatusLevel.approved),
-              ),
-              const SizedBox(height: 8),
-              _StatusOption(
-                label: 'Warning',
-                description: 'Business requires attention or follow-up.',
-                icon: Icons.warning_amber_rounded,
-                color: AppColors.accentOrange,
-                isSelected: _selected == BusinessStatusLevel.warning,
-                isEnabled: _restrictedOptionsEnabled,
-                onTap: () {
-                  if (_restrictedOptionsEnabled) {
-                    setState(() => _selected = BusinessStatusLevel.warning);
-                  }
-                },
-              ),
-              const SizedBox(height: 8),
-              _StatusOption(
-                label: 'Suspended',
-                description: 'Business access and operations are suspended.',
-                icon: Icons.block_rounded,
-                color: AppColors.accentRed,
-                isSelected: _selected == BusinessStatusLevel.suspended,
-                isEnabled: _restrictedOptionsEnabled,
-                onTap: () {
-                  if (_restrictedOptionsEnabled) {
-                    setState(() => _selected = BusinessStatusLevel.suspended);
-                  }
-                },
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 10),
 
-              // ── Actions ────────────────────────────────────────────────────
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _isSaving
-                          ? null
-                          : () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textGray,
-                        side: BorderSide(color: AppColors.cardBorder),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontSize: 13),
-                      ),
+                // Escalate → Warning
+                if (_canSetWarning)
+                  _StatusOption(
+                    label: 'Set to Warning',
+                    description:
+                        'Flag this business for attention or follow-up.',
+                    icon: Icons.warning_amber_rounded,
+                    color: AppColors.accentOrange,
+                    isSelected: _selected == BusinessStatusLevel.warning,
+                    onTap: () => setState(
+                      () => _selected = BusinessStatusLevel.warning,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _isSaving ? null : _confirm,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AppColors.primaryCyan,
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 16,
-                              width: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black54,
-                              ),
-                            )
-                          : const Text(
-                              'Confirm',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+
+                // Revert → Approved
+                if (_canSetApproved)
+                  _StatusOption(
+                    label: 'Revert to Approved',
+                    description: 'Remove warning and restore good standing.',
+                    icon: Icons.check_circle_outline_rounded,
+                    color: AppColors.accentGreen,
+                    isSelected: _selected == BusinessStatusLevel.approved,
+                    onTap: () => setState(
+                      () => _selected = BusinessStatusLevel.approved,
                     ),
                   ),
-                ],
-              ),
+
+                const SizedBox(height: 24),
+
+                // ── Actions ──────────────────────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _isSaving
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textGray,
+                          side: BorderSide(color: AppColors.cardBorder),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _isSaving ? null : _confirm,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.primaryCyan,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.black54,
+                                ),
+                              )
+                            : const Text(
+                                'Confirm',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -1188,7 +1283,6 @@ class _StatusOption extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.isSelected,
-    required this.isEnabled,
     required this.onTap,
   });
 
@@ -1197,66 +1291,50 @@ class _StatusOption extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool isSelected;
-  final bool isEnabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final effectiveColor = isEnabled ? color : AppColors.textSubtle;
-    return Opacity(
-      opacity: isEnabled ? 1.0 : 0.4,
-      child: GestureDetector(
-        onTap: isEnabled ? onTap : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? effectiveColor.withOpacity(0.08)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? effectiveColor.withOpacity(0.4)
-                  : AppColors.cardBorder,
-            ),
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withOpacity(0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? color.withOpacity(0.4) : AppColors.cardBorder,
           ),
-          child: Row(
-            children: [
-              Icon(icon, color: effectiveColor, size: 16),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        color: isSelected
-                            ? effectiveColor
-                            : AppColors.textWhite,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 16),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: isSelected ? color : AppColors.textWhite,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                    Text(
-                      description,
-                      style: const TextStyle(
-                        color: AppColors.textSubtle,
-                        fontSize: 11,
-                      ),
+                  ),
+                  Text(
+                    description,
+                    style: const TextStyle(
+                      color: AppColors.textSubtle,
+                      fontSize: 11,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              if (isSelected)
-                Icon(
-                  Icons.check_circle_rounded,
-                  color: effectiveColor,
-                  size: 16,
-                ),
-            ],
-          ),
+            ),
+            if (isSelected) Icon(Icons.check_circle_rounded, color: color, size: 16),
+          ],
         ),
       ),
     );
@@ -1290,12 +1368,17 @@ class _StatusChip extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 13),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1315,25 +1398,25 @@ class _ActivityBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status) {
       ActivityStatus.active => const _StatusChip(
-        color: AppColors.accentGreen,
-        label: 'Active',
-        icon: Icons.check_circle_outline_rounded,
-      ),
+          color: AppColors.accentGreen,
+          label: 'Active',
+          icon: Icons.check_circle_outline_rounded,
+        ),
       ActivityStatus.lowActivity => const _StatusChip(
-        color: AppColors.accentOrange,
-        label: 'Low Activity',
-        icon: Icons.warning_amber_rounded,
-      ),
+          color: AppColors.accentOrange,
+          label: 'Low Activity',
+          icon: Icons.warning_amber_rounded,
+        ),
       ActivityStatus.inactive => const _StatusChip(
-        color: AppColors.accentRed,
-        label: 'Inactive',
-        icon: Icons.cancel_outlined,
-      ),
+          color: AppColors.accentRed,
+          label: 'Inactive',
+          icon: Icons.cancel_outlined,
+        ),
       ActivityStatus.noActivity => const _StatusChip(
-        color: AppColors.textSubtle,
-        label: 'No Activity',
-        icon: Icons.remove_circle_outline_rounded,
-      ),
+          color: AppColors.textSubtle,
+          label: 'No Activity',
+          icon: Icons.remove_circle_outline_rounded,
+        ),
     };
   }
 }
@@ -1349,20 +1432,20 @@ class _BusinessStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status) {
       BusinessStatusLevel.approved => const _StatusChip(
-        color: AppColors.accentGreen,
-        label: 'Approved',
-        icon: Icons.verified_outlined,
-      ),
+          color: AppColors.accentGreen,
+          label: 'Approved',
+          icon: Icons.verified_outlined,
+        ),
       BusinessStatusLevel.warning => const _StatusChip(
-        color: AppColors.accentOrange,
-        label: 'Warning',
-        icon: Icons.warning_amber_rounded,
-      ),
+          color: AppColors.accentOrange,
+          label: 'Warning',
+          icon: Icons.warning_amber_rounded,
+        ),
       BusinessStatusLevel.suspended => const _StatusChip(
-        color: AppColors.accentRed,
-        label: 'Suspended',
-        icon: Icons.block_rounded,
-      ),
+          color: AppColors.accentRed,
+          label: 'Suspended',
+          icon: Icons.block_rounded,
+        ),
     };
   }
 }
