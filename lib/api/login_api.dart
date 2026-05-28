@@ -1,4 +1,9 @@
+// ignore_for_file: avoid_print
+
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,8 +25,28 @@ class LoginResult {
       LoginResult._(success: false, error: error);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  LoginApiException
+//  Thrown by all forgot-password methods.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class LoginApiException implements Exception {
+  const LoginApiException(this.message);
+  final String message;
+  @override
+  String toString() => 'LoginApiException: $message';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LoginApi
+// ─────────────────────────────────────────────────────────────────────────────
+
 class LoginApi {
   final _supabase = Supabase.instance.client;
+
+  // ===========================================================================
+  // SIGN IN
+  // ===========================================================================
 
   Future<LoginResult> login({
     required String username,
@@ -258,10 +283,158 @@ class LoginApi {
   }
 
   // ===========================================================================
-  // OFFLINE LOGIN
-  // Verifies credentials against locally cached SHA-256 hash.
-  // Rebuilds the session entirely from SQLite — no Supabase call.
+  // FORGOT PASSWORD  ─  Step 1: Validate email + send OTP
+  //
+  // Accepts the email address directly (no username lookup).
+  // Returns the trimmed email so the OTP modal can use it for verify/resend.
+  //
+  // Throws [LoginApiException] on any error.
   // ===========================================================================
+
+  Future<String> sendForgotPasswordOtp({required String email}) async {
+    final trimmed = email.trim().toLowerCase();
+    if (trimmed.isEmpty) {
+      throw const LoginApiException('Please enter your email address.');
+    }
+    if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(trimmed)) {
+      throw const LoginApiException('Please enter a valid email address.');
+    }
+
+    // ── Send 6-digit OTP directly to the provided email ────────────────────
+    try {
+      await _supabase.auth.signInWithOtp(
+        email: trimmed,
+        shouldCreateUser: false,
+      );
+    } on AuthException catch (e) {
+      throw LoginApiException('Could not send OTP: ${e.message}');
+    } catch (e) {
+      throw const LoginApiException('Failed to send OTP. Please try again.');
+    }
+
+    return trimmed;
+  }
+
+  // ===========================================================================
+  // FORGOT PASSWORD  ─  Step 1b: Resend OTP (uses email directly)
+  // ===========================================================================
+
+  Future<void> resendForgotPasswordOtp({required String email}) async {
+    try {
+      await _supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: false,
+      );
+    } on AuthException catch (e) {
+      throw LoginApiException('Could not resend OTP: ${e.message}');
+    } catch (e) {
+      throw const LoginApiException('Failed to resend OTP. Please try again.');
+    }
+  }
+
+  // ===========================================================================
+  // FORGOT PASSWORD  ─  Step 2: Verify OTP
+  // ===========================================================================
+
+  Future<void> verifyForgotPasswordOtp({
+    required String email,
+    required String otp,
+  }) async {
+    final code = otp.trim();
+    if (code.isEmpty) {
+      throw const LoginApiException(
+        'Please enter the 6-digit code sent to your email.',
+      );
+    }
+    if (code.length != 6 || !RegExp(r'^\d{6}$').hasMatch(code)) {
+      throw const LoginApiException('OTP must be exactly 6 digits.');
+    }
+
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        email: email,
+        token: code,
+        type: OtpType.email,
+      );
+      if (response.user == null) {
+        throw const LoginApiException(
+          'OTP verification failed. Please request a new code.',
+        );
+      }
+    } on LoginApiException {
+      rethrow;
+    } on AuthException catch (e) {
+      final msg = e.message.toLowerCase();
+      if (msg.contains('expired')) {
+        throw const LoginApiException(
+          'OTP has expired. Please request a new code.',
+        );
+      }
+      if (msg.contains('invalid')) {
+        throw const LoginApiException(
+          'Incorrect OTP. Please check the code and try again.',
+        );
+      }
+      throw LoginApiException('OTP verification failed: ${e.message}');
+    } catch (e) {
+      throw LoginApiException('Unexpected error during OTP verification: $e');
+    }
+  }
+
+  // ===========================================================================
+  // FORGOT PASSWORD  ─  Step 3: Reset password (no old password required)
+  //
+  // The user is already authenticated via OTP at this point, so
+  // updateUser() works without the old credential.
+  // ===========================================================================
+
+  Future<void> resetPassword({
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    // ── Client-side validation ─────────────────────────────────────────────
+    if (newPassword.isEmpty) {
+      throw const LoginApiException('New password is required.');
+    }
+    if (newPassword.length < 8) {
+      throw const LoginApiException(
+        'Password must be at least 8 characters long.',
+      );
+    }
+    if (!RegExp(r'[A-Z]').hasMatch(newPassword)) {
+      throw const LoginApiException(
+        'Password must contain at least one uppercase letter.',
+      );
+    }
+    if (!RegExp(r'[0-9]').hasMatch(newPassword)) {
+      throw const LoginApiException(
+        'Password must contain at least one number.',
+      );
+    }
+    if (!RegExp(r"[!@#$%^&*()\-_=+\[\]{};:',.<>?/\\|`~]")
+        .hasMatch(newPassword)) {
+      throw const LoginApiException(
+        'Password must contain at least one special character (e.g. @, #, !).',
+      );
+    }
+    if (newPassword != confirmPassword) {
+      throw const LoginApiException('Passwords do not match.');
+    }
+
+    // ── Update via Supabase Auth ───────────────────────────────────────────
+    try {
+      await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+    } on AuthException catch (e) {
+      throw LoginApiException('Password reset failed: ${e.message}');
+    } catch (e) {
+      throw LoginApiException('Unexpected error resetting password: $e');
+    }
+  }
+
+  // ===========================================================================
+  // OFFLINE LOGIN
+  // ===========================================================================
+
   Future<LoginResult> _offlineLogin({
     required String username,
     required String password,
@@ -273,7 +446,6 @@ class LoginApi {
       );
 
       if (profile == null) {
-        // No cached credentials → first-time login always needs internet
         return LoginResult.err(
           'You\'re offline. Please connect to the internet to sign in for the first time.',
         );
@@ -290,7 +462,6 @@ class LoginApi {
       final userId = profile['id'] as String;
       final role = roleStr == 'admin' ? Role.admin : Role.business;
 
-      // Load cached business from SQLite
       final db = await LocalDatabase.instance.database;
       final businesses = await db.query(
         LocalDatabase.tableLocalBusinesses,
@@ -328,7 +499,7 @@ class LoginApi {
         totalRooms = b['total_rooms'] as int?;
         businessType = b['business_type'] as String?;
         status = b['status'] as String?;
-        remarks = null; // not stored locally
+        remarks = null;
         region = b['region'] as String?;
         cityMunicipality = b['city_municipality'] as String?;
         province = b['province'] as String?;
@@ -338,7 +509,6 @@ class LoginApi {
         ownerLastName = b['owner_last_name'] as String?;
         ownerMiddleName = b['owner_middle_name'] as String?;
 
-        // business_line is stored as a JSON string e.g. '["Hotel","Resort"]'
         final rawLine = b['business_line'] as String?;
         if (rawLine != null) {
           try {
@@ -358,7 +528,7 @@ class LoginApi {
         email: profile['email'] as String? ?? '',
         phone: profile['phone'] as String? ?? '',
         role: roleStr,
-        isOfflineSession: true, // ← marks this as an offline session
+        isOfflineSession: true,
         businessId: businessId,
         businessName: businessName,
         permitNumber: permitNumber,
@@ -418,7 +588,6 @@ class LoginApi {
     required List<String>? businessLine,
   }) async {
     final db = await LocalDatabase.instance.database;
-
     await db.insert(
       LocalDatabase.tableLocalBusinesses,
       {
@@ -435,7 +604,6 @@ class LoginApi {
         'province': businessData['province'],
         'barangay': businessData['barangay'],
         'tradename': businessData['tradename'],
-        // Encode the list back to a JSON string for SQLite storage
         'business_line': businessLine != null ? jsonEncode(businessLine) : null,
         'owner_first_name': businessData['owner_first_name'],
         'owner_last_name': businessData['owner_last_name'],
@@ -466,7 +634,6 @@ class LoginApi {
 
   Future<void> logout() async {
     await SessionService.instance.clear();
-    // Only sign out from Supabase if we were online to begin with
     if (ConnectivityService.instance.isOnline) {
       await _supabase.auth.signOut();
     }
