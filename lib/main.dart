@@ -37,7 +37,13 @@ void main() async {
   );
 
   // ── Offline infrastructure ─────────────────────────────────────────────────
-  await LocalDatabase.instance.database;
+  if (!kIsWeb) {
+    await LocalDatabase.instance.database;
+    final dbFilePath = await LocalDatabase.instance.getDatabaseFilePath();
+    debugPrint('SQLite DB file path: $dbFilePath');
+  } else {
+    debugPrint('Web platform detected: skipping local SQLite initialization.');
+  }
   ConnectivityService.instance.startWatching();
   SyncService.instance.listenForConnectivity();
   WidgetsBinding.instance.addObserver(_AppLifecycleSyncObserver());

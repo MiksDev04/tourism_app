@@ -63,6 +63,13 @@ class LocalDatabase {
     );
   }
 
+  /// Returns the full filesystem path to the SQLite database file.
+  /// Useful for logging or diagnostics on desktop platforms.
+  Future<String> getDatabaseFilePath() async {
+    final dbPath = await getDatabasesPath();
+    return join(dbPath, _kDbName);
+  }
+
   // ── onCreate — full schema at current version ──────────────────────────────
   Future<void> _onCreate(Database db, int version) async {
     await db.transaction((txn) async {

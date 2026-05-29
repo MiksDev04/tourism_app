@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
@@ -41,6 +42,14 @@ class ConnectivityService {
   }
 
   Future<void> _check() async {
+    if (kIsWeb) {
+      if (!_isOnline) {
+        _isOnline = true;
+        _controller.add(_isOnline);
+      }
+      return;
+    }
+
     bool online;
     try {
       final result = await InternetAddress.lookup('google.com')
@@ -163,10 +172,46 @@ class SyncService {
   static const _syncDelay = Duration(seconds: 3);
 
   void listenForConnectivity() {
-    ConnectivityService.instance.onConnectivityChanged.listen((isOnline) {
+    ConnectivityService.instance.onConnectivityChanged.listen((isOnline) async {
       if (isOnline) {
-        _clearOfflineSessionFlag();
-        // Wait briefly for the connection to stabilise before syncing.
+        // When connectivity returns, prioritise pulling data for the
+        // currently cached business (if available) so local offline
+        // records reconcile with the online source immediately.
+        try {
+          final current = SessionService.instance.current;
+          String? businessId = current?.businessId;
+
+          // If the session exists but has no businessId, try local DB.
+          if (businessId == null && current != null) {
+            final db = await LocalDatabase.instance.database;
+            final rows = await db.query(
+              LocalDatabase.tableLocalBusinesses,
+              where: 'profile_id = ?',
+              whereArgs: [current.userId],
+              limit: 1,
+            );
+            if (rows.isNotEmpty) {
+              businessId = rows.first['id'] as String?;
+            }
+          }
+
+          if (businessId != null) {
+            await _pullForBusiness(businessId);
+          } else {
+            // No current business context — fall back to full sync.
+            await Future.delayed(_syncDelay);
+            await sync();
+            return;
+          }
+        } catch (e) {
+          debugPrint('⚠️ listenForConnectivity: pull-for-business failed: $e');
+        }
+
+        // Only clear the offline-session flag after the business pull
+        // completes so guarded routes see consistent data.
+        await _clearOfflineSessionFlag();
+
+        // Now perform full sync (after a short stabilisation delay).
         Future.delayed(_syncDelay, sync);
       }
     });
@@ -214,6 +259,11 @@ class SyncService {
   }
 
   Future<void> sync() async {
+    if (kIsWeb) {
+      debugPrint('⏭ sync: skipped on web — local SQLite is disabled');
+      return;
+    }
+
     if (_state.status == SyncStatus.syncing) return;
 
     // Double-check connectivity right before syncing — the flag may have
@@ -465,9 +515,72 @@ class SyncService {
   }
 
   // ---------------------------------------------------------------------------
+  // PULL — fetch Supabase records for a single business_id into local SQLite.
+  // Used when connectivity is restored to prioritise the current session's
+  // business data.
+  // ---------------------------------------------------------------------------
+  Future<void> _pullForBusiness(String businessId) async {
+    if (!await _canReachSupabase()) {
+      debugPrint('⏭ _pullForBusiness: skipped — Supabase unreachable');
+      return;
+    }
+
+    final db = await LocalDatabase.instance.database;
+
+    try {
+      final remoteRecords = await _supabase
+          .from('guest_records')
+          .select('*, guest_breakdowns(*)')
+          .eq('business_id', businessId);
+
+      for (final remote in remoteRecords) {
+        final recordId = remote['id'] as String;
+
+        // Don't overwrite a record with unsent local changes.
+        final pending = await db.query(
+          LocalDatabase.tableGuestRecords,
+          where:     'id = ? AND sync_status != ?',
+          whereArgs: [recordId, LocalDatabase.syncSynced],
+          limit:     1,
+        );
+        if (pending.isNotEmpty) continue;
+
+        await db.insert(
+          LocalDatabase.tableGuestRecords,
+          _fromSupabaseRecord(remote),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        await db.delete(
+          LocalDatabase.tableGuestBreakdowns,
+          where:     'guest_record_id = ?',
+          whereArgs: [recordId],
+        );
+
+        final breakdowns = remote['guest_breakdowns'] as List<dynamic>? ?? [];
+
+        for (final b in breakdowns) {
+          await db.insert(
+            LocalDatabase.tableGuestBreakdowns,
+            _fromSupabaseBreakdown(b as Map<String, dynamic>),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+    } on SocketException catch (e) {
+      debugPrint('🌐 _pullForBusiness: network lost — aborting ($e)');
+      return;
+    } catch (e) {
+      debugPrint('❌ _pullForBusiness: failed for business $businessId — $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Count all records not yet synced.
   // ---------------------------------------------------------------------------
   Future<int> _countPending() async {
+    if (kIsWeb) return 0;
+
     final db = await LocalDatabase.instance.database;
     final result = await db.rawQuery(
       '''

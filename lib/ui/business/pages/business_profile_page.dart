@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -64,8 +66,7 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
   void initState() {
     super.initState();
     _subscribeConnectivity();
-    unawaited(_primeConnectivityState());
-    _loadData();
+    _loadData(); // handles its own offline pre-check — no separate prime needed
   }
 
   @override
@@ -89,7 +90,8 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       if (!mounted) return;
 
       if (!isOnline) {
-        if (_isOffline) return;
+        // Just went offline — show the offline banner immediately.
+        if (_isOffline) return; // already showing it, no-op
         setState(() {
           _isOffline = true;
           _isLoading = false;
@@ -97,30 +99,23 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
         return;
       }
 
-      if (!_isOffline) return;
-
-      // Connection restored while the page was offline → clear the offline
-      // state and refresh the profile data.
+      // Connection restored — only reload if we were in offline state
+      // and not already mid-load (matches messages page guard exactly).
+      if (!_isOffline || _isLoading) return;
       setState(() => _isOffline = false);
-      if (!_isLoading) _loadData();
+      _loadData();
     });
-  }
-
-  Future<void> _primeConnectivityState() async {
-    final online = await ConnectivityService.instance.isOnline;
-    if (!mounted) return;
-    if (!online) {
-      setState(() {
-        _isOffline = true;
-        _isLoading = false;
-      });
-    }
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────
 
   Future<void> _loadData() async {
-    setState(() { _isLoading = true; });
+    if (!mounted) return;
+    // Clear offline banner and show spinner immediately on every load attempt.
+    setState(() {
+      _isLoading = true;
+      _isOffline = false;
+    });
 
     // ── Pre-check connectivity ─────────────────────────────────────────────
     final online = await ConnectivityService.instance.isOnline;
@@ -129,7 +124,6 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
       setState(() { _isOffline = true; _isLoading = false; });
       return;
     }
-    setState(() => _isOffline = false);
 
     // ── Fetch ──────────────────────────────────────────────────────────────
     try {
@@ -144,19 +138,21 @@ class _BusinessProfilePageState extends State<BusinessProfilePage> {
     } on ProfileApiException catch (e) {
       if (!mounted) return;
       if (isNetworkError(e)) {
-        setState(() { _isOffline = true; _isLoading = false; });
+        setState(() { _isOffline = true; });
         return;
       }
+      // Non-network API error — loading stops, page shows whatever was loaded.
     } catch (e) {
       if (!mounted) return;
       if (isNetworkError(e)) {
-        setState(() { _isOffline = true; _isLoading = false; });
+        setState(() { _isOffline = true; });
         return;
       }
     } finally {
-      // Only clear loading when we're not in the offline state
-      // (offline path already sets _isLoading = false and returns early).
-      if (mounted && !_isOffline) setState(() => _isLoading = false);
+      // Always clears the spinner. The offline paths above set
+      // _isLoading = false themselves before returning, but this
+      // harmlessly sets it again — keeps the finally block simple.
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

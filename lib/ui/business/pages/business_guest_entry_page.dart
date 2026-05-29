@@ -1177,7 +1177,6 @@ class _DemographicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
     final totalLabel = total > 0 ? '$total' : '?';
     final sumMatch = total > 0 && currentSum == total;
     final sumColor = currentSum == 0
@@ -1187,87 +1186,94 @@ class _DemographicCard extends StatelessWidget {
         : AppColors.accentRed;
     final sumError = errors['demographicSum'];
 
-    return _SectionCard(
-      title: 'Guest Demographic Breakdown',
-      subtitle: 'Must sum to $totalLabel total guests',
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$currentSum / $totalLabel',
-            style: TextStyle(
-              color: sumColor,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (sumError != null) ...[
-            const SizedBox(height: 4),
-            _InlineError(message: sumError),
-            const SizedBox(height: 10),
-          ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useCompactLayout = constraints.maxWidth < 900;
 
-          ...List.generate(rows.length, (i) {
-            final row = rows[i];
-            final rErr = i < rowErrors.length
-                ? rowErrors[i]
-                : <String, String?>{};
-            final isPhilippines =
-                !row.isOverseas && row.country == 'Philippines';
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: isMobile
-                  ? _MobileDemoRow(
-                      row: row,
-                      isPhilippines: isPhilippines,
-                      showDelete: rows.length > 1,
-                      rowErrors: rErr,
-                      onDelete: () => onRemoveRow(i),
-                      onChanged: (fieldKey) => onRowChanged(i, fieldKey),
-                    )
-                  : _DesktopDemoRow(
-                      row: row,
-                      isPhilippines: isPhilippines,
-                      showDelete: rows.length > 1,
-                      rowErrors: rErr,
-                      onDelete: () => onRemoveRow(i),
-                      onChanged: (fieldKey) => onRowChanged(i, fieldKey),
-                    ),
-            );
-          }),
-
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Icon(Icons.lightbulb_outline, color: Color(0xFFD4A017), size: 13),
-              SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'Each row represents a unique combination of country, nationality, region, sex, and age group. '
-                  'Toggle "Overseas" for guests with no fixed country. Add multiple rows to cover all guest segments.',
-                  style: TextStyle(
-                    color: AppColors.textSubtle,
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
+        return _SectionCard(
+          title: 'Guest Demographic Breakdown',
+          subtitle: 'Must sum to $totalLabel total guests',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$currentSum / $totalLabel',
+                style: TextStyle(
+                  color: sumColor,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _AddRowButton(onTap: onAddRow),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (sumError != null) ...[
+                const SizedBox(height: 4),
+                _InlineError(message: sumError),
+                const SizedBox(height: 10),
+              ],
+
+              ...List.generate(rows.length, (i) {
+                final row = rows[i];
+                final rErr = i < rowErrors.length
+                    ? rowErrors[i]
+                    : <String, String?>{};
+                final isPhilippines =
+                    !row.isOverseas && row.country == 'Philippines';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: useCompactLayout
+                      ? _MobileDemoRow(
+                          row: row,
+                          isPhilippines: isPhilippines,
+                          showDelete: rows.length > 1,
+                          rowErrors: rErr,
+                          onDelete: () => onRemoveRow(i),
+                          onChanged: (fieldKey) => onRowChanged(i, fieldKey),
+                        )
+                      : _DesktopDemoRow(
+                          row: row,
+                          isPhilippines: isPhilippines,
+                          showDelete: rows.length > 1,
+                          rowErrors: rErr,
+                          onDelete: () => onRemoveRow(i),
+                          onChanged: (fieldKey) => onRowChanged(i, fieldKey),
+                        ),
+                );
+              }),
+
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Icon(Icons.lightbulb_outline,
+                      color: Color(0xFFD4A017), size: 13),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Each row represents a unique combination of country, nationality, region, sex, and age group. '
+                      'Toggle "Overseas" for guests with no fixed country. Add multiple rows to cover all guest segments.',
+                      style: TextStyle(
+                        color: AppColors.textSubtle,
+                        fontSize: 11,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: _AddRowButton(onTap: onAddRow),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -2182,7 +2188,7 @@ class _CompactDrop extends StatelessWidget {
 
     return Container(
       height: _kFieldHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       decoration: BoxDecoration(
         color: fillColor,
         borderRadius: BorderRadius.circular(7),
@@ -2197,8 +2203,9 @@ class _CompactDrop extends StatelessWidget {
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,
             color: iconColor,
-            size: 16,
+            size: 14,
           ),
+          iconSize: 14,
           isExpanded: true,
           isDense: true,
           onChanged: enabled ? onChanged : null,

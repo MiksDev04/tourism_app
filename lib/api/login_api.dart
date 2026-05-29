@@ -2,7 +2,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
@@ -52,6 +51,10 @@ class LoginApi {
     required String username,
     required String password,
   }) async {
+    // Clear any previous in-memory and persisted session before starting
+    // a new login flow (both online and offline) to avoid mixed state.
+    await SessionService.instance.clear();
+
     final isOnline = ConnectivityService.instance.isOnline;
 
     // =========================================================================
@@ -132,13 +135,15 @@ class LoginApi {
       String? ownerMiddleName;
 
       if (role == Role.admin) {
-        await _cacheProfileLocally(
-          userId: userId,
-          username: username,
-          password: password,
-          profileData: profileData,
-          roleStr: roleStr,
-        );
+        if (!kIsWeb) {
+          await _cacheProfileLocally(
+            userId: userId,
+            username: username,
+            password: password,
+            profileData: profileData,
+            roleStr: roleStr,
+          );
+        }
       } else {
         final businessData = await _supabase
             .from('businesses')
@@ -201,22 +206,24 @@ class LoginApi {
         ownerLastName = businessData['owner_last_name'] as String?;
         ownerMiddleName = businessData['owner_middle_name'] as String?;
 
-        // ── 5. Cache credentials + business to SQLite ──────────────────────
-        await _cacheProfileLocally(
-          userId: userId,
-          username: username,
-          password: password,
-          profileData: profileData,
-          roleStr: roleStr,
-        );
-
-        if (businessId != null) {
-          await _cacheBusinessLocally(
-            profileId: userId,
-            businessId: businessId,
-            businessData: businessData,
-            businessLine: businessLine,
+        if (!kIsWeb) {
+          // ── 5. Cache credentials + business to SQLite ──────────────────────
+          await _cacheProfileLocally(
+            userId: userId,
+            username: username,
+            password: password,
+            profileData: profileData,
+            roleStr: roleStr,
           );
+
+          if (businessId != null) {
+            await _cacheBusinessLocally(
+              profileId: userId,
+              businessId: businessId,
+              businessData: businessData,
+              businessLine: businessLine,
+            );
+          }
         }
       }
 
