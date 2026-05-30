@@ -1,4 +1,5 @@
-// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
+// Web implementation for saving files: triggers browser download via AnchorElement
+// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 
 Future<String> saveFileToDownloads(String fileName, List<int> bytes) async {
@@ -12,5 +13,5 @@ Future<String> saveFileToDownloads(String fileName, List<int> bytes) async {
   anchor.click();
   anchor.remove();
   html.Url.revokeObjectUrl(url);
-  return 'downloaded:$fileName';
+  return fileName;
 }

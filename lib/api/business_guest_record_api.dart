@@ -448,23 +448,25 @@ class BusinessGuestRecordApi {
         );
       }
 
-      final db = await LocalDatabase.instance.database;
-      await db.update(
-        LocalDatabase.tableGuestRecords,
-        {
-          'check_in':            checkIn,
-          'check_out':           checkOut,
-          'total_guests':        totalGuests,
-          'rooms_occupied':      roomsOccupied,
-          'purpose_of_visit':    purposeOfVisit,
-          'transportation_mode': transportationMode,
-          'sync_status':         LocalDatabase.syncSynced,
-          'local_updated_at':    DateTime.now().toUtc().toIso8601String(),
-        },
-        where:     'id = ?',
-        whereArgs: [recordId],
-      );
-      await _replaceLocalBreakdowns(db, recordId, breakdowns);
+      if (!kIsWeb) {
+        final db = await LocalDatabase.instance.database;
+        await db.update(
+          LocalDatabase.tableGuestRecords,
+          {
+            'check_in':            checkIn,
+            'check_out':           checkOut,
+            'total_guests':        totalGuests,
+            'rooms_occupied':      roomsOccupied,
+            'purpose_of_visit':    purposeOfVisit,
+            'transportation_mode': transportationMode,
+            'sync_status':         LocalDatabase.syncSynced,
+            'local_updated_at':    DateTime.now().toUtc().toIso8601String(),
+          },
+          where:     'id = ?',
+          whereArgs: [recordId],
+        );
+        await _replaceLocalBreakdowns(db, recordId, breakdowns);
+      }
 
       return const ApiResult.success(null);
     } on PostgrestException catch (e) {
@@ -524,6 +526,11 @@ class BusinessGuestRecordApi {
   // ===========================================================================
 
   Future<void> _refreshLocalCache(String businessId, List rows) async {
+    if (kIsWeb) {
+      debugPrint('⏭ _refreshLocalCache: skipped on web — local SQLite is disabled');
+      return;
+    }
+
     final db = await LocalDatabase.instance.database;
 
     for (final row in rows) {

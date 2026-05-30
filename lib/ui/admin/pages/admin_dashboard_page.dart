@@ -2,7 +2,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:tourism_app/core/services/file_saver.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -199,18 +202,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         buf.writeln('${_monthName(i + 1)},$y1Count,$y2Count');
       }
 
-      final dir = await _exportDirectory();
-      final file = File(
-        p.join(dir.path, 'admin_dashboard_${_exportLabel()}.csv'),
-      );
-      await file.writeAsString('\uFEFF${buf.toString()}', flush: true);
+      final fileName = 'admin_dashboard_${_exportLabel()}.csv';
+      final bytes = utf8.encode('\uFEFF${buf.toString()}');
 
-      final result = await OpenFile.open(file.path);
-      if (!mounted) return;
-      if (result.type != ResultType.done) {
-        _showSnack('CSV saved to ${file.path}. ${result.message}');
+      if (kIsWeb) {
+        await saveFileToDownloads(fileName, bytes);
+        if (!mounted) return;
+        _showSnack('CSV downloaded: $fileName');
       } else {
-        _showSnack('CSV exported to ${file.path}');
+        final dir = await _exportDirectory();
+        final file = File(p.join(dir.path, fileName));
+        await file.writeAsString('\uFEFF${buf.toString()}', flush: true);
+
+        final result = await OpenFile.open(file.path);
+        if (!mounted) return;
+        if (result.type != ResultType.done) {
+          _showSnack('CSV saved to ${file.path}. ${result.message}');
+        } else {
+          _showSnack('CSV exported to ${file.path}');
+        }
       }
     } catch (e) {
       _showSnack('Export failed: $e');
@@ -379,18 +389,25 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         ),
       );
 
-      final dir = await _exportDirectory();
-      final file = File(
-        p.join(dir.path, 'admin_dashboard_${_exportLabel()}.pdf'),
-      );
-      await file.writeAsBytes(await doc.save(), flush: true);
+      final fileName = 'admin_dashboard_${_exportLabel()}.pdf';
+      final pdfBytes = await doc.save();
 
-      final result = await OpenFile.open(file.path);
-      if (!mounted) return;
-      if (result.type != ResultType.done) {
-        _showSnack('PDF saved to ${file.path}. ${result.message}');
+      if (kIsWeb) {
+        await saveFileToDownloads(fileName, pdfBytes);
+        if (!mounted) return;
+        _showSnack('PDF downloaded: $fileName');
       } else {
-        _showSnack('PDF exported to ${file.path}');
+        final dir = await _exportDirectory();
+        final file = File(p.join(dir.path, fileName));
+        await file.writeAsBytes(pdfBytes, flush: true);
+
+        final result = await OpenFile.open(file.path);
+        if (!mounted) return;
+        if (result.type != ResultType.done) {
+          _showSnack('PDF saved to ${file.path}. ${result.message}');
+        } else {
+          _showSnack('PDF exported to ${file.path}');
+        }
       }
     } catch (e) {
       _showSnack('PDF export failed: $e');

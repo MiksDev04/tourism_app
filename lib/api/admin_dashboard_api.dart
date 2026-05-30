@@ -173,7 +173,6 @@ class AdminDashboardApi {
         .from('guest_records')
         .select('id, check_in, check_out, total_guests, rooms_occupied')
         .eq('is_deleted', false)
-        .eq('status', 'active')
         .gte('check_in', startDate)
         .lte('check_in', endDate);
 

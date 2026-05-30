@@ -334,7 +334,6 @@ class BusinessDashboardApi {
         .select('id, check_in, check_out, total_guests, rooms_occupied')
         .eq('business_id', businessId)
         .eq('is_deleted', false)
-        .eq('status', 'active')
         .gte('check_in', startDate)
         .lte('check_in', endDate);
 
@@ -414,9 +413,9 @@ class BusinessDashboardApi {
         'rooms_occupied',
       ],
       where:
-          'business_id = ? AND is_deleted = 0 AND status = ? '
+          'business_id = ? AND is_deleted = 0  '
           'AND check_in >= ? AND check_in <= ?',
-      whereArgs: [businessId, 'active', startDate, endDate],
+      whereArgs: [businessId, startDate, endDate],
     );
     // Convert Map<String, Object?> to Map<String, dynamic>
     return rows.map((r) => Map<String, dynamic>.from(r)).toList();

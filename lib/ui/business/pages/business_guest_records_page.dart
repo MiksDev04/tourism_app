@@ -331,7 +331,6 @@ class _BusinessGuestRecordsPageState extends State<BusinessGuestRecordsPage> {
         final idx = _records.indexWhere((r) => r.id == record.id);
         if (idx != -1) _records[idx] = updated;
       });
-      _showSnack('Guest record updated.');
     } else {
       _showSnack(result.error ?? 'Failed to update.', isError: true);
     }

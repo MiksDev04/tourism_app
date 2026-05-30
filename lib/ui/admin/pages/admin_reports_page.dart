@@ -1,6 +1,8 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:tourism_app/core/services/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -254,7 +256,18 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
           .from('reports')
           .download(filePath);
 
-      // Save the file to the user's Downloads folder.
+      // Create filename from report ID
+      final fileName =
+          'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
+
+      if (kIsWeb) {
+        await saveFileToDownloads(fileName, fileData);
+        if (!mounted) return;
+        _showSuccess('File downloaded: $fileName');
+        return;
+      }
+
+      // Save the file to the user's Downloads folder (non-web).
       final Directory? downloadsDir = await getDownloadsDirectory();
       if (downloadsDir == null) {
         if (mounted) {
@@ -263,22 +276,15 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
         return;
       }
 
-      // Create filename from report ID
-      final fileName =
-          'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
       final localFile = File('${downloadsDir.path}/$fileName');
 
       // Write file to local storage
       await localFile.writeAsBytes(fileData);
       if (!mounted) return;
 
-      // Use shared helper so style/behaviour is consistent
-      _showSuccess(
-        'File saved to Downloads: $fileName',
-        actionText: 'Open',
-        onActionPressed: () => _openFile(localFile),
-        duration: const Duration(seconds: 8),
-      );
+      await _openFile(localFile);
+
+      _showSuccess('File saved to Downloads: $fileName');
     } catch (e) {
       if (mounted) {
         _showError('Error downloading file: $e');

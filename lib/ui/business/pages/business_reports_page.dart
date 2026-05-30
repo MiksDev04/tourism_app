@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:tourism_app/core/services/file_saver.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/business_layout.dart';
 
@@ -475,10 +478,56 @@ class _ActionButtons extends StatelessWidget {
   // ── PDF export ────────────────────────────────────────────────────────
   Future<void> _exportPdf(BuildContext context) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
       final fileName =
           'report_${report.period.replaceAll(' ', '_').toLowerCase()}.pdf';
-      final file = File('${dir.path}/$fileName');
+
+      if (kIsWeb) {
+        final content = '''%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
+3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
+4 0 obj<</Length 220>>
+stream
+BT /F1 16 Tf 50 800 Td (Monthly Report - ${report.period}) Tj
+0 -30 Td /F1 12 Tf (Period: ${report.period}) Tj
+0 -20 Td (Total Guests: ${report.totalGuests}) Tj
+0 -20 Td (Check-ins: ${report.checkIns}) Tj
+0 -20 Td (Submitted: ${report.submitted}) Tj
+0 -20 Td (Status: ${report.status.name}) Tj
+ET
+endstream
+endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000274 00000 n
+0000000546 00000 n
+trailer<</Size 6/Root 1 0 R>>
+startxref
+625
+%%EOF''';
+
+        await saveFileToDownloads(fileName, utf8.encode(content));
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(children: [
+                Icon(Icons.check_circle_outline, color: AppColors.textWhite, size: 16),
+                SizedBox(width: 8),
+                Text('PDF downloaded successfully.'),
+              ]),
+              backgroundColor: AppColors.primaryCyan,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
 
       // Build minimal PDF bytes manually (no external pdf package needed)
       final content = '''%PDF-1.4
@@ -510,6 +559,8 @@ startxref
 625
 %%EOF''';
 
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/$fileName');
       await file.writeAsString(content);
       await OpenFile.open(file.path);
 
@@ -541,15 +592,36 @@ startxref
   // ── CSV export ────────────────────────────────────────────────────────
   Future<void> _exportCsv(BuildContext context) async {
     try {
-      final dir = await getApplicationDocumentsDirectory();
       final fileName =
           'report_${report.period.replaceAll(' ', '_').toLowerCase()}.csv';
-      final file = File('${dir.path}/$fileName');
 
       final csv = [
         'Period,Total Guests,Check-ins,Submitted,Status',
         '${report.period},${report.totalGuests},${report.checkIns},${report.submitted},${report.status.name}',
       ].join('\n');
+
+      if (kIsWeb) {
+        await saveFileToDownloads(fileName, utf8.encode(csv));
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(children: [
+              Icon(Icons.check_circle_outline, color: AppColors.textWhite, size: 16),
+              SizedBox(width: 8),
+              Text('CSV exported successfully.'),
+            ]),
+            backgroundColor: AppColors.primaryCyan,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        }
+        return;
+      }
+
+      final dir = await getApplicationDocumentsDirectory();
+      final fileNameLocal = 'report_${report.period.replaceAll(' ', '_').toLowerCase()}.csv';
+      final file = File('${dir.path}/$fileNameLocal');
 
       await file.writeAsString(csv);
       await OpenFile.open(file.path);

@@ -117,24 +117,26 @@ class BusinessGuestEntryApi {
   final now         = DateTime.now().toUtc().toIso8601String();
 
   // ── Step 1: SQLite first (safe local copy, pending_create) ───────────────
-  try {
-    await _upsertLocalRecord(
-      recordId:           guestRecordId,
-      businessId:         data.businessId,
-      checkIn:            checkInStr,
-      checkOut:           checkOutStr,
-      totalGuests:        data.totalGuests,
-      roomsOccupied:      data.roomsOccupied,
-      purposeOfVisit:     data.purposeOfVisit,
-      transportationMode: data.transportationMode,
-      createdAt:          now,
-      syncStatus:         LocalDatabase.syncPendingCreate,
-      localUpdatedAt:     now,
-    );
-    await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
-  } catch (e) {
-    debugPrint('❌ _saveOnline: local write failed — $e');
-    return GuestEntryResult.err('Failed to save guest entry. Please try again.');
+  if (!kIsWeb) {
+    try {
+      await _upsertLocalRecord(
+        recordId:           guestRecordId,
+        businessId:         data.businessId,
+        checkIn:            checkInStr,
+        checkOut:           checkOutStr,
+        totalGuests:        data.totalGuests,
+        roomsOccupied:      data.roomsOccupied,
+        purposeOfVisit:     data.purposeOfVisit,
+        transportationMode: data.transportationMode,
+        createdAt:          now,
+        syncStatus:         LocalDatabase.syncPendingCreate,
+        localUpdatedAt:     now,
+      );
+      await _upsertLocalBreakdowns(guestRecordId, data.breakdowns);
+    } catch (e) {
+      debugPrint('❌ _saveOnline: local write failed — $e');
+      return GuestEntryResult.err('Failed to save guest entry. Please try again.');
+    }
   }
 
   // ── Step 2: Push to Supabase ─────────────────────────────────────────────
@@ -167,16 +169,18 @@ class BusinessGuestEntryApi {
     );
 
     // ── Step 3: Mark synced in SQLite ──────────────────────────────────────
-    final db = await LocalDatabase.instance.database;
-    await db.update(
-      LocalDatabase.tableGuestRecords,
-      {
-        'sync_status':      LocalDatabase.syncSynced,
-        'local_updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      where:     'id = ?',
-      whereArgs: [guestRecordId],
-    );
+    if (!kIsWeb) {
+      final db = await LocalDatabase.instance.database;
+      await db.update(
+        LocalDatabase.tableGuestRecords,
+        {
+          'sync_status':      LocalDatabase.syncSynced,
+          'local_updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        where:     'id = ?',
+        whereArgs: [guestRecordId],
+      );
+    }
 
     return GuestEntryResult.ok(syncedToCloud: true);
   } catch (e) {

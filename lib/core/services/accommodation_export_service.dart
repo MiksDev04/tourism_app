@@ -3,6 +3,8 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:tourism_app/core/services/file_saver.dart';
 
 import 'package:excel/excel.dart';
 import 'package:flutter/material.dart';
@@ -144,14 +146,13 @@ class AccommodationExportService {
       final path = await _saveToDevice(fileName, bytes);
       if (path == null) throw Exception('Failed to save file to device.');
 
+      if (!kIsWeb) {
+        await OpenFile.open(path);
+      }
+
       _showSnack(
         context,
         'Excel saved:\n$path',
-        action: SnackBarAction(
-          label: 'OPEN',
-          textColor: const Color(0xFF22D3EE),
-          onPressed: () => OpenFile.open(path),
-        ),
       );
     } catch (e) {
       debugPrint('❌ Excel export error: $e');
@@ -255,14 +256,13 @@ class AccommodationExportService {
 
       if (!context.mounted) return;
 
+      if (!kIsWeb) {
+        await OpenFile.open(path);
+      }
+
       _showSnack(
         context,
         'PDF saved:\n$path',
-        action: SnackBarAction(
-          label: 'OPEN',
-          textColor: const Color(0xFF22D3EE),
-          onPressed: () => OpenFile.open(path),
-        ),
       );
     } catch (e) {
       debugPrint('❌ PDF export error: $e');
@@ -278,6 +278,14 @@ class AccommodationExportService {
     String fileName,
     List<int> bytes,
   ) async {
+    if (kIsWeb) {
+      try {
+        return await saveFileToDownloads(fileName, bytes);
+      } catch (e) {
+        debugPrint('❌ web save failed: $e');
+        return null;
+      }
+    }
     Future<String?> tryWrite(String dirPath) async {
       try {
         final dir = Directory(dirPath);
