@@ -237,8 +237,8 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
                       ),
                     )
                   else
-                    SizedBox(
-                      width: 530,
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 530),
                       child: Column(
                         children: [
                           _ProfileCard(profile: _profile),
@@ -305,54 +305,120 @@ class _SecureActionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _SectionCard(
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.primaryCyan.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primaryCyan.withOpacity(0.2)),
-            ),
-            child: Icon(icon, color: AppColors.primaryCyan, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final narrow = constraints.maxWidth < 420;
+          if (narrow) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: AppColors.textWhite,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryCyan.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.primaryCyan.withOpacity(0.2)),
+                      ),
+                      child: Icon(icon, color: AppColors.primaryCyan, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              color: subtitleIsEmail
+                                  ? AppColors.primaryCyan
+                                  : AppColors.textGray,
+                              fontSize: 12,
+                              fontWeight: subtitleIsEmail
+                                  ? FontWeight.w500
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: subtitleIsEmail
-                        ? AppColors.primaryCyan
-                        : AppColors.textGray,
-                    fontSize: 12,
-                    fontWeight: subtitleIsEmail
-                        ? FontWeight.w500
-                        : FontWeight.w400,
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _GradientButton(
+                    icon: buttonIcon,
+                    label: buttonLabel,
+                    onPressed: onPressed,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          _GradientButton(
-            icon: buttonIcon,
-            label: buttonLabel,
-            onPressed: onPressed,
-          ),
-        ],
+            );
+          }
+
+          return Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryCyan.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border:
+                      Border.all(color: AppColors.primaryCyan.withOpacity(0.2)),
+                ),
+                child: Icon(icon, color: AppColors.primaryCyan, size: 20),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: subtitleIsEmail
+                            ? AppColors.primaryCyan
+                            : AppColors.textGray,
+                        fontSize: 12,
+                        fontWeight: subtitleIsEmail
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              _GradientButton(
+                icon: buttonIcon,
+                label: buttonLabel,
+                onPressed: onPressed,
+              ),
+            ],
+          );
+        },
       ),
     );
   }

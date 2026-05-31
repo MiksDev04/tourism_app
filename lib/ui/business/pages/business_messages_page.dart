@@ -341,9 +341,11 @@ class _FilterTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
           _FilterChip(
             label:    'All',
@@ -351,21 +353,18 @@ class _FilterTabBar extends StatelessWidget {
             isActive: activeFilter == _Filter.all,
             onTap:    () => onChanged(_Filter.all),
           ),
-          const SizedBox(width: 8),
           _FilterChip(
             label:    'Compliance',
             emoji:    '⚠️',
             isActive: activeFilter == _Filter.compliance,
             onTap:    () => onChanged(_Filter.compliance),
           ),
-          const SizedBox(width: 8),
           _FilterChip(
             label:    'Announcement',
             emoji:    '📣',
             isActive: activeFilter == _Filter.announcement,
             onTap:    () => onChanged(_Filter.announcement),
           ),
-          const SizedBox(width: 8),
           _FilterChip(
             label:    'General',
             emoji:    '💬',
