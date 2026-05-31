@@ -320,7 +320,8 @@ class _SecureActionCard extends StatelessWidget {
                         color: AppColors.primaryCyan.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppColors.primaryCyan.withOpacity(0.2)),
+                          color: AppColors.primaryCyan.withOpacity(0.2),
+                        ),
                       ),
                       child: Icon(icon, color: AppColors.primaryCyan, size: 20),
                     ),
@@ -375,8 +376,9 @@ class _SecureActionCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.primaryCyan.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border:
-                      Border.all(color: AppColors.primaryCyan.withOpacity(0.2)),
+                  border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.2),
+                  ),
                 ),
                 child: Icon(icon, color: AppColors.primaryCyan, size: 20),
               ),
@@ -553,161 +555,221 @@ class _OtpModalState extends State<_OtpModal> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 400,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.primaryCyan.withOpacity(0.08),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.mark_email_read_outlined,
-                color: AppColors.primaryCyan,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              widget.title,
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _sending
-                  ? 'Sending a 6-digit code to your email…'
-                  : widget.subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
-            ),
-            const SizedBox(height: 24),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 420;
+          final horizontalPadding = isCompact ? 20.0 : 28.0;
+          final dialogWidth =
+              constraints.hasBoundedWidth && constraints.maxWidth < 400
+              ? constraints.maxWidth
+              : 400.0;
 
-            // Sending spinner
-            if (_sending)
-              const CircularProgressIndicator(color: AppColors.primaryCyan),
-
-            // Pin boxes + actions
-            if (!_sending) ...[
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  6,
-                  (i) => Container(
-                    width: 46,
-                    height: 54,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    child: TextField(
-                      controller: _pinCtrl[i],
-                      focusNode: _pinFocus[i],
-                      maxLength: 1,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      style: const TextStyle(
-                        color: AppColors.textWhite,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        filled: true,
-                        fillColor: AppColors.inputBackground,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: AppColors.inputBorder,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: AppColors.inputBorder,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: const BorderSide(
-                            color: AppColors.primaryCyan,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      onChanged: (v) => _onPinChanged(v, i),
-                    ),
-                  ),
-                ),
-              ),
-
-              if (_errorMsg != null) ...[
-                const SizedBox(height: 12),
-                _ErrorBanner(message: _errorMsg!),
-              ],
-
-              const SizedBox(height: 22),
-
-              SizedBox(
-                width: double.infinity,
-                child: _GradientButton(
-                  icon: Icons.verified_outlined,
-                  label: 'Verify Code',
-                  loading: _verifying,
-                  enabled: _otpValue.length == 6,
-                  onPressed: _verify,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          return SizedBox(
+            width: dialogWidth,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(horizontalPadding),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextButton(
-                    onPressed: _resending ? null : _resendOtp,
-                    child: _resending
-                        ? const SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: AppColors.textGray,
-                            ),
-                          )
-                        : const Text(
-                            'Resend Code',
-                            style: TextStyle(
-                              color: AppColors.primaryCyan,
-                              fontSize: 12,
-                            ),
-                          ),
-                  ),
-                  const Text(
-                    '·',
-                    style: TextStyle(color: AppColors.textSubtle),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(color: AppColors.textGray, fontSize: 12),
+                  // Icon
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryCyan.withOpacity(0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.mark_email_read_outlined,
+                      color: AppColors.primaryCyan,
+                      size: 28,
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _sending
+                        ? 'Sending a 6-digit code to your email…'
+                        : widget.subtitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Sending spinner
+                  if (_sending)
+                    const CircularProgressIndicator(
+                      color: AppColors.primaryCyan,
+                    ),
+
+                  // Pin boxes + actions
+                  if (!_sending) ...[
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: isCompact ? 6 : 8,
+                      runSpacing: 8,
+                      children: List.generate(
+                        6,
+                        (i) => SizedBox(
+                          width: isCompact ? 42 : 46,
+                          height: 54,
+                          child: TextField(
+                            controller: _pinCtrl[i],
+                            focusNode: _pinFocus[i],
+                            maxLength: 1,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
+                            style: const TextStyle(
+                              color: AppColors.textWhite,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            decoration: InputDecoration(
+                              counterText: '',
+                              filled: true,
+                              fillColor: AppColors.inputBackground,
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: AppColors.inputBorder,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: AppColors.inputBorder,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                                borderSide: const BorderSide(
+                                  color: AppColors.primaryCyan,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            onChanged: (v) => _onPinChanged(v, i),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    if (_errorMsg != null) ...[
+                      const SizedBox(height: 12),
+                      _ErrorBanner(message: _errorMsg!),
+                    ],
+
+                    const SizedBox(height: 22),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: _GradientButton(
+                        icon: Icons.verified_outlined,
+                        label: 'Verify Code',
+                        loading: _verifying,
+                        enabled: _otpValue.length == 6,
+                        onPressed: _verify,
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    if (isCompact)
+                      Column(
+                        children: [
+                          TextButton(
+                            onPressed: _resending ? null : _resendOtp,
+                            child: _resending
+                                ? const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: AppColors.textGray,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Resend Code',
+                                    style: TextStyle(
+                                      color: AppColors.primaryCyan,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: AppColors.textGray,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          TextButton(
+                            onPressed: _resending ? null : _resendOtp,
+                            child: _resending
+                                ? const SizedBox(
+                                    width: 12,
+                                    height: 12,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 1.5,
+                                      color: AppColors.textGray,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Resend Code',
+                                    style: TextStyle(
+                                      color: AppColors.primaryCyan,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                          ),
+                          const Text(
+                            '·',
+                            style: TextStyle(color: AppColors.textSubtle),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: AppColors.textGray,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
                 ],
               ),
-            ],
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -770,72 +832,91 @@ class _ChangePasswordModalState extends State<_ChangePasswordModal> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 420,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ModalHeader(
-              icon: Icons.lock_reset_rounded,
-              title: 'Set New Password',
-              subtitle: 'Identity verified. Enter your new password below.',
-            ),
-            const Divider(color: AppColors.cardBorder, height: 28),
-            _ModalField(
-              label: 'Current Password',
-              icon: Icons.lock_outline_rounded,
-              child: _PasswordField(
-                controller: _oldPassCtrl,
-                obscure: _obscureOld,
-                hint: 'Enter your current password',
-                onToggle: () => setState(() => _obscureOld = !_obscureOld),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 420;
+          final dialogWidth =
+              constraints.hasBoundedWidth && constraints.maxWidth < 420
+              ? constraints.maxWidth
+              : 420.0;
+
+          return SizedBox(
+            width: dialogWidth,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isCompact ? 20 : 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ModalHeader(
+                    icon: Icons.lock_reset_rounded,
+                    title: 'Set New Password',
+                    subtitle:
+                        'Identity verified. Enter your new password below.',
+                  ),
+                  const Divider(color: AppColors.cardBorder, height: 28),
+                  _ModalField(
+                    label: 'Current Password',
+                    icon: Icons.lock_outline_rounded,
+                    child: _PasswordField(
+                      controller: _oldPassCtrl,
+                      obscure: _obscureOld,
+                      hint: 'Enter your current password',
+                      onToggle: () =>
+                          setState(() => _obscureOld = !_obscureOld),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _ModalField(
+                    label: 'New Password',
+                    icon: Icons.lock_open_outlined,
+                    child: _PasswordField(
+                      controller: _newPassCtrl,
+                      obscure: _obscureNew,
+                      hint: 'Min. 8 chars, 1 uppercase, 1 number, 1 special',
+                      onToggle: () =>
+                          setState(() => _obscureNew = !_obscureNew),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _ModalField(
+                    label: 'Confirm New Password',
+                    icon: Icons.check_circle_outline_rounded,
+                    child: _PasswordField(
+                      controller: _confirmPassCtrl,
+                      obscure: _obscureConfirm,
+                      hint: 'Re-enter your new password',
+                      onToggle: () =>
+                          setState(() => _obscureConfirm = !_obscureConfirm),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Min. 8 characters · 1 uppercase · 1 number · 1 special character',
+                    style: TextStyle(
+                      color: AppColors.textSubtle,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                  if (_errorMsg != null) ...[
+                    const SizedBox(height: 14),
+                    _ErrorBanner(message: _errorMsg!),
+                  ],
+                  const SizedBox(height: 22),
+                  _ModalActions(
+                    loading: _loading,
+                    confirmLabel: 'Update Password',
+                    confirmIcon: Icons.lock_reset_rounded,
+                    onConfirm: _submit,
+                    onCancel: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            _ModalField(
-              label: 'New Password',
-              icon: Icons.lock_open_outlined,
-              child: _PasswordField(
-                controller: _newPassCtrl,
-                obscure: _obscureNew,
-                hint: 'Min. 8 chars, 1 uppercase, 1 number, 1 special',
-                onToggle: () => setState(() => _obscureNew = !_obscureNew),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _ModalField(
-              label: 'Confirm New Password',
-              icon: Icons.check_circle_outline_rounded,
-              child: _PasswordField(
-                controller: _confirmPassCtrl,
-                obscure: _obscureConfirm,
-                hint: 'Re-enter your new password',
-                onToggle: () =>
-                    setState(() => _obscureConfirm = !_obscureConfirm),
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Min. 8 characters · 1 uppercase · 1 number · 1 special character',
-              style: TextStyle(color: AppColors.textSubtle, fontSize: 10.5),
-            ),
-            if (_errorMsg != null) ...[
-              const SizedBox(height: 14),
-              _ErrorBanner(message: _errorMsg!),
-            ],
-            const SizedBox(height: 22),
-            _ModalActions(
-              loading: _loading,
-              confirmLabel: 'Update Password',
-              confirmIcon: Icons.lock_reset_rounded,
-              onConfirm: _submit,
-              onCancel: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -892,93 +973,109 @@ class _ChangeEmailModalState extends State<_ChangeEmailModal> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppColors.cardBackground,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Container(
-        width: 420,
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _ModalHeader(
-              icon: Icons.email_outlined,
-              title: 'Change Email Address',
-              subtitle:
-                  'Identity verified. Enter your new email address below.',
-            ),
-            const Divider(color: AppColors.cardBorder, height: 28),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isCompact = constraints.maxWidth < 420;
+          final dialogWidth =
+              constraints.hasBoundedWidth && constraints.maxWidth < 420
+              ? constraints.maxWidth
+              : 420.0;
 
-            // Current email (read-only display)
-            _ModalField(
-              label: 'Current Email',
-              icon: Icons.inbox_outlined,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 13,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.inputBackground.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: AppColors.inputBorder.withOpacity(0.4),
+          return SizedBox(
+            width: dialogWidth,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(isCompact ? 20 : 28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ModalHeader(
+                    icon: Icons.email_outlined,
+                    title: 'Change Email Address',
+                    subtitle:
+                        'Identity verified. Enter your new email address below.',
                   ),
-                ),
-                child: Text(
-                  widget.currentEmail,
-                  style: const TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13.5,
+                  const Divider(color: AppColors.cardBorder, height: 28),
+
+                  // Current email (read-only display)
+                  _ModalField(
+                    label: 'Current Email',
+                    icon: Icons.inbox_outlined,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.inputBackground.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AppColors.inputBorder.withOpacity(0.4),
+                        ),
+                      ),
+                      child: Text(
+                        widget.currentEmail,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+
+                  const SizedBox(height: 16),
+
+                  _ModalField(
+                    label: 'New Email Address',
+                    icon: Icons.email_outlined,
+                    child: TextField(
+                      controller: _newEmailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 13.5,
+                      ),
+                      decoration: _inputDecoration().copyWith(
+                        hintText: 'Enter new email address',
+                        hintStyle: const TextStyle(
+                          color: AppColors.textSubtle,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+                  const Text(
+                    'A confirmation link will be sent to your new email. '
+                    'The change takes effect after you click it.',
+                    style: TextStyle(
+                      color: AppColors.textSubtle,
+                      fontSize: 10.5,
+                    ),
+                  ),
+
+                  if (_errorMsg != null) ...[
+                    const SizedBox(height: 14),
+                    _ErrorBanner(message: _errorMsg!),
+                  ],
+
+                  const SizedBox(height: 22),
+                  _ModalActions(
+                    loading: _loading,
+                    confirmLabel: 'Update Email',
+                    confirmIcon: Icons.save_outlined,
+                    onConfirm: _submit,
+                    onCancel: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ),
-
-            const SizedBox(height: 16),
-
-            _ModalField(
-              label: 'New Email Address',
-              icon: Icons.email_outlined,
-              child: TextField(
-                controller: _newEmailCtrl,
-                keyboardType: TextInputType.emailAddress,
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 13.5,
-                ),
-                decoration: _inputDecoration().copyWith(
-                  hintText: 'Enter new email address',
-                  hintStyle: const TextStyle(
-                    color: AppColors.textSubtle,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 8),
-            const Text(
-              'A confirmation link will be sent to your new email. '
-              'The change takes effect after you click it.',
-              style: TextStyle(color: AppColors.textSubtle, fontSize: 10.5),
-            ),
-
-            if (_errorMsg != null) ...[
-              const SizedBox(height: 14),
-              _ErrorBanner(message: _errorMsg!),
-            ],
-
-            const SizedBox(height: 22),
-            _ModalActions(
-              loading: _loading,
-              confirmLabel: 'Update Email',
-              confirmIcon: Icons.save_outlined,
-              onConfirm: _submit,
-              onCancel: () => Navigator.of(context).pop(),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -998,21 +1095,23 @@ class _ModalHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: AppColors.primaryCyan.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, color: AppColors.primaryCyan, size: 20),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+
+        if (isCompact) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryCyan.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: AppColors.primaryCyan, size: 20),
+              ),
+              const SizedBox(height: 12),
               Text(
                 title,
                 style: const TextStyle(
@@ -1027,9 +1126,46 @@ class _ModalHeader extends StatelessWidget {
                 style: const TextStyle(color: AppColors.textGray, fontSize: 12),
               ),
             ],
-          ),
-        ),
-      ],
+          );
+        }
+
+        return Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryCyan.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.primaryCyan, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -1050,30 +1186,69 @@ class _ModalActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _GradientButton(
-            icon: confirmIcon,
-            label: confirmLabel,
-            loading: loading,
-            onPressed: onConfirm,
-          ),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton(
-          onPressed: loading ? null : onCancel,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.textGray,
-            side: const BorderSide(color: AppColors.inputBorder),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+
+        if (isCompact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _GradientButton(
+                icon: confirmIcon,
+                label: confirmLabel,
+                loading: loading,
+                onPressed: onConfirm,
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                onPressed: loading ? null : onCancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textGray,
+                  side: const BorderSide(color: AppColors.inputBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 11,
+                  ),
+                ),
+                child: const Text('Cancel', style: TextStyle(fontSize: 13.5)),
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: _GradientButton(
+                icon: confirmIcon,
+                label: confirmLabel,
+                loading: loading,
+                onPressed: onConfirm,
+              ),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
-          ),
-          child: const Text('Cancel', style: TextStyle(fontSize: 13.5)),
-        ),
-      ],
+            const SizedBox(width: 10),
+            OutlinedButton(
+              onPressed: loading ? null : onCancel,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textGray,
+                side: const BorderSide(color: AppColors.inputBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 11,
+                ),
+              ),
+              child: const Text('Cancel', style: TextStyle(fontSize: 13.5)),
+            ),
+          ],
+        );
+      },
     );
   }
 }

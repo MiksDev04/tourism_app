@@ -428,12 +428,14 @@ class _ForgotPasswordStartModalState
   @override
   Widget build(BuildContext context) {
     final canSend = _turnstileVerified && !_sending;
+    final isCompact = _fpIsCompactDialog(context);
 
     return Dialog(
+      insetPadding: _fpDialogInset(context),
       backgroundColor: AppColors.cardBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 420,
+        width: _fpDialogWidth(context, 420),
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -486,40 +488,75 @@ class _ForgotPasswordStartModalState
             const SizedBox(height: 22),
 
             // Actions
-            Row(
-              children: [
-                Expanded(
-                  child: _FpGradientButton(
+            if (!isCompact)
+              Row(
+                children: [
+                  Expanded(
+                    child: _FpGradientButton(
+                      icon: Icons.send_outlined,
+                      label: 'Send Reset Code',
+                      loading: _sending,
+                      enabled: canSend && _emailCtrl.text.trim().isNotEmpty,
+                      onPressed: _send,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    onPressed: _sending
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      side: const BorderSide(color: AppColors.inputBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 13.5),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _FpGradientButton(
                     icon: Icons.send_outlined,
                     label: 'Send Reset Code',
                     loading: _sending,
                     enabled: canSend && _emailCtrl.text.trim().isNotEmpty,
                     onPressed: _send,
                   ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton(
-                  onPressed: _sending
-                      ? null
-                      : () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textGray,
-                    side: const BorderSide(color: AppColors.inputBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: _sending
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      side: const BorderSide(color: AppColors.inputBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 11,
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 13.5),
                     ),
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 13.5),
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),
@@ -761,7 +798,7 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
       if (!mounted) return;
       setState(() {
         _verifying = false;
-        _errorMsg = e.message;
+        _errorMsg = 'Incorrect reset code. Please try again.';
       });
     }
   }
@@ -793,12 +830,18 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
     final maskedEmail = parts.length == 2
         ? '${parts[0][0]}***@${parts[1]}'
         : widget.email;
+    final isCompact = _fpIsCompactDialog(context);
+    final pinBoxWidth = isCompact ? 36.0 : 46.0;
+    final pinBoxHeight = isCompact ? 48.0 : 54.0;
+    final pinFontSize = isCompact ? 20.0 : 22.0;
+    final pinHorizontalMargin = isCompact ? 2.0 : 4.0;
 
     return Dialog(
+      insetPadding: _fpDialogInset(context),
       backgroundColor: AppColors.cardBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 400,
+        width: _fpDialogWidth(context, 400),
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -841,9 +884,9 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
               children: List.generate(
                 6,
                 (i) => Container(
-                  width: 46,
-                  height: 54,
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  width: pinBoxWidth,
+                  height: pinBoxHeight,
+                  margin: EdgeInsets.symmetric(horizontal: pinHorizontalMargin),
                   child: TextField(
                     controller: _pinCtrl[i],
                     focusNode: _pinFocus[i],
@@ -853,9 +896,9 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,
                     ],
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textWhite,
-                      fontSize: 22,
+                      fontSize: pinFontSize,
                       fontWeight: FontWeight.w700,
                     ),
                     decoration: InputDecoration(
@@ -910,44 +953,80 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
             const SizedBox(height: 10),
 
             // Resend + Cancel
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: _resending ? null : _resend,
-                  child: _resending
-                      ? const SizedBox(
-                          width: 12,
-                          height: 12,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: AppColors.textGray,
+            if (!isCompact)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+                    onPressed: _resending ? null : _resend,
+                    child: _resending
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: AppColors.textGray,
+                            ),
+                          )
+                        : const Text(
+                            'Resend Code',
+                            style: TextStyle(
+                              color: AppColors.primaryCyan,
+                              fontSize: 12,
+                            ),
                           ),
-                        )
-                      : const Text(
-                          'Resend Code',
-                          style: TextStyle(
-                            color: AppColors.primaryCyan,
-                            fontSize: 12,
-                          ),
-                        ),
-                ),
-                const Text(
-                  '·',
-                  style: TextStyle(color: AppColors.textSubtle),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 12,
+                  ),
+                  const Text(
+                    '·',
+                    style: TextStyle(color: AppColors.textSubtle),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextButton(
+                    onPressed: _resending ? null : _resend,
+                    child: _resending
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 1.5,
+                              color: AppColors.textGray,
+                            ),
+                          )
+                        : const Text(
+                            'Resend Code',
+                            style: TextStyle(
+                              color: AppColors.primaryCyan,
+                              fontSize: 12,
+                            ),
+                          ),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: AppColors.textGray,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1012,11 +1091,14 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
 
   @override
   Widget build(BuildContext context) {
+    final isCompact = _fpIsCompactDialog(context);
+
     return Dialog(
+      insetPadding: _fpDialogInset(context),
       backgroundColor: AppColors.cardBackground,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        width: 420,
+        width: _fpDialogWidth(context, 420),
         padding: const EdgeInsets.all(28),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1070,38 +1152,71 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
 
             const SizedBox(height: 22),
 
-            Row(
-              children: [
-                Expanded(
-                  child: _FpGradientButton(
+            if (!isCompact)
+              Row(
+                children: [
+                  Expanded(
+                    child: _FpGradientButton(
+                      icon: Icons.lock_reset_rounded,
+                      label: 'Reset Password',
+                      loading: _loading,
+                      onPressed: _submit,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton(
+                    onPressed:
+                        _loading ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      side: const BorderSide(color: AppColors.inputBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 13.5),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _FpGradientButton(
                     icon: Icons.lock_reset_rounded,
                     label: 'Reset Password',
                     loading: _loading,
                     onPressed: _submit,
                   ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton(
-                  onPressed:
-                      _loading ? null : () => Navigator.of(context).pop(),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textGray,
-                    side: const BorderSide(color: AppColors.inputBorder),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed:
+                        _loading ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textGray,
+                      side: const BorderSide(color: AppColors.inputBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 11,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 11,
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(fontSize: 13.5),
                     ),
                   ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontSize: 13.5),
-                  ),
-                ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1374,6 +1489,21 @@ InputDecoration _fpInputDecoration() => InputDecoration(
             const BorderSide(color: AppColors.primaryCyan, width: 1.5),
       ),
     );
+
+bool _fpIsCompactDialog(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < 480;
+
+EdgeInsets _fpDialogInset(BuildContext context) => EdgeInsets.symmetric(
+      horizontal: _fpIsCompactDialog(context) ? 12 : 24,
+      vertical: 24,
+    );
+
+double _fpDialogWidth(BuildContext context, double maxWidth) {
+  final screenWidth = MediaQuery.sizeOf(context).width;
+  final horizontalInset = _fpIsCompactDialog(context) ? 12.0 : 24.0;
+  final availableWidth = screenWidth - (horizontalInset * 2);
+  return availableWidth.clamp(280.0, maxWidth).toDouble();
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Existing login-card private widgets (unchanged)

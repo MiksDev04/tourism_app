@@ -1002,7 +1002,13 @@ class _PasswordChangeDialogState extends State<_PasswordChangeDialog> {
       setState(() { _loading = false; _step = 3; });
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = e.message; });
+      // Map ambiguous backend messages (e.g. "expired") to a clearer
+      // user-facing message indicating the code is incorrect.
+      final em = e.message.toLowerCase();
+      final display = (em.contains('expired') || em.contains('expire'))
+          ? 'Incorrect OTP. Please check and try again.'
+          : e.message;
+      setState(() { _loading = false; _error = display; });
     }
   }
 
@@ -1135,7 +1141,13 @@ class _EmailChangeDialogState extends State<_EmailChangeDialog> {
       setState(() { _loading = false; _step = 3; });
     } on ProfileApiException catch (e) {
       if (!mounted) return;
-      setState(() { _loading = false; _error = e.message; });
+      // Map ambiguous backend messages (e.g. "expired") to a clearer
+      // user-facing message indicating the code is incorrect.
+      final em = e.message.toLowerCase();
+      final display = (em.contains('expired') || em.contains('expire'))
+          ? 'Incorrect OTP. Please check and try again.'
+          : e.message;
+      setState(() { _loading = false; _error = display; });
     }
   }
 
@@ -1213,49 +1225,65 @@ class _DialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final isNarrow = screenSize.width < 600;
+    final horizontalInset = isNarrow ? 16.0 : 24.0;
+
     return Dialog(
       backgroundColor: AppColors.cardBackground,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: horizontalInset,
+        vertical: 24,
+      ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        constraints: BoxConstraints(
+          maxWidth: 420,
+          maxHeight: screenSize.height * 0.85,
+        ),
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: EdgeInsets.all(isNarrow ? 16 : 24),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title,
-                            style: const TextStyle(
-                                color: AppColors.textWhite,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 2),
-                        Text(stepLabel,
-                            style: const TextStyle(
-                                color: AppColors.textGray, fontSize: 12)),
-                      ],
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title,
+                                style: const TextStyle(
+                                    color: AppColors.textWhite,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 2),
+                            Text(stepLabel,
+                                style: const TextStyle(
+                                    color: AppColors.textGray, fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close_rounded,
+                            color: AppColors.textGray, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close_rounded,
-                        color: AppColors.textGray, size: 20),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
+                  const SizedBox(height: 8),
+                  Container(height: 1, color: AppColors.cardBorder),
+                  const SizedBox(height: 20),
+                  child,
                 ],
               ),
-              const SizedBox(height: 8),
-              Container(height: 1, color: AppColors.cardBorder),
-              const SizedBox(height: 20),
-              child,
-            ],
+            ),
           ),
         ),
       ),
@@ -1391,47 +1419,53 @@ class _StepVerifyOtpState extends State<_StepVerifyOtp> {
           style: TextStyle(color: AppColors.textGray, fontSize: 13),
         ),
         const SizedBox(height: 22),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(6, (i) => Container(
-            width: 46,
-            height: 54,
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            child: TextField(
-              controller: widget.pinCtrl[i],
-              focusNode:  widget.pinFocus[i],
-              maxLength:  1,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: const TextStyle(
-                color: AppColors.textWhite,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-              decoration: InputDecoration(
-                counterText: '',
-                filled: true,
-                fillColor: AppColors.inputBackground,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.inputBorder),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final boxWidth = ((constraints.maxWidth - 48) / 6)
+                .clamp(36.0, 46.0);
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(6, (i) => Container(
+                width: boxWidth,
+                height: 54,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                child: TextField(
+                  controller: widget.pinCtrl[i],
+                  focusNode:  widget.pinFocus[i],
+                  maxLength:  1,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.center,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  style: const TextStyle(
+                    color: AppColors.textWhite,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    filled: true,
+                    fillColor: AppColors.inputBackground,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.inputBorder),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppColors.inputBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: AppColors.primaryCyan, width: 2),
+                    ),
+                  ),
+                  onChanged: (v) => _onPinChanged(v, i),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppColors.inputBorder),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                      color: AppColors.primaryCyan, width: 2),
-                ),
-              ),
-              onChanged: (v) => _onPinChanged(v, i),
-            ),
-          )),
+              )),
+            );
+          },
         ),
         if (widget.error != null) ...[
           const SizedBox(height: 14),
@@ -1852,20 +1886,22 @@ class _ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF3B0D0D),
+        color: Colors.red.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF7F1D1D)),
+        border: Border.all(color: Colors.red.withOpacity(0.3)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: Color(0xFFF87171), size: 16),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.redAccent,
+            size: 16,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(message,
                 style: const TextStyle(
-                    color: Color(0xFFF87171), fontSize: 12.5)),
+                    color: Colors.redAccent, fontSize: 12.5)),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:tourism_app/api/register_api.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
@@ -135,7 +136,7 @@ class _V {
   static String? region(String v) =>
       v.trim().isEmpty ? 'Region is required' : null;
 
-  static String? file(File? f) =>
+  static String? file(PlatformFile? f) =>
       f == null ? 'Please upload the required file' : null;
 }
 
@@ -210,8 +211,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // Business line: DB stores as array, users can choose one or more
   List<String> _businessLine = ['hotel'];
 
-  File? _permitFile;
-  File? _validIdFile;
+  PlatformFile? _permitFile;
+  PlatformFile? _validIdFile;
   bool _showErrors = false;
 
   final _api = RegisterApi();
@@ -259,6 +260,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _checkConnectivity() async {
     try {
+      if (kIsWeb) {
+        if (mounted) {
+          setState(() {
+            _isOnline = true;
+            _checkingConnection = false;
+          });
+        }
+        return;
+      }
+
       final result = await InternetAddress.lookup(
         'google.com',
       ).timeout(const Duration(seconds: 3));
@@ -327,9 +338,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: kIsWeb,
     );
-    if (result != null && result.files.single.path != null) {
-      setState(() => _permitFile = File(result.files.single.path!));
+    if (result != null) {
+      setState(() => _permitFile = result.files.single);
     }
   }
 
@@ -337,9 +349,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+      withData: kIsWeb,
     );
-    if (result != null && result.files.single.path != null) {
-      setState(() => _validIdFile = File(result.files.single.path!));
+    if (result != null) {
+      setState(() => _validIdFile = result.files.single);
     }
   }
 
@@ -714,8 +727,8 @@ class _FormCard extends StatelessWidget {
   final TextEditingController cityCtrl;
   final TextEditingController provinceCtrl;
   final TextEditingController regionCtrl;
-  final File? permitFile;
-  final File? validIdFile;
+  final PlatformFile? permitFile;
+  final PlatformFile? validIdFile;
   final VoidCallback onPickPermitFile;
   final VoidCallback onPickValidId;
   final VoidCallback onBack;
@@ -1002,70 +1015,69 @@ class _Step1FormState extends State<_Step1Form> {
           ),
         ),
         const SizedBox(height: 16),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Password',
-                error: _show('password')
-                    ? _V.password(widget.passwordCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.passwordCtrl,
-                  hint: 'Min 8 characters',
-                  obscure: _hidePassword,
-                  hasError:
-                      _show('password') &&
-                      _V.password(widget.passwordCtrl.text) != null,
-                  onChanged: (_) => _touch('password'),
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(() => _hidePassword = !_hidePassword),
-                    icon: Icon(
-                      _hidePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                      color: AppColors.textSubtle,
-                      size: 18,
-                    ),
-                    tooltip: _hidePassword ? 'Show password' : 'Hide password',
-                  ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Password',
+            error: _show('password')
+                ? _V.password(widget.passwordCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.passwordCtrl,
+              hint: 'Min 8 characters',
+              obscure: _hidePassword,
+              hasError:
+                  _show('password') &&
+                  _V.password(widget.passwordCtrl.text) != null,
+              onChanged: (_) => _touch('password'),
+              suffixIcon: IconButton(
+                onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                icon: Icon(
+                  _hidePassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: AppColors.textSubtle,
+                  size: 18,
                 ),
+                tooltip: _hidePassword ? 'Show password' : 'Hide password',
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Confirm Password',
-                error: _show('confirmPass')
-                    ? _V.confirmPassword(
+          ),
+          second: _LabeledField(
+            label: 'Confirm Password',
+            error: _show('confirmPass')
+                ? _V.confirmPassword(
+                    widget.confirmPassCtrl.text,
+                    widget.passwordCtrl.text,
+                  )
+                : null,
+            child: _Input(
+              controller: widget.confirmPassCtrl,
+              hint: 'Repeat password',
+              obscure: _hideConfirmPassword,
+              hasError:
+                  _show('confirmPass') &&
+                  _V.confirmPassword(
                         widget.confirmPassCtrl.text,
                         widget.passwordCtrl.text,
-                      )
-                    : null,
-                child: _Input(
-                  controller: widget.confirmPassCtrl,
-                  hint: 'Repeat password',
-                  obscure: _hideConfirmPassword,
-                  hasError:
-                      _show('confirmPass') &&
-                      _V.confirmPassword(
-                            widget.confirmPassCtrl.text,
-                            widget.passwordCtrl.text,
-                          ) !=
-                          null,
-                  onChanged: (_) => _touch('confirmPass'),
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(() => _hideConfirmPassword = !_hideConfirmPassword),
-                    icon: Icon(
-                      _hideConfirmPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-                      color: AppColors.textSubtle,
-                      size: 18,
-                    ),
-                    tooltip: _hideConfirmPassword ? 'Show password' : 'Hide password',
-                  ),
+                      ) !=
+                      null,
+              onChanged: (_) => _touch('confirmPass'),
+              suffixIcon: IconButton(
+                onPressed: () => setState(
+                  () => _hideConfirmPassword = !_hideConfirmPassword,
                 ),
+                icon: Icon(
+                  _hideConfirmPassword
+                      ? Icons.visibility_off_rounded
+                      : Icons.visibility_rounded,
+                  color: AppColors.textSubtle,
+                  size: 18,
+                ),
+                tooltip:
+                    _hideConfirmPassword ? 'Show password' : 'Hide password',
               ),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 22),
         _GradientButton(
@@ -1129,8 +1141,8 @@ class _Step2Form extends StatefulWidget {
   final TextEditingController cityCtrl;
   final TextEditingController provinceCtrl;
   final TextEditingController regionCtrl;
-  final File? permitFile;
-  final File? validIdFile;
+  final PlatformFile? permitFile;
+  final PlatformFile? validIdFile;
   final VoidCallback onPickPermitFile;
   final VoidCallback onPickValidId;
   final VoidCallback onBack;
@@ -1152,41 +1164,33 @@ class _Step2FormState extends State<_Step2Form> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Business Name + Business Type ─────────────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Business Name',
-                error: _show('businessName')
-                    ? _V.businessName(widget.businessNameCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.businessNameCtrl,
-                  hint: 'Hotel / Resort Name',
-                  hasError:
-                      _show('businessName') &&
-                      _V.businessName(widget.businessNameCtrl.text) != null,
-                  onChanged: (_) => _touch('businessName'),
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Business Name',
+            error: _show('businessName')
+                ? _V.businessName(widget.businessNameCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.businessNameCtrl,
+              hint: 'Hotel / Resort Name',
+              hasError:
+                  _show('businessName') &&
+                  _V.businessName(widget.businessNameCtrl.text) != null,
+              onChanged: (_) => _touch('businessName'),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Business Type',
-                child: _DropdownField(
-                  value: widget.businessType,
-                  items: const [
-                    'Sole Proprietorship',
-                    'Corporation',
-                    'Partnership',
-                  ],
-                  onChanged: widget.onBusinessTypeChanged,
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'Business Type',
+            child: _DropdownField(
+              value: widget.businessType,
+              items: const [
+                'Sole Proprietorship',
+                'Corporation',
+                'Partnership',
+              ],
+              onChanged: widget.onBusinessTypeChanged,
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -1219,121 +1223,96 @@ class _Step2FormState extends State<_Step2Form> {
           ),
         ),
         // ── Owner First Name + Last Name ───────────────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Owner First Name',
-                error: _show('ownerFirstName')
-                    ? _V.ownerFirstName(widget.ownerFirstNameCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.ownerFirstNameCtrl,
-                  hint: 'First name',
-                  hasError:
-                      _show('ownerFirstName') &&
-                      _V.ownerFirstName(widget.ownerFirstNameCtrl.text) != null,
-                  onChanged: (_) => _touch('ownerFirstName'),
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Owner First Name',
+            error: _show('ownerFirstName')
+                ? _V.ownerFirstName(widget.ownerFirstNameCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.ownerFirstNameCtrl,
+              hint: 'First name',
+              hasError:
+                  _show('ownerFirstName') &&
+                  _V.ownerFirstName(widget.ownerFirstNameCtrl.text) != null,
+              onChanged: (_) => _touch('ownerFirstName'),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Owner Last Name',
-                error: _show('ownerLastName')
-                    ? _V.ownerLastName(widget.ownerLastNameCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.ownerLastNameCtrl,
-                  hint: 'Last name',
-                  hasError:
-                      _show('ownerLastName') &&
-                      _V.ownerLastName(widget.ownerLastNameCtrl.text) != null,
-                  onChanged: (_) => _touch('ownerLastName'),
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'Owner Last Name',
+            error: _show('ownerLastName')
+                ? _V.ownerLastName(widget.ownerLastNameCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.ownerLastNameCtrl,
+              hint: 'Last name',
+              hasError:
+                  _show('ownerLastName') &&
+                  _V.ownerLastName(widget.ownerLastNameCtrl.text) != null,
+              onChanged: (_) => _touch('ownerLastName'),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 12),
 
         // ── Owner Middle Name + Total Rooms ────────────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Middle Name (Optional)',
-                child: _Input(
-                  controller: widget.ownerMiddleNameCtrl,
-                  hint: 'Middle name',
-                  onChanged: (_) {},
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Middle Name (Optional)',
+            child: _Input(
+              controller: widget.ownerMiddleNameCtrl,
+              hint: 'Middle name',
+              onChanged: (_) {},
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Total Rooms / Units',
-                error: _show('totalRooms')
-                    ? _V.totalRooms(widget.totalRoomsCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.totalRoomsCtrl,
-                  hint: 'e.g. 30',
-                  keyboardType: TextInputType.number,
-                  hasError:
-                      _show('totalRooms') &&
-                      _V.totalRooms(widget.totalRoomsCtrl.text) != null,
-                  onChanged: (_) => _touch('totalRooms'),
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'Total Rooms / Units',
+            error: _show('totalRooms')
+                ? _V.totalRooms(widget.totalRoomsCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.totalRoomsCtrl,
+              hint: 'e.g. 30',
+              keyboardType: TextInputType.number,
+              hasError:
+                  _show('totalRooms') &&
+                  _V.totalRooms(widget.totalRoomsCtrl.text) != null,
+              onChanged: (_) => _touch('totalRooms'),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 16),
 
         // ── Permit Number + Registration Number ───────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Permit Number',
-                error: _show('permitNumber')
-                    ? _V.permitNumber(widget.permitNumberCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.permitNumberCtrl,
-                  hint: 'SP-HTL-2024-XXX',
-                  hasError:
-                      _show('permitNumber') &&
-                      _V.permitNumber(widget.permitNumberCtrl.text) != null,
-                  onChanged: (_) => _touch('permitNumber'),
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Permit Number',
+            error: _show('permitNumber')
+                ? _V.permitNumber(widget.permitNumberCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.permitNumberCtrl,
+              hint: 'SP-HTL-2024-XXX',
+              hasError:
+                  _show('permitNumber') &&
+                  _V.permitNumber(widget.permitNumberCtrl.text) != null,
+              onChanged: (_) => _touch('permitNumber'),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Registration Number',
-                error: _show('registration')
-                    ? _V.registrationNumber(widget.registrationCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.registrationCtrl,
-                  hint: 'BIR-2024-XXXXX',
-                  hasError:
-                      _show('registration') &&
-                      _V.registrationNumber(widget.registrationCtrl.text) !=
-                          null,
-                  onChanged: (_) => _touch('registration'),
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'Registration Number',
+            error: _show('registration')
+                ? _V.registrationNumber(widget.registrationCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.registrationCtrl,
+              hint: 'BIR-2024-XXXXX',
+              hasError:
+                  _show('registration') &&
+                  _V.registrationNumber(widget.registrationCtrl.text) != null,
+              onChanged: (_) => _touch('registration'),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -1352,84 +1331,66 @@ class _Step2FormState extends State<_Step2Form> {
         const SizedBox(height: 12),
 
         // ── Barangay + City ───────────────────────────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Barangay',
-                error: _show('barangay')
-                    ? _V.barangay(widget.barangayCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.barangayCtrl,
-                  hint: 'Barangay',
-                  hasError:
-                      _show('barangay') &&
-                      _V.barangay(widget.barangayCtrl.text) != null,
-                  onChanged: (_) => _touch('barangay'),
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Barangay',
+            error: _show('barangay')
+                ? _V.barangay(widget.barangayCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.barangayCtrl,
+              hint: 'Barangay',
+              hasError:
+                  _show('barangay') &&
+                  _V.barangay(widget.barangayCtrl.text) != null,
+              onChanged: (_) => _touch('barangay'),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'City / Municipality',
-                error: _show('city')
-                    ? _V.cityMunicipality(widget.cityCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.cityCtrl,
-                  hint: 'City / Municipality',
-                  hasError:
-                      _show('city') &&
-                      _V.cityMunicipality(widget.cityCtrl.text) != null,
-                  onChanged: (_) => _touch('city'),
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'City / Municipality',
+            error: _show('city')
+                ? _V.cityMunicipality(widget.cityCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.cityCtrl,
+              hint: 'City / Municipality',
+              hasError:
+                  _show('city') &&
+                  _V.cityMunicipality(widget.cityCtrl.text) != null,
+              onChanged: (_) => _touch('city'),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 12),
 
         // ── Province + Region ─────────────────────────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _LabeledField(
-                label: 'Province',
-                error: _show('province')
-                    ? _V.province(widget.provinceCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.provinceCtrl,
-                  hint: 'Province',
-                  hasError:
-                      _show('province') &&
-                      _V.province(widget.provinceCtrl.text) != null,
-                  onChanged: (_) => _touch('province'),
-                ),
-              ),
+        _ResponsiveFieldPair(
+          first: _LabeledField(
+            label: 'Province',
+            error: _show('province')
+                ? _V.province(widget.provinceCtrl.text)
+                : null,
+            child: _Input(
+              controller: widget.provinceCtrl,
+              hint: 'Province',
+              hasError:
+                  _show('province') &&
+                  _V.province(widget.provinceCtrl.text) != null,
+              onChanged: (_) => _touch('province'),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _LabeledField(
-                label: 'Region',
-                error: _show('region')
-                    ? _V.region(widget.regionCtrl.text)
-                    : null,
-                child: _Input(
-                  controller: widget.regionCtrl,
-                  hint: 'Region',
-                  hasError:
-                      _show('region') &&
-                      _V.region(widget.regionCtrl.text) != null,
-                  onChanged: (_) => _touch('region'),
-                ),
-              ),
+          ),
+          second: _LabeledField(
+            label: 'Region',
+            error: _show('region') ? _V.region(widget.regionCtrl.text) : null,
+            child: _Input(
+              controller: widget.regionCtrl,
+              hint: 'Region',
+              hasError:
+                  _show('region') &&
+                  _V.region(widget.regionCtrl.text) != null,
+              onChanged: (_) => _touch('region'),
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 16),
 
@@ -1522,11 +1483,11 @@ class _FilePicker extends StatelessWidget {
   });
 
   final String label;
-  final File? file;
+  final PlatformFile? file;
   final bool hasError;
   final VoidCallback onPick;
 
-  String get _fileName => file!.path.split('/').last;
+  String get _fileName => file!.name;
 
   @override
   Widget build(BuildContext context) {
@@ -1732,6 +1693,38 @@ class _DropdownField extends StatelessWidget {
           onChanged: onChanged,
         ),
       ),
+    );
+  }
+}
+
+class _ResponsiveFieldPair extends StatelessWidget {
+  const _ResponsiveFieldPair({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          first,
+          const SizedBox(height: 12),
+          second,
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: first),
+        const SizedBox(width: 12),
+        Expanded(child: second),
+      ],
     );
   }
 }

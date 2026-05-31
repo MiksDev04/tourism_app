@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tourism_app/core/enums/business_enums.dart';
@@ -36,8 +37,8 @@ class RegisterApi {
     required String cityMunicipality,
     required String province,
     required String region,
-    required File permitFile,
-    required File validIdFile,
+    required PlatformFile permitFile,
+    required PlatformFile validIdFile,
   }) async {
     try {
       // ── 1. Validate inputs before any network call ─────────────────────
@@ -176,24 +177,66 @@ class RegisterApi {
   // ── File upload helper ───────────────────────────────────────────────────
 
   Future<String?> _uploadFile({
-    required File file,
+    required PlatformFile file,
     required String bucket,
     required String userId,
     required String label,
   }) async {
     try {
-      final ext = file.path.split('.').last;
+      final ext = _fileExtension(file);
       final path =
           '$userId/${label}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      await _supabase.storage
-          .from(bucket)
-          .upload(path, file, fileOptions: const FileOptions(upsert: true));
+      final fileOptions = FileOptions(
+        upsert: true,
+        contentType: _contentTypeFor(ext),
+      );
+
+      if (kIsWeb) {
+        final bytes = file.bytes;
+        if (bytes == null) {
+          throw StateError('Missing file bytes for web upload');
+        }
+        await _supabase.storage
+            .from(bucket)
+            .uploadBinary(path, bytes, fileOptions: fileOptions);
+      } else {
+        final pathOnDisk = file.path;
+        if (pathOnDisk == null) {
+          throw StateError('Missing file path for desktop upload');
+        }
+        await _supabase.storage.from(bucket).upload(
+              path,
+              File(pathOnDisk),
+              fileOptions: fileOptions,
+            );
+      }
 
       return _supabase.storage.from(bucket).getPublicUrl(path);
     } catch (e) {
       debugPrint('❌ Upload failed [$bucket/$label]: $e');
       return null;
+    }
+  }
+
+  String _fileExtension(PlatformFile file) {
+    final name = file.name;
+    final dotIndex = name.lastIndexOf('.');
+    if (dotIndex == -1 || dotIndex == name.length - 1) return 'bin';
+    return name.substring(dotIndex + 1).toLowerCase();
+  }
+
+  String? _contentTypeFor(String extension) {
+    switch (extension.toLowerCase()) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      default:
+        return null;
     }
   }
 

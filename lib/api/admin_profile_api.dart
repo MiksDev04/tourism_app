@@ -343,14 +343,24 @@ class AdminProfileApi {
       rethrow;
     } on AuthException catch (e) {
       final msg = e.message.toLowerCase();
-      if (msg.contains('expired')) {
-        throw const ProfileApiException(
-          'OTP has expired. Please request a new code.',
-        );
-      }
       if (msg.contains('invalid')) {
         throw const ProfileApiException(
           'Incorrect OTP. Please check the code and try again.',
+        );
+      }
+      if (msg.contains('incorrect')) {
+        throw const ProfileApiException(
+          'Incorrect OTP. Please check the code and try again.',
+        );
+      }
+      if (msg.contains('mismatch')) {
+        throw const ProfileApiException(
+          'Incorrect OTP. Please check the code and try again.',
+        );
+      }
+      if (msg.contains('expired')) {
+        throw const ProfileApiException(
+          'OTP has expired. Please request a new code.',
         );
       }
       throw ProfileApiException('OTP verification failed: ${e.message}');
