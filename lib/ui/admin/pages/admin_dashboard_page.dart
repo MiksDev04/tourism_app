@@ -675,22 +675,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                               },
                             ),
                           ],
-                          const SizedBox(height: 20),
-                          _TrendCard(
-                            trendData: _trendData,
-                            year1: _trendYear1,
-                            year2: _trendYear2,
-                            isLoading: _loadingTrend,
-                            onYear1Changed: (y) {
-                              setState(() => _trendYear1 = y);
-                              _loadTrend();
-                            },
-                            onYear2Changed: (y) {
-                              setState(() => _trendYear2 = y);
-                              _loadTrend();
-                            },
-                          ),
-                          const SizedBox(height: 32),
                         ],
                       );
                     },
