@@ -1,18 +1,19 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/foundation.dart';
 import 'package:tourism_app/core/services/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tourism_app/ui/shared/pages/error_page.dart';
-import 'package:tourism_app/ui/shared/pages/loading_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../shared/layouts/admin_layout.dart';
 import '../../shared/widgets/paginator.dart';
-import '../../../api/admin_report_api.dart'; // <-- updated import
+import '../../../api/admin_report_api.dart';
 
 // ─── Generated Report Model ───────────────────────────────────────────────────
 
@@ -39,7 +40,6 @@ class GeneratedReport {
 
   bool get hasFile => fileUrl != null && fileUrl!.isNotEmpty;
 
-  /// Short display ID — first 8 chars uppercased, e.g. "A1B2C3D4"
   String get shortId => id.replaceAll('-', '').substring(0, 8).toUpperCase();
 
   String get periodLabel => '${_monthName(periodMonth)} $periodYear';
@@ -72,8 +72,7 @@ class GeneratedReport {
     generatedAt: DateTime.parse(row['generated_at'] as String),
     generatedBy: row['generated_by'] as String?,
     sheetOptions: ReportSheetOptions(
-      includeDailySheet: // was: includeEstablishmentSheet
-          row['include_sheet_establishment'] as bool? ?? true,
+      includeDailySheet: row['include_sheet_establishment'] as bool? ?? true,
       includeCountrySumSheet: row['include_sheet_country_sum'] as bool? ?? true,
       includeMonthlySummarySheet: row['include_sheet_monthly'] as bool? ?? true,
     ),
@@ -90,17 +89,14 @@ class AdminReportsPage extends StatefulWidget {
 }
 
 class _AdminReportsPageState extends State<AdminReportsPage> {
-  // ── API / Service ──────────────────────────────────────────────────────────
-  final ReportService _reportService = ReportService(); // <-- updated
+  final ReportService _reportService = ReportService();
   final _supabase = Supabase.instance.client;
 
-  // ── Data ─────────────────────────────────────────────────────────────────
   List<GeneratedReport> _reports = [];
 
-  // ── UI State ─────────────────────────────────────────────────────────────
   bool _loadingReports = false;
-  int? _errorCode; // add this
-  String? _fetchError; // add this
+  int? _errorCode;
+  String? _fetchError;
   bool _isGenerating = false;
   bool _showFilters = false;
   String _searchQuery = '';
@@ -138,8 +134,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     '2022',
   ];
 
-  // ── Lifecycle ─────────────────────────────────────────────────────────────
-
   @override
   void initState() {
     super.initState();
@@ -151,8 +145,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     _searchCtrl.dispose();
     super.dispose();
   }
-
-  // ── Supabase Fetches ──────────────────────────────────────────────────────
 
   Future<void> _fetchReports() async {
     if (!mounted) return;
@@ -189,8 +181,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       if (mounted) setState(() => _loadingReports = false);
     }
   }
-
-  // ── Generate Report ───────────────────────────────────────────────────────
 
   Future<void> _onGenerateReport({
     required int month,
@@ -236,27 +226,35 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     );
   }
 
+  // ── View Report ───────────────────────────────────────────────────────────
+
+  void _viewReport(GeneratedReport report) {
+    if (!report.hasFile) return;
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (_) => _ReportViewerModal(
+        report: report,
+        supabase: _supabase,
+        onDownloadExcel: () => _downloadReport(report),
+      ),
+    );
+  }
+
   // ── Download ──────────────────────────────────────────────────────────────
 
   Future<void> _downloadReport(GeneratedReport report) async {
     if (!report.hasFile) return;
-
     try {
       _showSuccess('Downloading file...');
-
-      // Extract file path from URL or use as-is if it's already a path
       String filePath = report.fileUrl!;
       if (filePath.contains('/')) {
-        // If it's a full URL, extract the path after the bucket name
         filePath = filePath.split('/reports/').last;
       }
-
-      // Download from Supabase storage
       final fileData = await _supabase.storage
           .from('reports')
           .download(filePath);
 
-      // Create filename from report ID
       final fileName =
           'Report_${report.shortId}_${report.periodLabel.replaceAll(' ', '_')}.xlsx';
 
@@ -267,28 +265,19 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
         return;
       }
 
-      // Save the file to the user's Downloads folder (non-web).
       final Directory? downloadsDir = await getDownloadsDirectory();
       if (downloadsDir == null) {
-        if (mounted) {
-          _showError('Could not access the Downloads folder.');
-        }
+        if (mounted) _showError('Could not access the Downloads folder.');
         return;
       }
 
       final localFile = File('${downloadsDir.path}/$fileName');
-
-      // Write file to local storage
       await localFile.writeAsBytes(fileData);
       if (!mounted) return;
-
       await _openFile(localFile);
-
       _showSuccess('File saved to Downloads: $fileName');
     } catch (e) {
-      if (mounted) {
-        _showError('Error downloading file: $e');
-      }
+      if (mounted) _showError('Error downloading file: $e');
     }
   }
 
@@ -304,8 +293,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       if (mounted) _showError('Could not open file: $e');
     }
   }
-
-  // ── Filters ───────────────────────────────────────────────────────────────
 
   void _clearFilters() {
     setState(() {
@@ -346,8 +333,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
 
   void _resetPage() => _currentPage = 0;
 
-  // ── Snackbars ─────────────────────────────────────────────────────────────
-
   void _showSuccess(
     String msg, {
     String? actionText,
@@ -356,15 +341,12 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     SnackBarBehavior? behavior,
   }) {
     if (!mounted) return;
-
     final messenger = ScaffoldMessenger.of(context);
     messenger.clearSnackBars();
-
     messenger.showSnackBar(
       SnackBar(
         backgroundColor: const Color(0xFF00C48C),
         behavior: behavior ?? SnackBarBehavior.fixed,
-        // Only apply margin when floating to avoid layout shifts for fixed bars
         margin:
             (behavior ?? SnackBarBehavior.fixed) == SnackBarBehavior.floating
             ? const EdgeInsets.fromLTRB(16, 0, 16, 16)
@@ -392,8 +374,6 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       ),
     );
   }
-
-  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -481,7 +461,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                           _GeneratedReportsTable(
                             rows: _pagedReports,
                             isLoading: false,
-                            onDownload: _downloadReport,
+                            onView: _viewReport,
                           ),
                         if (!_loadingReports) ...[
                           const SizedBox(height: 12),
@@ -507,6 +487,913 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
                 );
               },
             ),
+    );
+  }
+}
+
+// ─── Report Viewer Modal ──────────────────────────────────────────────────────
+
+class _ReportViewerModal extends StatefulWidget {
+  const _ReportViewerModal({
+    required this.report,
+    required this.supabase,
+    required this.onDownloadExcel,
+  });
+
+  final GeneratedReport report;
+  final SupabaseClient supabase;
+  final VoidCallback onDownloadExcel;
+
+  @override
+  State<_ReportViewerModal> createState() => _ReportViewerModalState();
+}
+
+class _ReportViewerModalState extends State<_ReportViewerModal>
+    with SingleTickerProviderStateMixin {
+  bool _loading = true;
+  String? _error;
+  Excel? _excel;
+  int _activeSheetIndex = 0;
+  bool _exportingExcel = false;
+
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFile();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadFile() async {
+    try {
+      String filePath = widget.report.fileUrl!;
+      if (filePath.contains('/reports/')) {
+        filePath = filePath.split('/reports/').last;
+      }
+      final bytes = await widget.supabase.storage
+          .from('reports')
+          .download(filePath);
+
+      final excel = Excel.decodeBytes(bytes);
+      if (!mounted) return;
+      setState(() {
+        _excel = excel;
+        _loading = false;
+        _tabController = TabController(
+          length: excel.sheets.length,
+          vsync: this,
+        );
+        _tabController.addListener(() {
+          if (!_tabController.indexIsChanging) {
+            setState(() => _activeSheetIndex = _tabController.index);
+          }
+        });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _exportExcel() async {
+    setState(() => _exportingExcel = true);
+    try {
+      widget.onDownloadExcel();
+    } finally {
+      if (mounted) setState(() => _exportingExcel = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: size.width * 0.95,
+        height: size.height * 0.92,
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 40,
+              offset: const Offset(0, 16),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // ── Modal Header ──────────────────────────────────────────────
+            _ModalHeader(
+              report: widget.report,
+              onClose: () => Navigator.pop(context),
+              onExportExcel: _exportingExcel ? null : _exportExcel,
+              exportingExcel: _exportingExcel,
+            ),
+
+            const Divider(color: AppColors.cardBorder, height: 1),
+
+            // ── Sheet Tabs ────────────────────────────────────────────────
+            if (!_loading && _error == null && _excel != null)
+              _SheetTabBar(
+                sheetNames: _excel!.sheets.keys.toList(),
+                tabController: _tabController,
+              ),
+
+            // ── Content ───────────────────────────────────────────────────
+            Expanded(
+              child: _loading
+                  ? const _LoadingView()
+                  : _error != null
+                  ? _ErrorView(error: _error!)
+                  : _SheetTabView(
+                      excel: _excel!,
+                      tabController: _tabController,
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Modal Header ──────────────────────────────────────────────────────────────
+
+class _ModalHeader extends StatelessWidget {
+  const _ModalHeader({
+    required this.report,
+    required this.onClose,
+    required this.onExportExcel,
+    required this.exportingExcel,
+  });
+
+  final GeneratedReport report;
+  final VoidCallback onClose;
+  final VoidCallback? onExportExcel;
+  final bool exportingExcel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
+      child: Row(
+        children: [
+          // Icon
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppColors.primaryCyan.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.table_chart_rounded,
+              color: AppColors.primaryCyan,
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Title
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      report.reportType,
+                      style: const TextStyle(
+                        color: AppColors.textWhite,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryCyan.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(5),
+                        border: Border.all(
+                          color: AppColors.primaryCyan.withOpacity(0.25),
+                        ),
+                      ),
+                      child: Text(
+                        report.periodLabel,
+                        style: const TextStyle(
+                          color: AppColors.primaryCyan,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Report ID: ${report.shortId}',
+                  style: const TextStyle(
+                    color: AppColors.textGray,
+                    fontSize: 11.5,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Export buttons
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Excel export
+              _ExportButton(
+                icon: Icons.table_rows_rounded,
+                label: 'Export Excel',
+                color: const Color(0xFF1D6F42),
+                borderColor: const Color(0xFF1D6F42),
+                isLoading: exportingExcel,
+                onTap: onExportExcel,
+              ),
+              const SizedBox(width: 10),
+
+              // Close
+              GestureDetector(
+                onTap: onClose,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundDark,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: const Icon(
+                    Icons.close_rounded,
+                    color: AppColors.textGray,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExportButton extends StatelessWidget {
+  const _ExportButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.borderColor,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color borderColor;
+  final VoidCallback? onTap;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null && !isLoading;
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: AnimatedOpacity(
+        opacity: enabled ? 1.0 : 0.5,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: borderColor.withOpacity(0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                SizedBox(
+                  width: 13,
+                  height: 13,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: color,
+                  ),
+                )
+              else
+                Icon(icon, color: color, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Sheet Tab Bar ─────────────────────────────────────────────────────────────
+
+class _SheetTabBar extends StatelessWidget {
+  const _SheetTabBar({required this.sheetNames, required this.tabController});
+
+  final List<String> sheetNames;
+  final TabController tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.backgroundDark,
+      child: TabBar(
+        controller: tabController,
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        dividerColor: AppColors.cardBorder,
+        indicatorColor: AppColors.primaryCyan,
+        indicatorWeight: 2,
+        labelColor: AppColors.primaryCyan,
+        unselectedLabelColor: AppColors.textGray,
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+        ),
+        tabs: sheetNames.asMap().entries.map((e) {
+          return Tab(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_sheetIcon(e.key), size: 13),
+                const SizedBox(width: 6),
+                Text(e.value),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  IconData _sheetIcon(int index) {
+    switch (index) {
+      case 0:
+        return Icons.calendar_today_rounded;
+      case 1:
+        return Icons.public_rounded;
+      case 2:
+        return Icons.bar_chart_rounded;
+      default:
+        return Icons.grid_on_rounded;
+    }
+  }
+}
+
+// ── Sheet Tab View ────────────────────────────────────────────────────────────
+
+class _SheetTabView extends StatelessWidget {
+  const _SheetTabView({required this.excel, required this.tabController});
+
+  final Excel excel;
+  final TabController tabController;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheets = excel.sheets.entries.toList();
+    return TabBarView(
+      controller: tabController,
+      children: sheets.map((entry) {
+        return _SheetGridView(sheetName: entry.key, sheet: entry.value);
+      }).toList(),
+    );
+  }
+}
+class _SheetGridView extends StatefulWidget {
+  const _SheetGridView({
+    required this.sheetName,
+    required this.sheet,
+  });
+ 
+  final String sheetName;
+  final Sheet sheet;
+ 
+  @override
+  State<_SheetGridView> createState() => _SheetGridViewState();
+}
+ 
+class _SheetGridViewState extends State<_SheetGridView> {
+  // ── Zoom state ────────────────────────────────────────────────────────────
+  // Default 1.0 (100 %) – user can pinch or tap +/- buttons.
+  double _scale = 1.0;
+  double _baseScale = 1.0;
+ 
+  static const double _minScale = 0.4;
+  static const double _maxScale = 3.0;
+  static const double _scaleStep = 0.2;
+ 
+  void _zoomIn()  => setState(() => _scale = (_scale + _scaleStep).clamp(_minScale, _maxScale));
+  void _zoomOut() => setState(() => _scale = (_scale - _scaleStep).clamp(_minScale, _maxScale));
+  void _zoomReset() => setState(() => _scale = 1.0);
+ 
+  // ── Excel exact colours (opaque, matching the API constants) ─────────────
+  static const Color _cBlue        = Color(0xFF0070C0); // section headers
+  static const Color _cGreen       = Color(0xFF92D050); // total rows
+  static const Color _cLightBlue   = Color(0xFF00B0F0); // sub-total rows
+  static const Color _cYellow      = Color(0xFFFFFF00); // grand-total / DAE2
+  static const Color _cLightYellow = Color(0xFFFFFF66); // column-header row
+  static const Color _cWhite       = Color(0xFFFFFFFF); // normal rows
+  static const Color _cGridBorder  = Color(0xFFBFBFBF); // thin cell border
+ 
+  // ── Text colour on each background ───────────────────────────────────────
+  // Blue bg → white;  everything else → black  (matches Excel rendering)
+  static Color _textOn(Color bg) =>
+      bg == _cBlue ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
+ 
+  // ── Row background derived from the first-cell label ─────────────────────
+  //
+  // The logic mirrors _rowBackground() in the OLD widget but uses the EXACT
+  // opaque colours instead of the semi-transparent approximations.
+  // The rowIndex cutoff (<10) is kept so the metadata header rows (DAE-1B
+  // title, region, establishment lines) never get a coloured background.
+  Color _bgForRow(String label, int rowIndex) {
+    if (rowIndex < 10) return _cWhite;
+ 
+    final u = label.trim().toUpperCase();
+ 
+    // ── Column-header row ─────────────────────────────────────────────────
+    if (u == 'COUNTRY OF RESIDENCE') return _cLightYellow;
+ 
+    // ── Grand-total rows ──────────────────────────────────────────────────
+    if (u.contains('GRAND TOTAL')) return _cYellow;
+ 
+    // ── DAE2 / VOLUME PER SEX section starters ────────────────────────────
+    if (u == 'A. DAE2:' || u.contains('VOLUME PER SEX')) return _cYellow;
+ 
+    // ── Green aggregate-total rows ────────────────────────────────────────
+    if (u == 'TOTAL PHILIPPINE RESIDENTS'     ||
+        u == 'TOTAL NON-PHILIPPINE RESIDENTS' ||
+        u == 'TOTAL OVERSEAS FILIPINOS'        ||
+        u.startsWith('   TOTAL PHILIPPINE')   ||
+        u.startsWith('   TOTAL NON-PHILIPPINE')||
+        u.startsWith('   TOTAL OVERSEAS')      ||
+        u.startsWith('   TOTAL GUEST'))         return _cGreen;
+ 
+    // ── Light-blue sub-total rows ─────────────────────────────────────────
+    if (u.contains('SUB-TOTAL')) return _cLightBlue;
+ 
+    // ── Blue section / region / sub-region headers ────────────────────────
+    if (u == 'PHILIPPINE RESIDENTS'           ||
+        u == 'NON-PHILIPPINE RESIDENTS'        ||
+        u == 'ASIA'   || u == 'AMERICA'        ||
+        u == 'EUROPE' || u == 'AFRICA'         ||
+        u.startsWith('AUSTRALASIA')            ||
+        // indented sub-regions (leading spaces preserved by Excel export)
+        u.trimLeft().startsWith('ASEAN')       ||
+        u.trimLeft().startsWith('EAST ASIA')   ||
+        u.trimLeft().startsWith('SOUTH ASIA')  ||
+        u.trimLeft().startsWith('MIDDLE EAST') ||
+        u.trimLeft().startsWith('NORTH AMERICA')||
+        u.trimLeft().startsWith('SOUTH AMERICA')||
+        u.trimLeft().startsWith('WESTERN EUROPE')||
+        u.trimLeft().startsWith('NORTHERN EUROPE')||
+        u.trimLeft().startsWith('SOUTHERN EUROPE')||
+        u.trimLeft().startsWith('EASTERN EUROPE') ||
+        u.trimLeft().startsWith('AUSTRALASIA')    ||
+        u.contains('OVERSEAS FILIPINOS')          ||
+        u.contains('OTHERS AND UNSPECIFIED NON-PHILIPPINE')) return _cBlue;
+ 
+    return _cWhite;
+  }
+ 
+  // ── Bold: any coloured row is bold; individual country rows (deep-indent) ─
+  bool _isBold(String label, int rowIndex) {
+    if (rowIndex < 10) return false;
+    final bg = _bgForRow(label, rowIndex);
+    if (bg != _cWhite) return true;
+    // Country rows have leading spaces ("       BRUNEI") → bold
+    if (label.startsWith('       ') && label.trim().isNotEmpty) return true;
+    // "x. Total" sex-breakdown totals
+    final u = label.trim().toUpperCase();
+    if (u == 'X. TOTAL') return true;
+    return false;
+  }
+ 
+  // ── Column-width map (Excel units → logical pixels) ──────────────────────
+  // Excel unit ≈ 7 px.  The API sets:
+  //   col 0  : 45.66 u → ~320 px   (label column)
+  //   cols 1-31 : 4.66 u → ~33 px  (day columns)
+  //   col 32 : 14.44 u → ~101 px   (TOTAL column)
+  // Monthly-summary sheet (14 data cols) and country-summary (1 data col)
+  // are handled by the same logic because the cell values are already written
+  // correctly – we just widen the data columns a bit for readability.
+  static const double _colLabelW = 320.0;
+  static const double _colDayW   =  33.0;
+  static const double _colTotalW = 101.0;
+  static const double _rowH      =  18.0; // Excel default row height ≈ 13.5 pt
+ 
+  double _colWidth(int colIndex, int maxCols) {
+    if (colIndex == 0)            return _colLabelW;
+    if (colIndex == maxCols - 1)  return _colTotalW;
+    // Monthly-summary has 12 month columns → wider than day columns
+    if (maxCols == 14) return 52.0; // 12 months + label + total
+    if (maxCols == 2)  return _colTotalW; // country-summary sheet
+    return _colDayW;
+  }
+ 
+  // ── Build ─────────────────────────────────────────────────────────────────
+ 
+  @override
+  Widget build(BuildContext context) {
+    final rows = widget.sheet.rows;
+    if (rows.isEmpty) {
+      return const Center(
+        child: Text(
+          'This sheet is empty.',
+          style: TextStyle(color: Color(0xFF888888), fontSize: 13),
+        ),
+      );
+    }
+ 
+    // Determine max column count across all rows
+    int maxCols = 0;
+    for (final row in rows) {
+      if (row.length > maxCols) maxCols = row.length;
+    }
+    if (maxCols == 0) maxCols = 1;
+ 
+    // Total logical width of the spreadsheet content
+    double totalW = 0;
+    for (int c = 0; c < maxCols; c++) {
+      totalW += _colWidth(c, maxCols);
+    }
+ 
+    return Column(
+      children: [
+        // ── Zoom toolbar ──────────────────────────────────────────────────
+        _ZoomBar(
+          scale: _scale,
+          onZoomIn:    _zoomIn,
+          onZoomOut:   _zoomOut,
+          onZoomReset: _zoomReset,
+        ),
+ 
+        // ── Sheet content ─────────────────────────────────────────────────
+        Expanded(
+          child: GestureDetector(
+            onScaleStart: (d) => _baseScale = _scale,
+            onScaleUpdate: (d) => setState(() {
+              _scale = (_baseScale * d.scale).clamp(_minScale, _maxScale);
+            }),
+            child: Scrollbar(
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.all(8),
+                  child: Transform.scale(
+                    scale: _scale,
+                    alignment: Alignment.topLeft,
+                    child: SizedBox(
+                      width: totalW,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: rows.asMap().entries.map((entry) {
+                          return _buildRow(entry.key, entry.value, maxCols, totalW);
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+ 
+  // ── Build a single row ───────────────────────────────────────────────────
+ 
+  Widget _buildRow(int rowIndex, List<Data?> cells, int maxCols, double totalW) {
+    final firstVal = cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
+ 
+    // ── Metadata header rows (0-9): borderless, styled text only ──────────
+    if (rowIndex < 10) {
+      return _MetaRow(rowIndex: rowIndex, value: firstVal, totalW: totalW);
+    }
+ 
+    // ── Normal data / section rows ─────────────────────────────────────────
+    final bg   = _bgForRow(firstVal, rowIndex);
+    final bold = _isBold(firstVal, rowIndex);
+    final tc   = _textOn(bg);
+ 
+    return SizedBox(
+      height: _rowH,
+      child: Row(
+        children: List.generate(maxCols, (colIndex) {
+          final cell   = colIndex < cells.length ? cells[colIndex] : null;
+          final raw    = cell?.value?.toString() ?? '';
+          final isFirst = colIndex == 0;
+          final colW   = _colWidth(colIndex, maxCols);
+ 
+          // The column-header row ("COUNTRY OF RESIDENCE" / "1" / "2" … / "TOTAL")
+          // uses a slightly different style for the day-number cells.
+          final isColHdrRow = firstVal.trim().toUpperCase() == 'COUNTRY OF RESIDENCE';
+ 
+          return Container(
+            width:  colW,
+            height: _rowH,
+            decoration: BoxDecoration(
+              color: bg,
+              border: Border(
+                top:    BorderSide(color: _cGridBorder, width: 0.5),
+                bottom: BorderSide(color: _cGridBorder, width: 0.5),
+                left:   BorderSide(color: _cGridBorder, width: 0.5),
+                right:  BorderSide(color: _cGridBorder, width: 0.5),
+              ),
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: isFirst ? 4 : 1,
+              vertical: 1,
+            ),
+            alignment: isFirst ? Alignment.centerLeft : Alignment.center,
+            child: Text(
+              raw,
+              style: TextStyle(
+                // Calibri is the Excel default; Bell MT is used for day-number
+                // headers in the API (_writeDayColHeaders).  Flutter will fall
+                // back to the system sans-serif if neither is embedded, which
+                // is fine – the key is weight, size and colour are exact.
+                fontFamily: (isColHdrRow && !isFirst) ? 'Bell MT' : 'Calibri',
+                fontSize: 8.5,
+                fontWeight: bold || isColHdrRow ? FontWeight.bold : FontWeight.normal,
+                color: tc,
+                height: 1.1,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: isFirst ? TextAlign.left : TextAlign.center,
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+ 
+// ─── Metadata header row (rows 0-9) ──────────────────────────────────────────
+ 
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({
+    required this.rowIndex,
+    required this.value,
+    required this.totalW,
+  });
+ 
+  final int rowIndex;
+  final String value;
+  final double totalW;
+ 
+  @override
+  Widget build(BuildContext context) {
+    // Row 4 is "REPORT ON THE REGIONAL DISTRIBUTION…" – larger, bold, centred.
+    final isBigTitle = rowIndex == 4;
+    // Rows 1-4 are centred (region, month/year, blank, title).
+    final isCentered = rowIndex >= 1 && rowIndex <= 4;
+ 
+    return SizedBox(
+      width: totalW,
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: 6,
+          vertical: isBigTitle ? 3 : 1.5,
+        ),
+        child: Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'Calibri',
+            fontSize: isBigTitle ? 11.0 : 9.0,
+            fontWeight: (rowIndex >= 5 || isBigTitle) ? FontWeight.bold : FontWeight.normal,
+            color: const Color(0xFF000000),
+          ),
+          textAlign: isCentered ? TextAlign.center : TextAlign.left,
+        ),
+      ),
+    );
+  }
+}
+ 
+// ─── Zoom toolbar ─────────────────────────────────────────────────────────────
+ 
+class _ZoomBar extends StatelessWidget {
+  const _ZoomBar({
+    required this.scale,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onZoomReset,
+  });
+ 
+  final double scale;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomReset;
+ 
+  @override
+  Widget build(BuildContext context) {
+    final pct = '${(scale * 100).round()}%';
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFF1A2332),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF2D3F55), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Zoom out
+          _ZoomBtn(
+            icon: Icons.remove_rounded,
+            onTap: onZoomOut,
+            tooltip: 'Zoom out',
+          ),
+          // Percentage label — tap to reset to 100 %
+          GestureDetector(
+            onTap: onZoomReset,
+            child: Container(
+              width: 52,
+              alignment: Alignment.center,
+              child: Text(
+                pct,
+                style: const TextStyle(
+                  color: Color(0xFFCDD6E0),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ),
+          // Zoom in
+          _ZoomBtn(
+            icon: Icons.add_rounded,
+            onTap: onZoomIn,
+            tooltip: 'Zoom in',
+          ),
+          const SizedBox(width: 8),
+          // Reset label
+          GestureDetector(
+            onTap: onZoomReset,
+            child: const Text(
+              'Reset',
+              style: TextStyle(
+                color: Color(0xFF5DADE2),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const Spacer(),
+          // Pinch hint
+          const Icon(Icons.pinch_rounded, color: Color(0xFF4A6580), size: 14),
+          const SizedBox(width: 4),
+          const Text(
+            'pinch to zoom',
+            style: TextStyle(color: Color(0xFF4A6580), fontSize: 10.5),
+          ),
+        ],
+      ),
+    );
+  }
+}
+ 
+class _ZoomBtn extends StatelessWidget {
+  const _ZoomBtn({
+    required this.icon,
+    required this.onTap,
+    required this.tooltip,
+  });
+ 
+  final IconData icon;
+  final VoidCallback onTap;
+  final String tooltip;
+ 
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: const Color(0xFF243447),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: const Color(0xFF2D3F55)),
+          ),
+          child: Icon(icon, color: const Color(0xFFCDD6E0), size: 14),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Loading & Error Views ─────────────────────────────────────────────────────
+
+class _LoadingView extends StatelessWidget {
+  const _LoadingView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircularProgressIndicator(
+            color: AppColors.primaryCyan,
+            strokeWidth: 2,
+          ),
+          SizedBox(height: 14),
+          Text(
+            'Loading spreadsheet…',
+            style: TextStyle(color: AppColors.textGray, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({required this.error});
+  final String error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Color(0xFFFF4D6A),
+              size: 40,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Could not load the spreadsheet.',
+              style: TextStyle(
+                color: AppColors.textWhite,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              error,
+              style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -572,12 +1459,12 @@ class _GeneratedReportsTable extends StatelessWidget {
   const _GeneratedReportsTable({
     required this.rows,
     required this.isLoading,
-    required this.onDownload,
+    required this.onView,
   });
 
   final List<GeneratedReport> rows;
   final bool isLoading;
-  final void Function(GeneratedReport) onDownload;
+  final void Function(GeneratedReport) onView;
 
   @override
   Widget build(BuildContext context) {
@@ -589,14 +1476,11 @@ class _GeneratedReportsTable extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Header
           LayoutBuilder(
             builder: (_, constraints) =>
                 _TableHeader(isNarrow: constraints.maxWidth < 700),
           ),
           const Divider(color: AppColors.cardBorder, height: 1),
-
-          // Body
           if (isLoading)
             const Padding(
               padding: EdgeInsets.all(40),
@@ -625,7 +1509,7 @@ class _GeneratedReportsTable extends StatelessWidget {
                 builder: (_, constraints) => _TableRow(
                   report: rows[i],
                   isNarrow: constraints.maxWidth < 700,
-                  onDownload: () => onDownload(rows[i]),
+                  onView: () => onView(rows[i]),
                 ),
               ),
             ),
@@ -648,7 +1532,7 @@ class _TableHeader extends StatelessWidget {
           children: [
             Expanded(flex: 4, child: _HeaderCell('Report ID')),
             Expanded(flex: 2, child: _HeaderCell('Period')),
-            SizedBox(width: 60),
+            SizedBox(width: 72),
           ],
         ),
       );
@@ -662,7 +1546,7 @@ class _TableHeader extends StatelessWidget {
           Expanded(flex: 2, child: _HeaderCell('Period')),
           Expanded(flex: 2, child: _HeaderCell('Sheets')),
           Expanded(flex: 3, child: _HeaderCell('Generated At')),
-          SizedBox(width: 80, child: _HeaderCell('File')),
+          SizedBox(width: 88, child: _HeaderCell('Actions')),
         ],
       ),
     );
@@ -673,12 +1557,12 @@ class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.report,
     required this.isNarrow,
-    required this.onDownload,
+    required this.onView,
   });
 
   final GeneratedReport report;
   final bool isNarrow;
-  final VoidCallback onDownload;
+  final VoidCallback onView;
 
   @override
   Widget build(BuildContext context) {
@@ -718,11 +1602,8 @@ class _TableRow extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 60,
-              child: _DownloadButton(
-                hasFile: report.hasFile,
-                onTap: onDownload,
-              ),
+              width: 72,
+              child: _ViewButton(hasFile: report.hasFile, onTap: onView),
             ),
           ],
         ),
@@ -733,7 +1614,6 @@ class _TableRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          // Report ID
           Expanded(
             flex: 4,
             child: Tooltip(
@@ -741,9 +1621,7 @@ class _TableRow extends StatelessWidget {
               child: _ReportIdBadge(shortId: report.shortId),
             ),
           ),
-          // Report type badge
           Expanded(flex: 2, child: _TypeBadge(label: report.reportType)),
-          // Period
           Expanded(
             flex: 2,
             child: Text(
@@ -751,9 +1629,7 @@ class _TableRow extends StatelessWidget {
               style: const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ),
-          // Sheet pills
           Expanded(flex: 2, child: _SheetPills(options: report.sheetOptions)),
-          // Generated date
           Expanded(
             flex: 3,
             child: Text(
@@ -761,12 +1637,66 @@ class _TableRow extends StatelessWidget {
               style: const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ),
-          // Download
           SizedBox(
-            width: 80,
-            child: _DownloadButton(hasFile: report.hasFile, onTap: onDownload),
+            width: 88,
+            child: _ViewButton(hasFile: report.hasFile, onTap: onView),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── View Button (replaces Download Button) ───────────────────────────────────
+
+class _ViewButton extends StatelessWidget {
+  const _ViewButton({required this.hasFile, required this.onTap});
+  final bool hasFile;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasFile) {
+      return const Tooltip(
+        message: 'File unavailable',
+        child: Icon(
+          Icons.error_outline_rounded,
+          color: Color(0xFFFF4D6A),
+          size: 18,
+        ),
+      );
+    }
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.primaryCyan.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: AppColors.primaryCyan.withOpacity(0.3)),
+        ),
+        child: const FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.open_in_full_rounded,
+                color: AppColors.primaryCyan,
+                size: 13,
+              ),
+              SizedBox(width: 5),
+              Text(
+                'View',
+                style: TextStyle(
+                  color: AppColors.primaryCyan,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -895,59 +1825,6 @@ class _Pill extends StatelessWidget {
   }
 }
 
-class _DownloadButton extends StatelessWidget {
-  const _DownloadButton({required this.hasFile, required this.onTap});
-  final bool hasFile;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hasFile) {
-      return const Tooltip(
-        message: 'File unavailable',
-        child: Icon(
-          Icons.error_outline_rounded,
-          color: Color(0xFFFF4D6A),
-          size: 18,
-        ),
-      );
-    }
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.primaryCyan.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: AppColors.primaryCyan.withOpacity(0.3)),
-        ),
-        child: const FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.download_rounded,
-                color: AppColors.primaryCyan,
-                size: 14,
-              ),
-              SizedBox(width: 4),
-              Text(
-                '.xlsx',
-                style: TextStyle(
-                  color: AppColors.primaryCyan,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // ─── Generate Report Dialog ───────────────────────────────────────────────────
 
 class _GenerateReportDialog extends StatefulWidget {
@@ -1017,7 +1894,6 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 children: [
                   Container(
@@ -1057,8 +1933,6 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                 ],
               ),
               const SizedBox(height: 24),
-
-              // Month
               const _DialogLabel('Month'),
               const SizedBox(height: 6),
               _DropdownField<String>(
@@ -1069,8 +1943,6 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                 onChanged: (v) => setState(() => _selectedMonth = v),
               ),
               const SizedBox(height: 14),
-
-              // Year
               const _DialogLabel('Year'),
               const SizedBox(height: 6),
               _DropdownField<String>(
@@ -1081,8 +1953,6 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                 onChanged: (v) => setState(() => _selectedYear = v),
               ),
               const SizedBox(height: 18),
-
-              // Sheet selection
               const Text(
                 'Include Sheets',
                 style: TextStyle(
@@ -1135,8 +2005,6 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                   ),
                 ),
               const SizedBox(height: 20),
-
-              // Actions
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
