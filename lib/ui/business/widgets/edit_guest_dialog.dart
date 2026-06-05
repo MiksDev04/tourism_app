@@ -425,8 +425,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
     } else if (checkOut == null) {
       errors['checkOut'] = 'Invalid date — use yyyy-mm-dd format.';
       hasError = true;
-    } else if (checkIn != null && !checkOut.isAfter(checkIn)) {
-      errors['checkOut'] = 'Check-out must be after check-in.';
+    } else if (checkIn != null && checkOut.isBefore(checkIn)) {
+      errors['checkOut'] = 'Check-out must be the same day as check-in or later.';
       hasError = true;
     }
 

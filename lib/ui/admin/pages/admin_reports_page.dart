@@ -947,7 +947,7 @@ class _SheetGridViewState extends State<_SheetGridView> {
   // opaque colours instead of the semi-transparent approximations.
   // The rowIndex cutoff (<10) is kept so the metadata header rows (DAE-1B
   // title, region, establishment lines) never get a coloured background.
-  Color _bgForRow(String label, int rowIndex) {
+  Color _bgForRow(String label, int rowIndex, {bool isPartII = false}) {
     if (rowIndex < 10) return _cWhite;
  
     final u = label.trim().toUpperCase();
@@ -991,16 +991,19 @@ class _SheetGridViewState extends State<_SheetGridView> {
         u.trimLeft().startsWith('SOUTHERN EUROPE')||
         u.trimLeft().startsWith('EASTERN EUROPE') ||
         u.trimLeft().startsWith('AUSTRALASIA')    ||
-        u.contains('OVERSEAS FILIPINOS')          ||
+        // Note: "Overseas Filipinos" should not be highlighted blue when
+        // rendering PART II (Other Indicators) in the app UI. Guard it with
+        // the isPartII flag so exports / other parts remain unchanged.
+        (!isPartII && u.contains('OVERSEAS FILIPINOS'))          ||
         u.contains('OTHERS AND UNSPECIFIED NON-PHILIPPINE')) return _cBlue;
  
     return _cWhite;
   }
  
   // ── Bold: any coloured row is bold; individual country rows (deep-indent) ─
-  bool _isBold(String label, int rowIndex) {
+  bool _isBold(String label, int rowIndex, {bool isPartII = false}) {
     if (rowIndex < 10) return false;
-    final bg = _bgForRow(label, rowIndex);
+    final bg = _bgForRow(label, rowIndex, isPartII: isPartII);
     if (bg != _cWhite) return true;
     // Country rows have leading spaces ("       BRUNEI") → bold
     if (label.startsWith('       ') && label.trim().isNotEmpty) return true;
@@ -1059,6 +1062,31 @@ class _SheetGridViewState extends State<_SheetGridView> {
       totalW += _colWidth(c, maxCols);
     }
  
+    // Detect the row-range that constitutes PART II so we can suppress
+    // the blue highlight for "Overseas Filipinos" only in that scope.
+    int _partIIStart = -1;
+    int _partIIEnd = rows.length;
+    for (int i = 0; i < rows.length; i++) {
+      final r = rows[i];
+      final first = r.isNotEmpty ? (r[0]?.value?.toString() ?? '').trim().toUpperCase() : '';
+      if (first == 'PART II.  OTHER INDICATORS') {
+        _partIIStart = i;
+        break;
+      }
+    }
+    if (_partIIStart >= 0) {
+      for (int i = _partIIStart + 1; i < rows.length; i++) {
+        final r = rows[i];
+        final first = r.isNotEmpty ? (r[0]?.value?.toString() ?? '').trim().toUpperCase() : '';
+        if (first.startsWith('PART ')) {
+          _partIIEnd = i;
+          break;
+        }
+      }
+    } else {
+      _partIIStart = rows.length;
+    }
+
     return Column(
       children: [
         // ── Zoom toolbar ──────────────────────────────────────────────────
@@ -1091,7 +1119,8 @@ class _SheetGridViewState extends State<_SheetGridView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: rows.asMap().entries.map((entry) {
-                          return _buildRow(entry.key, entry.value, maxCols, totalW);
+                          final isPartII = entry.key >= _partIIStart && entry.key < _partIIEnd;
+                          return _buildRow(entry.key, entry.value, maxCols, totalW, isPartII: isPartII);
                         }).toList(),
                       ),
                     ),
@@ -1107,7 +1136,7 @@ class _SheetGridViewState extends State<_SheetGridView> {
  
   // ── Build a single row ───────────────────────────────────────────────────
  
-  Widget _buildRow(int rowIndex, List<Data?> cells, int maxCols, double totalW) {
+  Widget _buildRow(int rowIndex, List<Data?> cells, int maxCols, double totalW, {bool isPartII = false}) {
     final firstVal = cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
  
     // ── Metadata header rows (0-9): borderless, styled text only ──────────
@@ -1116,8 +1145,8 @@ class _SheetGridViewState extends State<_SheetGridView> {
     }
  
     // ── Normal data / section rows ─────────────────────────────────────────
-    final bg   = _bgForRow(firstVal, rowIndex);
-    final bold = _isBold(firstVal, rowIndex);
+    final bg   = _bgForRow(firstVal, rowIndex, isPartII: isPartII);
+    final bold = _isBold(firstVal, rowIndex, isPartII: isPartII);
     final tc   = _textOn(bg);
  
     return SizedBox(

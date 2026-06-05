@@ -355,8 +355,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     if (_checkOut == null) {
       errors['checkOut'] = 'Please select a check-out date.';
       hasError = true;
-    } else if (_checkIn != null && !_checkOut!.isAfter(_checkIn!)) {
-      errors['checkOut'] = 'Check-out must be after check-in.';
+    } else if (_checkIn != null && _checkOut!.isBefore(_checkIn!)) {
+      errors['checkOut'] = 'Check-out must be the same day as check-in or later.';
       hasError = true;
     }
 
@@ -563,7 +563,7 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     setState(() {
       if (isCheckIn) {
         _checkIn = picked;
-        if (_checkOut != null && !_checkOut!.isAfter(picked)) _checkOut = null;
+        if (_checkOut != null && _checkOut!.isBefore(picked)) _checkOut = null;
         _clearFieldError('checkIn');
       } else {
         _checkOut = picked;
