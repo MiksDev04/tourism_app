@@ -209,19 +209,18 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
       builder: (_) => _GenerateReportDialog(
         months: _months.where((m) => m != 'All Months').toList(),
         years: _years.where((y) => y != 'All Years').toList(),
-        onGenerate:
-            ({
-              required int month,
-              required int year,
-              required ReportSheetOptions sheetOptions,
-            }) {
-              Navigator.pop(context);
-              _onGenerateReport(
-                month: month,
-                year: year,
-                sheetOptions: sheetOptions,
-              );
-            },
+        onGenerate: ({
+          required int month,
+          required int year,
+          required ReportSheetOptions sheetOptions,
+        }) {
+          Navigator.pop(context);
+          _onGenerateReport(
+            month: month,
+            year: year,
+            sheetOptions: sheetOptions,
+          );
+        },
       ),
     );
   }
@@ -241,7 +240,7 @@ class _AdminReportsPageState extends State<AdminReportsPage> {
     );
   }
 
-  // ── Download ──────────────────────────────────────────────────────────────
+  // ── Download Excel ────────────────────────────────────────────────────────
 
   Future<void> _downloadReport(GeneratedReport report) async {
     if (!report.hasFile) return;
@@ -513,8 +512,14 @@ class _ReportViewerModalState extends State<_ReportViewerModal>
   bool _loading = true;
   String? _error;
   Excel? _excel;
+
+  Uint8List? _excelBytes;
+
   int _activeSheetIndex = 0;
   bool _exportingExcel = false;
+
+  bool _exportingPdf = false;
+  final _reportService = ReportService();
 
   late final TabController _tabController;
 
@@ -539,6 +544,8 @@ class _ReportViewerModalState extends State<_ReportViewerModal>
       final bytes = await widget.supabase.storage
           .from('reports')
           .download(filePath);
+
+      _excelBytes = bytes;
 
       final excel = Excel.decodeBytes(bytes);
       if (!mounted) return;
@@ -573,6 +580,54 @@ class _ReportViewerModalState extends State<_ReportViewerModal>
     }
   }
 
+  Future<void> _exportPdf() async {
+    if (_excelBytes == null) return;
+    setState(() => _exportingPdf = true);
+    try {
+      final pdfBytes = await _reportService.convertExcelToPdf(_excelBytes!);
+      final fileName =
+          'Report_${widget.report.shortId}_'
+          '${widget.report.periodLabel.replaceAll(' ', '_')}.pdf';
+
+      if (kIsWeb) {
+        await saveFileToDownloads(fileName, pdfBytes);
+        if (mounted) _showModalSnack('PDF downloaded: $fileName');
+      } else {
+        final downloadsDir = await getDownloadsDirectory();
+        if (downloadsDir == null) {
+          if (mounted) {
+            _showModalSnack('Could not access Downloads folder.', isError: true);
+          }
+          return;
+        }
+        final file = File('${downloadsDir.path}/$fileName');
+        await file.writeAsBytes(pdfBytes);
+        if (!mounted) return;
+        final uri = Uri.file(file.path);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+        _showModalSnack('PDF saved: $fileName');
+      }
+    } catch (e) {
+      if (mounted) _showModalSnack('Error exporting PDF: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _exportingPdf = false);
+    }
+  }
+
+  void _showModalSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: Colors.white)),
+        backgroundColor:
+            isError ? const Color(0xFFFF4D6A) : const Color(0xFF00C48C),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -597,24 +652,24 @@ class _ReportViewerModalState extends State<_ReportViewerModal>
         ),
         child: Column(
           children: [
-            // ── Modal Header ──────────────────────────────────────────────
             _ModalHeader(
               report: widget.report,
               onClose: () => Navigator.pop(context),
               onExportExcel: _exportingExcel ? null : _exportExcel,
               exportingExcel: _exportingExcel,
+              onExportPdf:
+                  (_exportingPdf || _excelBytes == null) ? null : _exportPdf,
+              exportingPdf: _exportingPdf,
             ),
 
             const Divider(color: AppColors.cardBorder, height: 1),
 
-            // ── Sheet Tabs ────────────────────────────────────────────────
             if (!_loading && _error == null && _excel != null)
               _SheetTabBar(
                 sheetNames: _excel!.sheets.keys.toList(),
                 tabController: _tabController,
               ),
 
-            // ── Content ───────────────────────────────────────────────────
             Expanded(
               child: _loading
                   ? const _LoadingView()
@@ -640,12 +695,16 @@ class _ModalHeader extends StatelessWidget {
     required this.onClose,
     required this.onExportExcel,
     required this.exportingExcel,
+    required this.onExportPdf,
+    required this.exportingPdf,
   });
 
   final GeneratedReport report;
   final VoidCallback onClose;
   final VoidCallback? onExportExcel;
   final bool exportingExcel;
+  final VoidCallback? onExportPdf;
+  final bool exportingPdf;
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +712,6 @@ class _ModalHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
       child: Row(
         children: [
-          // Icon
           Container(
             width: 36,
             height: 36,
@@ -669,7 +727,6 @@ class _ModalHeader extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // Title
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -721,11 +778,19 @@ class _ModalHeader extends StatelessWidget {
             ),
           ),
 
-          // Export buttons
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Excel export
+              _ExportButton(
+                icon: Icons.picture_as_pdf_rounded,
+                label: 'Export PDF',
+                color: const Color(0xFFD32F2F),
+                borderColor: const Color(0xFFD32F2F),
+                isLoading: exportingPdf,
+                onTap: onExportPdf,
+              ),
+              const SizedBox(width: 8),
+
               _ExportButton(
                 icon: Icons.table_rows_rounded,
                 label: 'Export Excel',
@@ -736,7 +801,6 @@ class _ModalHeader extends StatelessWidget {
               ),
               const SizedBox(width: 10),
 
-              // Close
               GestureDetector(
                 onTap: onClose,
                 child: Container(
@@ -900,143 +964,133 @@ class _SheetTabView extends StatelessWidget {
     );
   }
 }
+
+// ─── Sheet Grid View ──────────────────────────────────────────────────────────
+// Scrolling: normal vertical + horizontal ScrollViews with visible scrollbars.
+// Zoom: + / − toolbar buttons and pinch-to-zoom on touch only.
+//       Scroll wheel / trackpad scrolls normally and does NOT zoom.
+
 class _SheetGridView extends StatefulWidget {
-  const _SheetGridView({
-    required this.sheetName,
-    required this.sheet,
-  });
- 
+  const _SheetGridView({required this.sheetName, required this.sheet});
+
   final String sheetName;
   final Sheet sheet;
- 
+
   @override
   State<_SheetGridView> createState() => _SheetGridViewState();
 }
- 
+
 class _SheetGridViewState extends State<_SheetGridView> {
   // ── Zoom state ────────────────────────────────────────────────────────────
-  // Default 1.0 (100 %) – user can pinch or tap +/- buttons.
   double _scale = 1.0;
-  double _baseScale = 1.0;
- 
+  double _startScale = 1.0;   // captured at the start of each pinch gesture
+
+  // ── Scroll controllers for the two scrollbars ─────────────────────────────
+  late final ScrollController _vertScrollCtrl;
+  late final ScrollController _horizScrollCtrl;
+
   static const double _minScale = 0.4;
   static const double _maxScale = 3.0;
   static const double _scaleStep = 0.2;
- 
-  void _zoomIn()  => setState(() => _scale = (_scale + _scaleStep).clamp(_minScale, _maxScale));
-  void _zoomOut() => setState(() => _scale = (_scale - _scaleStep).clamp(_minScale, _maxScale));
+
+  @override
+  void initState() {
+    super.initState();
+    _vertScrollCtrl  = ScrollController();
+    _horizScrollCtrl = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _vertScrollCtrl.dispose();
+    _horizScrollCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Toolbar zoom actions ──────────────────────────────────────────────────
+  void _zoomIn() =>
+      setState(() => _scale = (_scale + _scaleStep).clamp(_minScale, _maxScale));
+
+  void _zoomOut() =>
+      setState(() => _scale = (_scale - _scaleStep).clamp(_minScale, _maxScale));
+
   void _zoomReset() => setState(() => _scale = 1.0);
- 
-  // ── Excel exact colours (opaque, matching the API constants) ─────────────
-  static const Color _cBlue        = Color(0xFF0070C0); // section headers
-  static const Color _cGreen       = Color(0xFF92D050); // total rows
-  static const Color _cLightBlue   = Color(0xFF00B0F0); // sub-total rows
-  static const Color _cYellow      = Color(0xFFFFFF00); // grand-total / DAE2
-  static const Color _cLightYellow = Color(0xFFFFFF66); // column-header row
-  static const Color _cWhite       = Color(0xFFFFFFFF); // normal rows
-  static const Color _cGridBorder  = Color(0xFFBFBFBF); // thin cell border
- 
-  // ── Text colour on each background ───────────────────────────────────────
-  // Blue bg → white;  everything else → black  (matches Excel rendering)
+
+  // ── Excel exact colours ───────────────────────────────────────────────────
+  static const Color _cBlue        = Color(0xFF0070C0);
+  static const Color _cGreen       = Color(0xFF92D050);
+  static const Color _cLightBlue   = Color(0xFF00B0F0);
+  static const Color _cYellow      = Color(0xFFFFFF00);
+  static const Color _cLightYellow = Color(0xFFFFFF66);
+  static const Color _cWhite       = Color(0xFFFFFFFF);
+  static const Color _cGridBorder  = Color(0xFFBFBFBF);
+
   static Color _textOn(Color bg) =>
       bg == _cBlue ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
- 
-  // ── Row background derived from the first-cell label ─────────────────────
-  //
-  // The logic mirrors _rowBackground() in the OLD widget but uses the EXACT
-  // opaque colours instead of the semi-transparent approximations.
-  // The rowIndex cutoff (<10) is kept so the metadata header rows (DAE-1B
-  // title, region, establishment lines) never get a coloured background.
+
   Color _bgForRow(String label, int rowIndex, {bool isPartII = false}) {
     if (rowIndex < 10) return _cWhite;
- 
     final u = label.trim().toUpperCase();
- 
-    // ── Column-header row ─────────────────────────────────────────────────
-    if (u == 'COUNTRY OF RESIDENCE') return _cLightYellow;
- 
-    // ── Grand-total rows ──────────────────────────────────────────────────
-    if (u.contains('GRAND TOTAL')) return _cYellow;
- 
-    // ── DAE2 / VOLUME PER SEX section starters ────────────────────────────
+
+    if (u == 'COUNTRY OF RESIDENCE')   return _cLightYellow;
+    if (u.contains('GRAND TOTAL'))      return _cYellow;
     if (u == 'A. DAE2:' || u.contains('VOLUME PER SEX')) return _cYellow;
- 
-    // ── Green aggregate-total rows ────────────────────────────────────────
-    if (u == 'TOTAL PHILIPPINE RESIDENTS'     ||
-        u == 'TOTAL NON-PHILIPPINE RESIDENTS' ||
-        u == 'TOTAL OVERSEAS FILIPINOS'        ||
-        u.startsWith('   TOTAL PHILIPPINE')   ||
-        u.startsWith('   TOTAL NON-PHILIPPINE')||
-        u.startsWith('   TOTAL OVERSEAS')      ||
-        u.startsWith('   TOTAL GUEST'))         return _cGreen;
- 
-    // ── Light-blue sub-total rows ─────────────────────────────────────────
+
+    if (u == 'TOTAL PHILIPPINE RESIDENTS'      ||
+        u == 'TOTAL NON-PHILIPPINE RESIDENTS'  ||
+        u == 'TOTAL OVERSEAS FILIPINOS'         ||
+        u.startsWith('   TOTAL PHILIPPINE')    ||
+        u.startsWith('   TOTAL NON-PHILIPPINE') ||
+        u.startsWith('   TOTAL OVERSEAS')       ||
+        u.startsWith('   TOTAL GUEST'))          return _cGreen;
+
     if (u.contains('SUB-TOTAL')) return _cLightBlue;
- 
-    // ── Blue section / region / sub-region headers ────────────────────────
-    if (u == 'PHILIPPINE RESIDENTS'           ||
-        u == 'NON-PHILIPPINE RESIDENTS'        ||
-        u == 'ASIA'   || u == 'AMERICA'        ||
-        u == 'EUROPE' || u == 'AFRICA'         ||
-        u.startsWith('AUSTRALASIA')            ||
-        // indented sub-regions (leading spaces preserved by Excel export)
-        u.trimLeft().startsWith('ASEAN')       ||
-        u.trimLeft().startsWith('EAST ASIA')   ||
-        u.trimLeft().startsWith('SOUTH ASIA')  ||
-        u.trimLeft().startsWith('MIDDLE EAST') ||
-        u.trimLeft().startsWith('NORTH AMERICA')||
-        u.trimLeft().startsWith('SOUTH AMERICA')||
-        u.trimLeft().startsWith('WESTERN EUROPE')||
-        u.trimLeft().startsWith('NORTHERN EUROPE')||
-        u.trimLeft().startsWith('SOUTHERN EUROPE')||
-        u.trimLeft().startsWith('EASTERN EUROPE') ||
-        u.trimLeft().startsWith('AUSTRALASIA')    ||
-        // Note: "Overseas Filipinos" should not be highlighted blue when
-        // rendering PART II (Other Indicators) in the app UI. Guard it with
-        // the isPartII flag so exports / other parts remain unchanged.
-        (!isPartII && u.contains('OVERSEAS FILIPINOS'))          ||
+
+    if (u == 'PHILIPPINE RESIDENTS'            ||
+        u == 'NON-PHILIPPINE RESIDENTS'         ||
+        u == 'ASIA'   || u == 'AMERICA'         ||
+        u == 'EUROPE' || u == 'AFRICA'          ||
+        u.startsWith('AUSTRALASIA')             ||
+        u.trimLeft().startsWith('ASEAN')        ||
+        u.trimLeft().startsWith('EAST ASIA')    ||
+        u.trimLeft().startsWith('SOUTH ASIA')   ||
+        u.trimLeft().startsWith('MIDDLE EAST')  ||
+        u.trimLeft().startsWith('NORTH AMERICA') ||
+        u.trimLeft().startsWith('SOUTH AMERICA') ||
+        u.trimLeft().startsWith('WESTERN EUROPE') ||
+        u.trimLeft().startsWith('NORTHERN EUROPE') ||
+        u.trimLeft().startsWith('SOUTHERN EUROPE')  ||
+        u.trimLeft().startsWith('EASTERN EUROPE')   ||
+        u.trimLeft().startsWith('AUSTRALASIA')       ||
+        (!isPartII && u.contains('OVERSEAS FILIPINOS')) ||
         u.contains('OTHERS AND UNSPECIFIED NON-PHILIPPINE')) return _cBlue;
- 
+
     return _cWhite;
   }
- 
-  // ── Bold: any coloured row is bold; individual country rows (deep-indent) ─
+
   bool _isBold(String label, int rowIndex, {bool isPartII = false}) {
     if (rowIndex < 10) return false;
     final bg = _bgForRow(label, rowIndex, isPartII: isPartII);
     if (bg != _cWhite) return true;
-    // Country rows have leading spaces ("       BRUNEI") → bold
     if (label.startsWith('       ') && label.trim().isNotEmpty) return true;
-    // "x. Total" sex-breakdown totals
-    final u = label.trim().toUpperCase();
-    if (u == 'X. TOTAL') return true;
+    if (label.trim().toUpperCase() == 'X. TOTAL') return true;
     return false;
   }
- 
-  // ── Column-width map (Excel units → logical pixels) ──────────────────────
-  // Excel unit ≈ 7 px.  The API sets:
-  //   col 0  : 45.66 u → ~320 px   (label column)
-  //   cols 1-31 : 4.66 u → ~33 px  (day columns)
-  //   col 32 : 14.44 u → ~101 px   (TOTAL column)
-  // Monthly-summary sheet (14 data cols) and country-summary (1 data col)
-  // are handled by the same logic because the cell values are already written
-  // correctly – we just widen the data columns a bit for readability.
+
+  // ── Column widths (Excel units → logical pixels) ──────────────────────────
   static const double _colLabelW = 320.0;
   static const double _colDayW   =  33.0;
   static const double _colTotalW = 101.0;
-  static const double _rowH      =  18.0; // Excel default row height ≈ 13.5 pt
- 
+  static const double _rowH      =  18.0;
+
   double _colWidth(int colIndex, int maxCols) {
-    if (colIndex == 0)            return _colLabelW;
-    if (colIndex == maxCols - 1)  return _colTotalW;
-    // Monthly-summary has 12 month columns → wider than day columns
-    if (maxCols == 14) return 52.0; // 12 months + label + total
-    if (maxCols == 2)  return _colTotalW; // country-summary sheet
+    if (colIndex == 0)           return _colLabelW;
+    if (colIndex == maxCols - 1) return _colTotalW;
+    if (maxCols == 14)           return 52.0;
+    if (maxCols == 2)            return _colTotalW;
     return _colDayW;
   }
- 
-  // ── Build ─────────────────────────────────────────────────────────────────
- 
+
   @override
   Widget build(BuildContext context) {
     final rows = widget.sheet.rows;
@@ -1048,43 +1102,40 @@ class _SheetGridViewState extends State<_SheetGridView> {
         ),
       );
     }
- 
-    // Determine max column count across all rows
+
     int maxCols = 0;
     for (final row in rows) {
       if (row.length > maxCols) maxCols = row.length;
     }
     if (maxCols == 0) maxCols = 1;
- 
-    // Total logical width of the spreadsheet content
+
     double totalW = 0;
     for (int c = 0; c < maxCols; c++) {
       totalW += _colWidth(c, maxCols);
     }
- 
-    // Detect the row-range that constitutes PART II so we can suppress
-    // the blue highlight for "Overseas Filipinos" only in that scope.
-    int _partIIStart = -1;
-    int _partIIEnd = rows.length;
+
+    // Detect PART II range to suppress blue on "Overseas Filipinos" there.
+    int partIIStart = rows.length;
+    int partIIEnd   = rows.length;
     for (int i = 0; i < rows.length; i++) {
-      final r = rows[i];
-      final first = r.isNotEmpty ? (r[0]?.value?.toString() ?? '').trim().toUpperCase() : '';
+      final first = rows[i].isNotEmpty
+          ? (rows[i][0]?.value?.toString() ?? '').trim().toUpperCase()
+          : '';
       if (first == 'PART II.  OTHER INDICATORS') {
-        _partIIStart = i;
+        partIIStart = i;
         break;
       }
     }
-    if (_partIIStart >= 0) {
-      for (int i = _partIIStart + 1; i < rows.length; i++) {
-        final r = rows[i];
-        final first = r.isNotEmpty ? (r[0]?.value?.toString() ?? '').trim().toUpperCase() : '';
+    if (partIIStart < rows.length) {
+      for (int i = partIIStart + 1; i < rows.length; i++) {
+        final first = rows[i].isNotEmpty
+            ? (rows[i][0]?.value?.toString() ?? '').trim().toUpperCase()
+            : '';
         if (first.startsWith('PART ')) {
-          _partIIEnd = i;
+          partIIEnd = i;
           break;
         }
       }
-    } else {
-      _partIIStart = rows.length;
     }
 
     return Column(
@@ -1092,36 +1143,87 @@ class _SheetGridViewState extends State<_SheetGridView> {
         // ── Zoom toolbar ──────────────────────────────────────────────────
         _ZoomBar(
           scale: _scale,
-          onZoomIn:    _zoomIn,
-          onZoomOut:   _zoomOut,
+          onZoomIn: _zoomIn,
+          onZoomOut: _zoomOut,
           onZoomReset: _zoomReset,
         ),
- 
-        // ── Sheet content ─────────────────────────────────────────────────
+
+        // ── Scrollable sheet content with visible scrollbars ──────────────
+        // GestureDetector only intercepts multi-pointer (pinch) gestures for
+        // zoom.  Single-pointer touches are passed through to the scroll views.
         Expanded(
-          child: GestureDetector(
-            onScaleStart: (d) => _baseScale = _scale,
-            onScaleUpdate: (d) => setState(() {
-              _scale = (_baseScale * d.scale).clamp(_minScale, _maxScale);
-            }),
-            child: Scrollbar(
-              thumbVisibility: true,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.all(8),
-                  child: Transform.scale(
-                    scale: _scale,
-                    alignment: Alignment.topLeft,
-                    child: SizedBox(
-                      width: totalW,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: rows.asMap().entries.map((entry) {
-                          final isPartII = entry.key >= _partIIStart && entry.key < _partIIEnd;
-                          return _buildRow(entry.key, entry.value, maxCols, totalW, isPartII: isPartII);
-                        }).toList(),
+          child: ScrollbarTheme(
+            data: ScrollbarThemeData(
+              thumbColor: MaterialStatePropertyAll(
+                AppColors.primaryCyan.withOpacity(0.95),
+              ),
+              trackColor: MaterialStatePropertyAll(
+                AppColors.backgroundDark.withOpacity(0.85),
+              ),
+              trackBorderColor: MaterialStatePropertyAll(
+                AppColors.primaryCyan.withOpacity(0.18),
+              ),
+              thumbVisibility: const MaterialStatePropertyAll(true),
+              trackVisibility: const MaterialStatePropertyAll(true),
+              thickness: const MaterialStatePropertyAll(11),
+              radius: const Radius.circular(6),
+              minThumbLength: 48,
+            ),
+            child: GestureDetector(
+              onScaleStart: (details) => _startScale = _scale,
+              onScaleUpdate: (details) {
+                // Only react when two or more fingers are on screen (pinch).
+                if (details.pointerCount >= 2) {
+                  setState(() {
+                    _scale = (_startScale * details.scale)
+                        .clamp(_minScale, _maxScale);
+                  });
+                }
+              },
+              child: Scrollbar(
+                controller: _horizScrollCtrl,
+                notificationPredicate: (notification) =>
+                    notification.metrics.axis == Axis.horizontal,
+                thumbVisibility: true,
+                trackVisibility: true,
+                thickness: 11,
+                radius: const Radius.circular(6),
+                child: Scrollbar(
+                  controller: _vertScrollCtrl,
+                  notificationPredicate: (notification) =>
+                      notification.metrics.axis == Axis.vertical,
+                  thumbVisibility: true,
+                  trackVisibility: true,
+                  thickness: 11,
+                  radius: const Radius.circular(6),
+                  child: SingleChildScrollView(
+                    controller: _vertScrollCtrl,
+                    child: SingleChildScrollView(
+                      controller: _horizScrollCtrl,
+                      scrollDirection: Axis.horizontal,
+                      child: Transform.scale(
+                        scale: _scale,
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
+                          child: SizedBox(
+                            width: totalW,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: rows.asMap().entries.map((entry) {
+                                final isPartII = entry.key >= partIIStart &&
+                                    entry.key < partIIEnd;
+                                return _buildRow(
+                                  entry.key,
+                                  entry.value,
+                                  maxCols,
+                                  totalW,
+                                  isPartII: isPartII,
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1130,38 +1232,39 @@ class _SheetGridViewState extends State<_SheetGridView> {
             ),
           ),
         ),
-      ],
-    );
+          ],
+            );
   }
- 
-  // ── Build a single row ───────────────────────────────────────────────────
- 
-  Widget _buildRow(int rowIndex, List<Data?> cells, int maxCols, double totalW, {bool isPartII = false}) {
-    final firstVal = cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
- 
-    // ── Metadata header rows (0-9): borderless, styled text only ──────────
+
+  Widget _buildRow(
+    int rowIndex,
+    List<Data?> cells,
+    int maxCols,
+    double totalW, {
+    bool isPartII = false,
+  }) {
+    final firstVal =
+        cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
+
     if (rowIndex < 10) {
       return _MetaRow(rowIndex: rowIndex, value: firstVal, totalW: totalW);
     }
- 
-    // ── Normal data / section rows ─────────────────────────────────────────
+
     final bg   = _bgForRow(firstVal, rowIndex, isPartII: isPartII);
     final bold = _isBold(firstVal, rowIndex, isPartII: isPartII);
     final tc   = _textOn(bg);
- 
+    final isColHdrRow =
+        firstVal.trim().toUpperCase() == 'COUNTRY OF RESIDENCE';
+
     return SizedBox(
       height: _rowH,
       child: Row(
         children: List.generate(maxCols, (colIndex) {
-          final cell   = colIndex < cells.length ? cells[colIndex] : null;
-          final raw    = cell?.value?.toString() ?? '';
+          final cell    = colIndex < cells.length ? cells[colIndex] : null;
+          final raw     = cell?.value?.toString() ?? '';
           final isFirst = colIndex == 0;
-          final colW   = _colWidth(colIndex, maxCols);
- 
-          // The column-header row ("COUNTRY OF RESIDENCE" / "1" / "2" … / "TOTAL")
-          // uses a slightly different style for the day-number cells.
-          final isColHdrRow = firstVal.trim().toUpperCase() == 'COUNTRY OF RESIDENCE';
- 
+          final colW    = _colWidth(colIndex, maxCols);
+
           return Container(
             width:  colW,
             height: _rowH,
@@ -1182,13 +1285,12 @@ class _SheetGridViewState extends State<_SheetGridView> {
             child: Text(
               raw,
               style: TextStyle(
-                // Calibri is the Excel default; Bell MT is used for day-number
-                // headers in the API (_writeDayColHeaders).  Flutter will fall
-                // back to the system sans-serif if neither is embedded, which
-                // is fine – the key is weight, size and colour are exact.
-                fontFamily: (isColHdrRow && !isFirst) ? 'Bell MT' : 'Calibri',
+                fontFamily:
+                    (isColHdrRow && !isFirst) ? 'Bell MT' : 'Calibri',
                 fontSize: 8.5,
-                fontWeight: bold || isColHdrRow ? FontWeight.bold : FontWeight.normal,
+                fontWeight: bold || isColHdrRow
+                    ? FontWeight.bold
+                    : FontWeight.normal,
                 color: tc,
                 height: 1.1,
               ),
@@ -1202,27 +1304,25 @@ class _SheetGridViewState extends State<_SheetGridView> {
     );
   }
 }
- 
-// ─── Metadata header row (rows 0-9) ──────────────────────────────────────────
- 
+
+// ─── Metadata header rows (0–9) ───────────────────────────────────────────────
+
 class _MetaRow extends StatelessWidget {
   const _MetaRow({
     required this.rowIndex,
     required this.value,
     required this.totalW,
   });
- 
+
   final int rowIndex;
   final String value;
   final double totalW;
- 
+
   @override
   Widget build(BuildContext context) {
-    // Row 4 is "REPORT ON THE REGIONAL DISTRIBUTION…" – larger, bold, centred.
     final isBigTitle = rowIndex == 4;
-    // Rows 1-4 are centred (region, month/year, blank, title).
     final isCentered = rowIndex >= 1 && rowIndex <= 4;
- 
+
     return SizedBox(
       width: totalW,
       child: Padding(
@@ -1235,7 +1335,9 @@ class _MetaRow extends StatelessWidget {
           style: TextStyle(
             fontFamily: 'Calibri',
             fontSize: isBigTitle ? 11.0 : 9.0,
-            fontWeight: (rowIndex >= 5 || isBigTitle) ? FontWeight.bold : FontWeight.normal,
+            fontWeight: (rowIndex >= 5 || isBigTitle)
+                ? FontWeight.bold
+                : FontWeight.normal,
             color: const Color(0xFF000000),
           ),
           textAlign: isCentered ? TextAlign.center : TextAlign.left,
@@ -1244,9 +1346,9 @@ class _MetaRow extends StatelessWidget {
     );
   }
 }
- 
+
 // ─── Zoom toolbar ─────────────────────────────────────────────────────────────
- 
+
 class _ZoomBar extends StatelessWidget {
   const _ZoomBar({
     required this.scale,
@@ -1254,12 +1356,12 @@ class _ZoomBar extends StatelessWidget {
     required this.onZoomOut,
     required this.onZoomReset,
   });
- 
+
   final double scale;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onZoomReset;
- 
+
   @override
   Widget build(BuildContext context) {
     final pct = '${(scale * 100).round()}%';
@@ -1317,9 +1419,17 @@ class _ZoomBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          // Pinch hint
-          const Icon(Icons.pinch_rounded, color: Color(0xFF4A6580), size: 14),
-          const SizedBox(width: 4),
+          // Hints — updated to reflect new scroll + pinch-only zoom behaviour
+          const Icon(Icons.open_with_rounded,
+              color: Color(0xFF4A6580), size: 13),
+          const SizedBox(width: 3),
+          const Text(
+            'scroll to pan',
+            style: TextStyle(color: Color(0xFF4A6580), fontSize: 10.5),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.pinch_rounded, color: Color(0xFF4A6580), size: 13),
+          const SizedBox(width: 3),
           const Text(
             'pinch to zoom',
             style: TextStyle(color: Color(0xFF4A6580), fontSize: 10.5),
@@ -1329,18 +1439,18 @@ class _ZoomBar extends StatelessWidget {
     );
   }
 }
- 
+
 class _ZoomBtn extends StatelessWidget {
   const _ZoomBtn({
     required this.icon,
     required this.onTap,
     required this.tooltip,
   });
- 
+
   final IconData icon;
   final VoidCallback onTap;
   final String tooltip;
- 
+
   @override
   Widget build(BuildContext context) {
     return Tooltip(
@@ -1471,7 +1581,8 @@ class _SectionLabel extends StatelessWidget {
               ),
               Text(
                 subtitle,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 12),
+                style:
+                    const TextStyle(color: AppColors.textGray, fontSize: 12),
               ),
             ],
           ),
@@ -1626,7 +1737,8 @@ class _TableRow extends StatelessWidget {
               flex: 2,
               child: Text(
                 report.periodLabel,
-                style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+                style:
+                    const TextStyle(color: AppColors.textGray, fontSize: 13),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1655,7 +1767,8 @@ class _TableRow extends StatelessWidget {
             flex: 2,
             child: Text(
               report.periodLabel,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              style:
+                  const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ),
           Expanded(flex: 2, child: _SheetPills(options: report.sheetOptions)),
@@ -1663,7 +1776,8 @@ class _TableRow extends StatelessWidget {
             flex: 3,
             child: Text(
               dateStr,
-              style: const TextStyle(color: AppColors.textGray, fontSize: 13),
+              style:
+                  const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
           ),
           SizedBox(
@@ -1676,7 +1790,7 @@ class _TableRow extends StatelessWidget {
   }
 }
 
-// ─── View Button (replaces Download Button) ───────────────────────────────────
+// ─── View Button ──────────────────────────────────────────────────────────────
 
 class _ViewButton extends StatelessWidget {
   const _ViewButton({required this.hasFile, required this.onTap});
@@ -1731,7 +1845,7 @@ class _ViewButton extends StatelessWidget {
   }
 }
 
-// ─── Report ID Badge ──────────────────────────────────────────────────────────
+// ─── Small shared widgets ─────────────────────────────────────────────────────
 
 class _ReportIdBadge extends StatelessWidget {
   const _ReportIdBadge({required this.shortId});
@@ -1821,9 +1935,9 @@ class _SheetPills extends StatelessWidget {
       spacing: 4,
       runSpacing: 4,
       children: [
-        if (options!.includeDailySheet) _Pill('S1'),
-        if (options!.includeCountrySumSheet) _Pill('S2'),
-        if (options!.includeMonthlySummarySheet) _Pill('S3'),
+        if (options!.includeDailySheet) const _Pill('S1'),
+        if (options!.includeCountrySumSheet) const _Pill('S2'),
+        if (options!.includeMonthlySummarySheet) const _Pill('S3'),
       ],
     );
   }
@@ -1869,8 +1983,7 @@ class _GenerateReportDialog extends StatefulWidget {
     required int month,
     required int year,
     required ReportSheetOptions sheetOptions,
-  })
-  onGenerate;
+  }) onGenerate;
 
   @override
   State<_GenerateReportDialog> createState() => _GenerateReportDialogState();
@@ -1891,18 +2004,8 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
 
   static int _monthIndex(String name) {
     const names = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return names.indexOf(name) + 1;
   }
@@ -2001,7 +2104,8 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                   children: [
                     _SheetToggle(
                       label: 'Daily Breakdown',
-                      subtitle: 'One tab per establishment for selected month',
+                      subtitle:
+                          'One tab per establishment for selected month',
                       value: _sheet1,
                       onChanged: (v) => setState(() => _sheet1 = v),
                       isFirst: true,
@@ -2009,7 +2113,8 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                     const Divider(color: AppColors.cardBorder, height: 1),
                     _SheetToggle(
                       label: 'Country Summary',
-                      subtitle: 'All establishments combined — selected month',
+                      subtitle:
+                          'All establishments combined — selected month',
                       value: _sheet2,
                       onChanged: (v) => setState(() => _sheet2 = v),
                     ),
@@ -2030,7 +2135,8 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                   padding: EdgeInsets.only(top: 8),
                   child: Text(
                     'Select at least one sheet to generate.',
-                    style: TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5),
+                    style:
+                        TextStyle(color: Color(0xFFFF4D6A), fontSize: 11.5),
                   ),
                 ),
               const SizedBox(height: 20),
@@ -2041,28 +2147,27 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                     onPressed: () => Navigator.pop(context),
                     child: const Text(
                       'Cancel',
-                      style: TextStyle(color: AppColors.textGray, fontSize: 13),
+                      style:
+                          TextStyle(color: AppColors.textGray, fontSize: 13),
                     ),
                   ),
                   const SizedBox(width: 10),
                   GestureDetector(
                     onTap: _canGenerate
                         ? () => widget.onGenerate(
-                            month: _monthIndex(_selectedMonth!),
-                            year: int.parse(_selectedYear!),
-                            sheetOptions: ReportSheetOptions(
-                              includeDailySheet: _sheet1,
-                              includeCountrySumSheet: _sheet2,
-                              includeMonthlySummarySheet: _sheet3,
-                            ),
-                          )
+                              month: _monthIndex(_selectedMonth!),
+                              year: int.parse(_selectedYear!),
+                              sheetOptions: ReportSheetOptions(
+                                includeDailySheet: _sheet1,
+                                includeCountrySumSheet: _sheet2,
+                                includeMonthlySummarySheet: _sheet3,
+                              ),
+                            )
                         : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 10,
-                      ),
+                          horizontal: 18, vertical: 10),
                       decoration: BoxDecoration(
                         color: _canGenerate
                             ? AppColors.primaryCyan
@@ -2075,7 +2180,9 @@ class _GenerateReportDialogState extends State<_GenerateReportDialog> {
                           Icon(
                             Icons.auto_awesome_rounded,
                             size: 15,
-                            color: _canGenerate ? Colors.black : Colors.black45,
+                            color: _canGenerate
+                                ? Colors.black
+                                : Colors.black45,
                           ),
                           const SizedBox(width: 6),
                           Text(
@@ -2139,7 +2246,8 @@ class _SheetToggle extends StatelessWidget {
                 onChanged: (v) => onChanged(v ?? false),
                 activeColor: AppColors.primaryCyan,
                 checkColor: Colors.black,
-                side: const BorderSide(color: AppColors.textGray, width: 1.2),
+                side:
+                    const BorderSide(color: AppColors.textGray, width: 1.2),
                 visualDensity: VisualDensity.compact,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -2152,7 +2260,8 @@ class _SheetToggle extends StatelessWidget {
                   Text(
                     label,
                     style: TextStyle(
-                      color: value ? AppColors.textWhite : AppColors.textGray,
+                      color:
+                          value ? AppColors.textWhite : AppColors.textGray,
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -2160,7 +2269,9 @@ class _SheetToggle extends StatelessWidget {
                   Text(
                     subtitle,
                     style: TextStyle(
-                      color: value ? AppColors.textGray : AppColors.textSubtle,
+                      color: value
+                          ? AppColors.textGray
+                          : AppColors.textSubtle,
                       fontSize: 11,
                     ),
                   ),
@@ -2174,7 +2285,7 @@ class _SheetToggle extends StatelessWidget {
   }
 }
 
-// ─── Shared small widget helpers ──────────────────────────────────────────────
+// ─── Shared small helpers ─────────────────────────────────────────────────────
 
 class _DialogLabel extends StatelessWidget {
   const _DialogLabel(this.text);
@@ -2225,14 +2336,16 @@ class _DropdownField<T> extends StatelessWidget {
           isDense: true,
           hint: Text(
             hint,
-            style: const TextStyle(color: AppColors.textSubtle, fontSize: 13),
+            style: const TextStyle(
+                color: AppColors.textSubtle, fontSize: 13),
           ),
           icon: const Icon(
             Icons.keyboard_arrow_down_rounded,
             color: AppColors.textGray,
             size: 20,
           ),
-          style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+          style:
+              const TextStyle(color: AppColors.textWhite, fontSize: 13),
           dropdownColor: AppColors.cardBackground,
           items: items
               .map(
@@ -2242,9 +2355,7 @@ class _DropdownField<T> extends StatelessWidget {
                     itemLabel(item),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AppColors.textWhite,
-                      fontSize: 13,
-                    ),
+                        color: AppColors.textWhite, fontSize: 13),
                   ),
                 ),
               )
@@ -2306,10 +2417,8 @@ class _FilterSection extends StatelessWidget {
               TextButton(
                 onPressed: onClear,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: Size.zero,
                 ),
                 child: const Text(
@@ -2397,7 +2506,8 @@ class _FilterDropdown extends StatelessWidget {
                 color: AppColors.textGray,
                 size: 20,
               ),
-              style: const TextStyle(color: AppColors.textWhite, fontSize: 13),
+              style: const TextStyle(
+                  color: AppColors.textWhite, fontSize: 13),
               dropdownColor: AppColors.cardBackground,
               items: items
                   .map(
@@ -2407,9 +2517,7 @@ class _FilterDropdown extends StatelessWidget {
                         item,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: AppColors.textWhite,
-                          fontSize: 13,
-                        ),
+                            color: AppColors.textWhite, fontSize: 13),
                       ),
                     ),
                   )
@@ -2441,17 +2549,20 @@ class _SearchBar extends StatelessWidget {
       child: TextField(
         controller: controller,
         onChanged: onChanged,
-        style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+        style:
+            const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
         decoration: const InputDecoration(
           hintText: 'Search by report ID…',
-          hintStyle: TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
+          hintStyle:
+              TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
           prefixIcon: Icon(
             Icons.search_rounded,
             color: AppColors.textSubtle,
             size: 20,
           ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          contentPadding:
+              EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         ),
       ),
     );
@@ -2572,7 +2683,8 @@ class _HeaderButton extends StatelessWidget {
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: isPrimary
             ? BoxDecoration(
                 gradient: const LinearGradient(
@@ -2613,7 +2725,8 @@ class _HeaderButton extends StatelessWidget {
                 style: TextStyle(
                   color: fg,
                   fontSize: 13,
-                  fontWeight: isPrimary ? FontWeight.w600 : FontWeight.normal,
+                  fontWeight:
+                      isPrimary ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ],
