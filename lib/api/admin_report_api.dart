@@ -841,7 +841,6 @@ class ReportService {
     required ReportParams params,
   }) {
     final excel = Excel.createExcel();
-    excel.delete('Sheet1');
     final daysInMonth = DateTime(params.year, params.month + 1, 0).day;
     final opts = params.sheetOptions;
 
@@ -862,6 +861,7 @@ class ReportService {
       _buildMonthlySummarySheet(
           excel, allTwelveMonthsMerged, totalRoomsAll, params.year);
     }
+    excel.delete('Sheet1');
     return Uint8List.fromList(excel.encode()!);
   }
 

@@ -162,6 +162,95 @@ const _businessLineLabels = {
   'others': 'Others',
 };
 
+// ─── Fixed San Pablo location values ──────────────────────────────────────────
+
+const _fixedCityMunicipality = 'San Pablo City';
+const _fixedProvince = 'Laguna';
+const _fixedRegion = 'Region IV-A';
+
+const _sanPabloBarangays = <String>[
+  'Atisan',
+  'Bagong Bayan II-A',
+  'Bagong Pook VI-C',
+  'Barangay I-A',
+  'Barangay I-B',
+  'Barangay II-A',
+  'Barangay II-B',
+  'Barangay II-C',
+  'Barangay II-D',
+  'Barangay II-E',
+  'Barangay II-F',
+  'Barangay III-A',
+  'Barangay III-B',
+  'Barangay III-C',
+  'Barangay III-D',
+  'Barangay III-E',
+  'Barangay III-F',
+  'Barangay IV-A',
+  'Barangay IV-B',
+  'Barangay IV-C',
+  'Barangay V-A',
+  'Barangay V-B',
+  'Barangay V-C',
+  'Barangay V-D',
+  'Barangay VI-A',
+  'Barangay VI-B',
+  'Barangay VI-D',
+  'Barangay VI-E',
+  'Barangay VII-A',
+  'Barangay VII-B',
+  'Barangay VII-C',
+  'Barangay VII-D',
+  'Barangay VII-E',
+  'Bautista',
+  'Concepcion',
+  'Del Remedio',
+  'Dolores',
+  'San Antonio 1',
+  'San Antonio 2',
+  'San Bartolome',
+  'San Buenaventura',
+  'San Crispin',
+  'San Cristobal',
+  'San Diego',
+  'San Francisco',
+  'San Gabriel',
+  'San Gregorio',
+  'San Ignacio',
+  'San Isidro',
+  'San Joaquin',
+  'San Jose',
+  'San Juan',
+  'San Lorenzo',
+  'San Lucas 1',
+  'San Lucas 2',
+  'San Marcos',
+  'San Mateo',
+  'San Miguel',
+  'San Nicolas',
+  'San Pedro',
+  'San Rafael',
+  'San Roque',
+  'San Vicente',
+  'Santa Ana',
+  'Santa Catalina',
+  'Santa Cruz',
+  'Santa Elena',
+  'Santa Felomina',
+  'Santa Isabel',
+  'Santa Maria',
+  'Santa Maria Magdalena',
+  'Santa Monica',
+  'Santa Veronica',
+  'Santiago I',
+  'Santiago II',
+  'Santisimo Rosario',
+  'Santo Angel',
+  'Santo Cristo',
+  'Santo Niño',
+  'Soledad',
+];
+
 // ─── Register Screen ──────────────────────────────────────────────────────────
 
 class RegisterScreen extends StatefulWidget {
@@ -201,9 +290,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _registrationCtrl = TextEditingController();
   final _streetCtrl = TextEditingController();
   final _barangayCtrl = TextEditingController();
-  final _cityCtrl = TextEditingController();
-  final _provinceCtrl = TextEditingController();
-  final _regionCtrl = TextEditingController();
+  final _cityCtrl = TextEditingController(text: _fixedCityMunicipality);
+  final _provinceCtrl = TextEditingController(text: _fixedProvince);
+  final _regionCtrl = TextEditingController(text: _fixedRegion);
 
   // Business type: sole_proprietorship | corporation | partnership
   String _businessType = 'Sole Proprietorship';
@@ -356,7 +445,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  void _applyFixedLocationValues() {
+    _cityCtrl.text = _fixedCityMunicipality;
+    _provinceCtrl.text = _fixedProvince;
+    _regionCtrl.text = _fixedRegion;
+  }
+
   Future<void> _submit() async {
+    _applyFixedLocationValues();
     setState(() {
       _showErrors = true;
       _errorMessage = null;
@@ -383,9 +479,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       registrationNumber: _registrationCtrl.text.trim(),
       street: _streetCtrl.text.trim(),
       barangay: _barangayCtrl.text.trim(),
-      cityMunicipality: _cityCtrl.text.trim(),
-      province: _provinceCtrl.text.trim(),
-      region: _regionCtrl.text.trim(),
+      cityMunicipality: _fixedCityMunicipality,
+      province: _fixedProvince,
+      region: _fixedRegion,
       permitFile: _permitFile!,
       validIdFile: _validIdFile!,
     );
@@ -610,30 +706,7 @@ class _AppHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.gradientStart, AppColors.gradientEnd],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primaryBlue.withOpacity(0.4),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.assignment_rounded,
-            color: Colors.white,
-            size: 30,
-          ),
-        ),
+        _AppLogo(),
         const SizedBox(height: 14),
         const Text(
           'Register Accommodation',
@@ -645,10 +718,44 @@ class _AppHeader extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         const Text(
-          'San Pablo City Tourism System',
-          style: TextStyle(color: AppColors.textGray, fontSize: 13.5),
+          'Tourism Record Management System',
+          style: TextStyle(color: AppColors.primaryCyan, fontSize: 13.5),
         ),
       ],
+    );
+  }
+}
+
+class _AppLogo extends StatelessWidget {
+  const _AppLogo();
+
+  static const _logoAsset = 'assets/images/tourism_office_logo.jpg';
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 96,
+      height: 96,
+      padding: const EdgeInsets.all(1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.textWhite,
+        border: Border.all(color: AppColors.primaryCyan.withOpacity(0.45)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryBlue.withOpacity(0.4),
+            blurRadius: 20,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: Image.asset(
+          _logoAsset,
+          fit: BoxFit.cover,
+          semanticLabel: 'Office of the City Tourism Officer logo',
+        ),
+      ),
     );
   }
 }
@@ -1073,8 +1180,9 @@ class _Step1FormState extends State<_Step1Form> {
                   color: AppColors.textSubtle,
                   size: 18,
                 ),
-                tooltip:
-                    _hideConfirmPassword ? 'Show password' : 'Hide password',
+                tooltip: _hideConfirmPassword
+                    ? 'Show password'
+                    : 'Hide password',
               ),
             ),
           ),
@@ -1337,13 +1445,13 @@ class _Step2FormState extends State<_Step2Form> {
             error: _show('barangay')
                 ? _V.barangay(widget.barangayCtrl.text)
                 : null,
-            child: _Input(
+            child: _BarangayAutocomplete(
               controller: widget.barangayCtrl,
-              hint: 'Barangay',
               hasError:
                   _show('barangay') &&
                   _V.barangay(widget.barangayCtrl.text) != null,
               onChanged: (_) => _touch('barangay'),
+              onSelected: (_) => _touch('barangay'),
             ),
           ),
           second: _LabeledField(
@@ -1354,10 +1462,10 @@ class _Step2FormState extends State<_Step2Form> {
             child: _Input(
               controller: widget.cityCtrl,
               hint: 'City / Municipality',
+              enabled: false,
               hasError:
                   _show('city') &&
                   _V.cityMunicipality(widget.cityCtrl.text) != null,
-              onChanged: (_) => _touch('city'),
             ),
           ),
         ),
@@ -1373,10 +1481,10 @@ class _Step2FormState extends State<_Step2Form> {
             child: _Input(
               controller: widget.provinceCtrl,
               hint: 'Province',
+              enabled: false,
               hasError:
                   _show('province') &&
                   _V.province(widget.provinceCtrl.text) != null,
-              onChanged: (_) => _touch('province'),
             ),
           ),
           second: _LabeledField(
@@ -1385,10 +1493,9 @@ class _Step2FormState extends State<_Step2Form> {
             child: _Input(
               controller: widget.regionCtrl,
               hint: 'Region',
+              enabled: false,
               hasError:
-                  _show('region') &&
-                  _V.region(widget.regionCtrl.text) != null,
-              onChanged: (_) => _touch('region'),
+                  _show('region') && _V.region(widget.regionCtrl.text) != null,
             ),
           ),
         ),
@@ -1599,6 +1706,135 @@ class _LabeledField extends StatelessWidget {
   }
 }
 
+class _BarangayAutocomplete extends StatefulWidget {
+  const _BarangayAutocomplete({
+    required this.controller,
+    this.hasError = false,
+    this.onChanged,
+    this.onSelected,
+  });
+
+  final TextEditingController controller;
+  final bool hasError;
+  final ValueChanged<String>? onChanged;
+  final ValueChanged<String>? onSelected;
+
+  @override
+  State<_BarangayAutocomplete> createState() => _BarangayAutocompleteState();
+}
+
+class _BarangayAutocompleteState extends State<_BarangayAutocomplete> {
+  final _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = widget.hasError
+        ? RegisterColors.textRed
+        : AppColors.inputBorder;
+
+    return RawAutocomplete<String>(
+      textEditingController: widget.controller,
+      focusNode: _focusNode,
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        final query = textEditingValue.text.trim().toLowerCase();
+        if (query.isEmpty) return _sanPabloBarangays;
+        return _sanPabloBarangays.where(
+          (barangay) => barangay.toLowerCase().contains(query),
+        );
+      },
+      onSelected: widget.onSelected,
+      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+        return TextField(
+          controller: textController,
+          focusNode: focusNode,
+          onChanged: widget.onChanged,
+          style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+          decoration: InputDecoration(
+            hintText: 'Select or enter barangay',
+            hintStyle: const TextStyle(
+              color: AppColors.textSubtle,
+              fontSize: 13.5,
+            ),
+            filled: true,
+            fillColor: AppColors.inputBackground,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: AppColors.primaryCyan,
+                width: 1.5,
+              ),
+            ),
+            suffixIcon: const Icon(
+              Icons.arrow_drop_down_rounded,
+              color: AppColors.textGray,
+            ),
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelectedOption, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            color: Colors.transparent,
+            elevation: 8,
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 220),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.inputBorder),
+              ),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () => onSelectedOption(option),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 11,
+                      ),
+                      child: Text(
+                        option,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _Input extends StatelessWidget {
   const _Input({
     required this.controller,
@@ -1606,6 +1842,7 @@ class _Input extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.obscure = false,
     this.hasError = false,
+    this.enabled = true,
     this.onChanged,
     this.suffixIcon,
   });
@@ -1615,6 +1852,7 @@ class _Input extends StatelessWidget {
   final TextInputType keyboardType;
   final bool obscure;
   final bool hasError;
+  final bool enabled;
   final ValueChanged<String>? onChanged;
   final Widget? suffixIcon;
 
@@ -1623,17 +1861,22 @@ class _Input extends StatelessWidget {
     final borderColor = hasError
         ? RegisterColors.textRed
         : AppColors.inputBorder;
+    final textColor = enabled ? AppColors.textWhite : AppColors.textGray;
+    final fillColor = enabled
+        ? AppColors.inputBackground
+        : AppColors.inputBackground.withOpacity(0.45);
     return TextField(
       controller: controller,
       obscureText: obscure,
       keyboardType: keyboardType,
+      enabled: enabled,
       onChanged: onChanged,
-      style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
+      style: TextStyle(color: textColor, fontSize: 13.5),
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 13.5),
         filled: true,
-        fillColor: AppColors.inputBackground,
+        fillColor: fillColor,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
@@ -1646,6 +1889,10 @@ class _Input extends StatelessWidget {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: borderColor),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: AppColors.inputBorder.withOpacity(0.6)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -1710,11 +1957,7 @@ class _ResponsiveFieldPair extends StatelessWidget {
     if (isMobile) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          first,
-          const SizedBox(height: 12),
-          second,
-        ],
+        children: [first, const SizedBox(height: 12), second],
       );
     }
 

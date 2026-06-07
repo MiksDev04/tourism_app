@@ -42,8 +42,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SafeArea(
             child: Center(
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 40,
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: const [
@@ -70,18 +72,18 @@ class _LoginScreenState extends State<LoginScreen> {
 class _AppLogo extends StatelessWidget {
   const _AppLogo();
 
+  static const _logoAsset = 'assets/images/tourism_office_logo.jpg';
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 72,
-      height: 72,
+      width: 96,
+      height: 96,
+      padding: const EdgeInsets.all(1),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.gradientStart, AppColors.gradientEnd],
-        ),
-        borderRadius: BorderRadius.circular(18),
+        shape: BoxShape.circle,
+        color: AppColors.textWhite,
+        border: Border.all(color: AppColors.primaryCyan.withOpacity(0.45)),
         boxShadow: [
           BoxShadow(
             color: AppColors.primaryBlue.withOpacity(0.4),
@@ -90,10 +92,12 @@ class _AppLogo extends StatelessWidget {
           ),
         ],
       ),
-      child: const Icon(
-        Icons.location_on_rounded,
-        color: Colors.white,
-        size: 36,
+     child: ClipOval(
+        child: Image.asset(
+          _logoAsset,
+          fit: BoxFit.cover,
+          semanticLabel: 'Office of the City Tourism Officer logo',
+        ),
       ),
     );
   }
@@ -117,7 +121,7 @@ class _AppTitle extends StatelessWidget {
         ),
         SizedBox(height: 4),
         Text(
-          'Tourism Demographics System',
+          'Tourism Record Management System',
           style: TextStyle(
             color: AppColors.primaryCyan,
             fontSize: 14,
@@ -334,10 +338,7 @@ class _LoginCardState extends State<_LoginCard> {
                   Expanded(
                     child: Text(
                       _errorMessage!,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 12.5,
-                      ),
+                      style: const TextStyle(color: Colors.red, fontSize: 12.5),
                     ),
                   ),
                 ],
@@ -389,8 +390,7 @@ class _ForgotPasswordStartModal extends StatefulWidget {
       _ForgotPasswordStartModalState();
 }
 
-class _ForgotPasswordStartModalState
-    extends State<_ForgotPasswordStartModal> {
+class _ForgotPasswordStartModalState extends State<_ForgotPasswordStartModal> {
   final _emailCtrl = TextEditingController();
 
   bool _turnstileVerified = false;
@@ -656,12 +656,12 @@ class _TurnstilePlaceholderState extends State<_TurnstilePlaceholder> {
                         ),
                       )
                     : _verified
-                        ? const Icon(
-                            Icons.check_rounded,
-                            color: AppColors.primaryCyan,
-                            size: 16,
-                          )
-                        : const SizedBox.shrink(),
+                    ? const Icon(
+                        Icons.check_rounded,
+                        color: AppColors.primaryCyan,
+                        size: 16,
+                      )
+                    : const SizedBox.shrink(),
               ),
             ),
 
@@ -673,8 +673,8 @@ class _TurnstilePlaceholderState extends State<_TurnstilePlaceholder> {
                 _verified
                     ? 'Verified — you\'re human!'
                     : _verifying
-                        ? 'Verifying…'
-                        : 'I\'m not a robot',
+                    ? 'Verifying…'
+                    : 'I\'m not a robot',
                 style: TextStyle(
                   color: _verified ? AppColors.primaryCyan : AppColors.textGray,
                   fontSize: 13,
@@ -714,10 +714,7 @@ class _TurnstilePlaceholderState extends State<_TurnstilePlaceholder> {
                 const SizedBox(height: 2),
                 const Text(
                   'Turnstile',
-                  style: TextStyle(
-                    color: AppColors.textSubtle,
-                    fontSize: 8.5,
-                  ),
+                  style: TextStyle(color: AppColors.textSubtle, fontSize: 8.5),
                 ),
               ],
             ),
@@ -763,8 +760,9 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
   void initState() {
     super.initState();
     // OTP was already sent in Step 1; just focus the first pin box
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _pinFocus[0].requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _pinFocus[0].requestFocus(),
+    );
   }
 
   @override
@@ -893,9 +891,7 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
                     maxLength: 1,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: TextStyle(
                       color: AppColors.textWhite,
                       fontSize: pinFontSize,
@@ -909,13 +905,15 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
                       contentPadding: EdgeInsets.zero,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppColors.inputBorder),
+                        borderSide: const BorderSide(
+                          color: AppColors.inputBorder,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
-                        borderSide:
-                            const BorderSide(color: AppColors.inputBorder),
+                        borderSide: const BorderSide(
+                          color: AppColors.inputBorder,
+                        ),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -984,10 +982,7 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text(
                       'Cancel',
-                      style: TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.textGray, fontSize: 12),
                     ),
                   ),
                 ],
@@ -1019,10 +1014,7 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text(
                       'Cancel',
-                      style: TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: AppColors.textGray, fontSize: 12),
                     ),
                   ),
                 ],
@@ -1040,10 +1032,7 @@ class _ForgotOtpModalState extends State<_ForgotOtpModal> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _ResetPasswordModal extends StatefulWidget {
-  const _ResetPasswordModal({
-    required this.api,
-    required this.onSuccess,
-  });
+  const _ResetPasswordModal({required this.api, required this.onSuccess});
 
   final LoginApi api;
   final VoidCallback onSuccess;
@@ -1107,8 +1096,7 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
             _FpModalHeader(
               icon: Icons.lock_reset_rounded,
               title: 'Set New Password',
-              subtitle:
-                  'Identity verified. Enter your new password below.',
+              subtitle: 'Identity verified. Enter your new password below.',
             ),
             const Divider(color: AppColors.cardBorder, height: 28),
 
@@ -1119,8 +1107,7 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
                 controller: _newPassCtrl,
                 obscure: _obscureNew,
                 hint: 'Min. 8 chars, 1 uppercase, 1 number, 1 special',
-                onToggle: () =>
-                    setState(() => _obscureNew = !_obscureNew),
+                onToggle: () => setState(() => _obscureNew = !_obscureNew),
               ),
             ),
             const SizedBox(height: 16),
@@ -1139,10 +1126,7 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
             const SizedBox(height: 6),
             const Text(
               'Min. 8 characters · 1 uppercase · 1 number · 1 special character',
-              style: TextStyle(
-                color: AppColors.textSubtle,
-                fontSize: 10.5,
-              ),
+              style: TextStyle(color: AppColors.textSubtle, fontSize: 10.5),
             ),
 
             if (_errorMsg != null) ...[
@@ -1165,8 +1149,9 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton(
-                    onPressed:
-                        _loading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _loading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textGray,
                       side: const BorderSide(color: AppColors.inputBorder),
@@ -1197,8 +1182,9 @@ class _ResetPasswordModalState extends State<_ResetPasswordModal> {
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton(
-                    onPressed:
-                        _loading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _loading
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.textGray,
                       side: const BorderSide(color: AppColors.inputBorder),
@@ -1266,10 +1252,7 @@ class _FpModalHeader extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: AppColors.textGray,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: AppColors.textGray, fontSize: 12),
               ),
             ],
           ),
@@ -1335,15 +1318,10 @@ class _FpPasswordField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textWhite, fontSize: 13.5),
       decoration: _fpInputDecoration().copyWith(
         hintText: hint,
-        hintStyle: const TextStyle(
-          color: AppColors.textSubtle,
-          fontSize: 12.5,
-        ),
+        hintStyle: const TextStyle(color: AppColors.textSubtle, fontSize: 12.5),
         suffixIcon: IconButton(
           icon: Icon(
-            obscure
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
+            obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
             color: AppColors.textSubtle,
             size: 18,
           ),
@@ -1379,10 +1357,7 @@ class _FpErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
-                color: Colors.redAccent,
-                fontSize: 12.5,
-              ),
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12.5),
             ),
           ),
         ],
@@ -1470,33 +1445,31 @@ class _FpGradientButton extends StatelessWidget {
 }
 
 InputDecoration _fpInputDecoration() => InputDecoration(
-      filled: true,
-      fillColor: AppColors.inputBackground,
-      isDense: true,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.inputBorder),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-        borderSide:
-            const BorderSide(color: AppColors.primaryCyan, width: 1.5),
-      ),
-    );
+  filled: true,
+  fillColor: AppColors.inputBackground,
+  isDense: true,
+  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+  border: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.inputBorder),
+  ),
+  enabledBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.inputBorder),
+  ),
+  focusedBorder: OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+  ),
+);
 
 bool _fpIsCompactDialog(BuildContext context) =>
     MediaQuery.sizeOf(context).width < 480;
 
 EdgeInsets _fpDialogInset(BuildContext context) => EdgeInsets.symmetric(
-      horizontal: _fpIsCompactDialog(context) ? 12 : 24,
-      vertical: 24,
-    );
+  horizontal: _fpIsCompactDialog(context) ? 12 : 24,
+  vertical: 24,
+);
 
 double _fpDialogWidth(BuildContext context, double maxWidth) {
   final screenWidth = MediaQuery.sizeOf(context).width;
@@ -1553,8 +1526,10 @@ class _InputField extends StatelessWidget {
             : null,
         filled: true,
         fillColor: AppColors.inputBackground,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -1565,8 +1540,10 @@ class _InputField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
       ),
     );
@@ -1600,8 +1577,10 @@ class _PasswordField extends StatelessWidget {
           color: AppColors.textSubtle,
           size: 20,
         ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -1612,14 +1591,14 @@ class _PasswordField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide:
-              const BorderSide(color: AppColors.primaryCyan, width: 1.5),
+          borderSide: const BorderSide(
+            color: AppColors.primaryCyan,
+            width: 1.5,
+          ),
         ),
         suffixIcon: IconButton(
           icon: Icon(
-            obscure
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
+            obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
             color: AppColors.textSubtle,
             size: 20,
           ),
@@ -1655,8 +1634,7 @@ class _SignInButton extends StatelessWidget {
         ),
         child: ElevatedButton.icon(
           onPressed: onPressed,
-          icon:
-              const Icon(Icons.login_rounded, size: 18, color: Colors.white),
+          icon: const Icon(Icons.login_rounded, size: 18, color: Colors.white),
           label: const Text(
             'Sign In',
             style: TextStyle(
@@ -1696,10 +1674,7 @@ class _LoadingButton extends StatelessWidget {
         child: SizedBox(
           width: 20,
           height: 20,
-          child: CircularProgressIndicator(
-            color: Colors.white,
-            strokeWidth: 2,
-          ),
+          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
         ),
       ),
     );
