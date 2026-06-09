@@ -6,7 +6,7 @@ enum ActivityStatus { active, lowActivity, inactive, noActivity }
 
 enum BusinessStatusLevel { approved, warning, suspended }
 
-// ─── Model ────────────────────────────────────────────────────────────────────
+// ─── Models ───────────────────────────────────────────────────────────────────
 
 class BusinessActivityRecord {
   const BusinessActivityRecord({
@@ -73,18 +73,12 @@ class BusinessActivityRecord {
     }
   }
 
-  /// Returns true when activity_status is 'active'.
   bool get isCompliant => activityStatus == ActivityStatus.active;
-
-  /// Returns true when business_status is 'warning'.
   bool get hasWarning => businessStatus == BusinessStatusLevel.warning;
-
-  /// Returns true when business_status is 'suspended'.
   bool get isSuspended => businessStatus == BusinessStatusLevel.suspended;
 
   String get businessLineLabel {
     if (businessLine.isEmpty) return '—';
-
     return businessLine
         .map(_formatBusinessLine)
         .where((value) => value.isNotEmpty)
@@ -126,6 +120,17 @@ class BusinessActivityRecord {
   }
 }
 
+/// Holds the aggregated guest total for a single check-in date.
+class DailyGuestStat {
+  const DailyGuestStat({
+    required this.date,
+    required this.totalGuests,
+  });
+
+  final DateTime date;
+  final int totalGuests;
+}
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 class AdminComplianceApi {
@@ -145,7 +150,6 @@ class AdminComplianceApi {
   }
 
   /// Updates the [status] column of a business row in [businesses].
-  /// Only [approved] and [warning] are valid targets per business rules.
   static Future<void> updateBusinessStatus(
     String businessId,
     BusinessStatusLevel newStatus,
@@ -160,5 +164,52 @@ class AdminComplianceApi {
         .from('businesses')
         .update({'status': raw})
         .eq('id', businessId);
+  }
+
+  /// Fetches and aggregates total guests per [check_in] date for [businessId]
+  /// within the given [month] (1–12) and [year].
+  ///
+  /// Only non-deleted records are considered. Results are sorted by date
+  /// ascending and multiple records sharing the same check-in date are
+  /// summed into a single [DailyGuestStat].
+  static Future<List<DailyGuestStat>> fetchDailyStats(
+    String businessId,
+    int month,
+    int year,
+  ) async {
+    final mm = month.toString().padLeft(2, '0');
+    final yyyy = year.toString().padLeft(4, '0');
+    final lastDay = DateTime(year, month + 1, 0).day;
+    final startStr = '$yyyy-$mm-01';
+    final endStr = '$yyyy-$mm-${lastDay.toString().padLeft(2, '0')}';
+
+    final response = await _supabase
+        .from('guest_records')
+        .select('check_in, total_guests')
+        .eq('business_id', businessId)
+        .eq('is_deleted', false)
+        .gte('check_in', startStr)
+        .lte('check_in', endStr)
+        .order('check_in', ascending: true);
+
+    // Aggregate multiple records that share the same check-in date.
+    final aggregated = <String, int>{};
+    for (final row in response as List<dynamic>) {
+      final checkIn = (row['check_in'] as String).substring(0, 10);
+      final guests = (row['total_guests'] as num).toInt();
+      aggregated[checkIn] = (aggregated[checkIn] ?? 0) + guests;
+    }
+
+    final entries = aggregated.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    return entries
+        .map(
+          (e) => DailyGuestStat(
+            date: DateTime.parse(e.key),
+            totalGuests: e.value,
+          ),
+        )
+        .toList();
   }
 }

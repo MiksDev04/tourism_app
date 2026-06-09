@@ -219,21 +219,16 @@ class _ReportViewerModalState extends State<ReportViewerModal>
     final size = MediaQuery.of(context).size;
     final topPadding = MediaQuery.of(context).padding.top;
 
-    // ── Responsive breakpoint ─────────────────────────────────────────────
     final isMobile = size.width < 600;
 
     return Dialog(
       backgroundColor: Colors.transparent,
-      // On mobile: full-screen (offset by status bar only).
-      // On desktop: 20px inset on all sides.
       insetPadding: isMobile
           ? EdgeInsets.only(top: topPadding)
           : const EdgeInsets.all(20),
       child: Container(
         width: isMobile ? size.width : size.width * 0.95,
-        height: isMobile
-            ? size.height - topPadding
-            : size.height * 0.92,
+        height: isMobile ? size.height - topPadding : size.height * 0.92,
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(isMobile ? 0 : 16),
@@ -283,8 +278,6 @@ class _ReportViewerModalState extends State<ReportViewerModal>
 }
 
 // ── Modal Header ──────────────────────────────────────────────────────────────
-// Desktop: single-row (icon | info | buttons | close).
-// Mobile:  two-row  (icon + info + close) / (PDF btn | Excel btn).
 
 class _ModalHeader extends StatelessWidget {
   const _ModalHeader({
@@ -302,8 +295,6 @@ class _ModalHeader extends StatelessWidget {
   final bool exportingExcel;
   final VoidCallback? onExportPdf;
   final bool exportingPdf;
-
-  // ── Shared sub-widgets ────────────────────────────────────────────────────
 
   Widget _buildIcon() => Container(
         width: 36,
@@ -392,7 +383,6 @@ class _ModalHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
 
-    // ── Mobile layout ─────────────────────────────────────────────────────
     if (isMobile) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -400,7 +390,6 @@ class _ModalHeader extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Row 1: icon | info | close
             Row(
               children: [
                 _buildIcon(),
@@ -411,7 +400,6 @@ class _ModalHeader extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            // Row 2: PDF and Excel buttons, each fills half
             Row(
               children: [
                 Expanded(
@@ -444,7 +432,6 @@ class _ModalHeader extends StatelessWidget {
       );
     }
 
-    // ── Desktop layout ────────────────────────────────────────────────────
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 16, 16),
       child: Row(
@@ -492,7 +479,6 @@ class _ExportButton extends StatelessWidget {
     required this.borderColor,
     required this.onTap,
     this.isLoading = false,
-    // When true (mobile), the button fills its parent width and centers content.
     this.expand = false,
   });
 
@@ -551,8 +537,7 @@ class _ExportButton extends StatelessWidget {
   }
 }
 
-// ── Sheet Tab Bar (responsive) ────────────────────────────────────────────────
-// Desktop → TabBar; Mobile → styled DropdownButton.
+// ── Sheet Tab Bar ─────────────────────────────────────────────────────────────
 
 class _SheetTabBar extends StatelessWidget {
   const _SheetTabBar({required this.sheetNames, required this.tabController});
@@ -574,8 +559,6 @@ class _SheetTabBar extends StatelessWidget {
           );
   }
 }
-
-// ── Desktop tab bar (unchanged from original) ─────────────────────────────────
 
 class _DesktopSheetTabBar extends StatelessWidget {
   const _DesktopSheetTabBar(
@@ -630,8 +613,6 @@ class _DesktopSheetTabBar extends StatelessWidget {
     }
   }
 }
-
-// ── Mobile sheet dropdown ─────────────────────────────────────────────────────
 
 class _MobileSheetDropdown extends StatefulWidget {
   const _MobileSheetDropdown(
@@ -700,7 +681,6 @@ class _MobileSheetDropdownState extends State<_MobileSheetDropdown> {
             color: AppColors.textGray,
             size: 18,
           ),
-          // Custom display for the currently selected item
           selectedItemBuilder: (context) {
             return widget.sheetNames.asMap().entries.map((e) {
               return Row(
@@ -719,7 +699,6 @@ class _MobileSheetDropdownState extends State<_MobileSheetDropdown> {
               );
             }).toList();
           },
-          // Dropdown menu items
           items: widget.sheetNames.asMap().entries.map((e) {
             final isActive = e.key == _selected;
             return DropdownMenuItem<int>(
@@ -791,20 +770,17 @@ class _SheetTabView extends StatelessWidget {
 
 // ─── Sheet Grid View ──────────────────────────────────────────────────────────
 //
-// SCROLLING:
-//   • Vertical Scrollbar is outermost → renders at the absolute right edge
-//     of the modal content area.
-//   • Horizontal Scrollbar is inner   → renders at the bottom.
-//
-// ZOOM:
-//   • All dimensions (row height, column widths, font sizes, padding) are
-//     multiplied by _scale directly — no Transform.scale wrapper.
-//   • This means the SingleChildScrollViews report the correct (scaled) extents,
-//     so both scrollbars appear and resize properly as the user zooms.
-//
-// GESTURE:
-//   • Pinch-to-zoom is handled by GestureDetector (touch only).
-//   • Scroll wheel / trackpad pan normally (no accidental zoom).
+// DESIGN: Faithfully replicates the ON Blank Form (DAE-1B) Excel design:
+//   • All text is BLACK — matches the actual Excel exactly (no white-on-blue)
+//   • Font: Arial 8pt for data rows, Bell MT bold+italic for day-number headers
+//   • Font sizes: 8pt (data), 9pt (PART II items), 12pt (PART II section headers)
+//   • Bold+Italic: country names, sub-region headers (ASEAN, EAST ASIA, etc.),
+//     SUB-TOTAL rows, OVERSEAS FILIPINOS, OTHERS AND UNSPECIFIED
+//   • Bold only: main region headers (ASIA, AMERICA, etc.), TOTAL rows
+//   • Colors: Blue=#0070C0, Green=#92D050, LightBlue=#00B0F0,
+//             Yellow=#FFFF00, LightYellow=#FFFF66
+//   • Meta header rows (form ID, title, fields) styled faithfully by content
+//   • firstDataRow detected dynamically — robust for any report file
 
 class _SheetGridView extends StatefulWidget {
   const _SheetGridView({required this.sheetName, required this.sheet});
@@ -817,10 +793,9 @@ class _SheetGridView extends StatefulWidget {
 }
 
 class _SheetGridViewState extends State<_SheetGridView> {
-  // ── Zoom state ────────────────────────────────────────────────────────────
+  // ── Zoom ──────────────────────────────────────────────────────────────────
   double _scale = 1.0;
   double _startScale = 1.0;
-
   static const double _minScale = 0.4;
   static const double _maxScale = 3.0;
   static const double _scaleStep = 0.2;
@@ -843,87 +818,193 @@ class _SheetGridViewState extends State<_SheetGridView> {
     super.dispose();
   }
 
-  // ── Zoom actions ──────────────────────────────────────────────────────────
   void _zoomIn() =>
       setState(() => _scale = (_scale + _scaleStep).clamp(_minScale, _maxScale));
   void _zoomOut() =>
       setState(() => _scale = (_scale - _scaleStep).clamp(_minScale, _maxScale));
   void _zoomReset() => setState(() => _scale = 1.0);
 
-  // ── Excel exact colours ───────────────────────────────────────────────────
-  static const Color _cBlue = Color(0xFF0070C0);
-  static const Color _cGreen = Color(0xFF92D050);
-  static const Color _cLightBlue = Color(0xFF00B0F0);
-  static const Color _cYellow = Color(0xFFFFFF00);
-  static const Color _cLightYellow = Color(0xFFFFFF66);
-  static const Color _cWhite = Color(0xFFFFFFFF);
-  static const Color _cGridBorder = Color(0xFFBFBFBF);
+  // ── Exact Excel color palette ─────────────────────────────────────────────
+  // Sourced directly from openpyxl cell.fill.fgColor.rgb values in ON Blank Form
+  static const Color _cBlue        = Color(0xFF0070C0); // FF0070C0
+  static const Color _cGreen       = Color(0xFF92D050); // FF92D050
+  static const Color _cLightBlue   = Color(0xFF00B0F0); // FF00B0F0
+  static const Color _cYellow      = Color(0xFFFFFF00); // FFFFFF00
+  static const Color _cLightYellow = Color(0xFFFFFF66); // FFFFFF66
+  static const Color _cWhite       = Color(0xFFFFFFFF);
+  // ALL text is black — matches Excel exactly (no white text on blue rows)
+  static const Color _cBlack       = Color(0xFF000000);
+  static const Color _cGridBorder  = Color(0xFF000000);
 
-  static Color _textOn(Color bg) =>
-      bg == _cBlue ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
-
-  Color _bgForRow(String label, int rowIndex, {bool isPartII = false}) {
-    if (rowIndex < 10) return _cWhite;
+  // ── Row background ────────────────────────────────────────────────────────
+  // Color rules exactly as in ON Blank Form (DAE-1B):
+  //   LightYellow → COUNTRY OF RESIDENCE header (repeating column header)
+  //   Yellow      → GRAND TOTAL, A. DAE2:, B. VOLUME PER SEX
+  //   Green       → TOTAL PHILIPPINE/NON-PHILIPPINE RESIDENTS + grand-total sub-rows
+  //   LightBlue   → SUB-TOTAL (all sub-region totals)
+  //   Blue        → Main regions + sub-regions + OVERSEAS FILIPINOS + OTHERS AND UNSPECIFIED
+  //   White       → Individual country/nationality rows + meta rows
+  Color _bgForRow(String label, int rowIndex,
+      {bool isPartII = false, required int firstDataRow}) {
+    if (rowIndex < firstDataRow) return _cWhite;
     final u = label.trim().toUpperCase();
 
-    if (u == 'COUNTRY OF RESIDENCE') return _cLightYellow;
+    // ── Yellow rows ───────────────────────────────────────────────────────
     if (u.contains('GRAND TOTAL')) return _cYellow;
-    if (u == 'A. DAE2:' || u.contains('VOLUME PER SEX')) return _cYellow;
+    if (u.startsWith('A. DAE') || u.contains('VOLUME PER SEX')) return _cYellow;
 
+    // ── Column header (repeating) ─────────────────────────────────────────
+    if (u == 'COUNTRY OF RESIDENCE') return _cLightYellow;
+
+    // ── Green: total aggregation rows ─────────────────────────────────────
     if (u == 'TOTAL PHILIPPINE RESIDENTS' ||
         u == 'TOTAL NON-PHILIPPINE RESIDENTS' ||
-        u == 'TOTAL OVERSEAS FILIPINOS' ||
         u.startsWith('   TOTAL PHILIPPINE') ||
         u.startsWith('   TOTAL NON-PHILIPPINE') ||
         u.startsWith('   TOTAL OVERSEAS') ||
         u.startsWith('   TOTAL GUEST')) return _cGreen;
 
+    // ── Light Blue: sub-region totals ─────────────────────────────────────
     if (u.contains('SUB-TOTAL')) return _cLightBlue;
 
+    // ── Blue: main regions (bold, NOT italic) ─────────────────────────────
     if (u == 'PHILIPPINE RESIDENTS' ||
         u == 'NON-PHILIPPINE RESIDENTS' ||
         u == 'ASIA' ||
         u == 'AMERICA' ||
         u == 'EUROPE' ||
         u == 'AFRICA' ||
-        u.startsWith('AUSTRALASIA') ||
-        u.trimLeft().startsWith('ASEAN') ||
-        u.trimLeft().startsWith('EAST ASIA') ||
-        u.trimLeft().startsWith('SOUTH ASIA') ||
-        u.trimLeft().startsWith('MIDDLE EAST') ||
-        u.trimLeft().startsWith('NORTH AMERICA') ||
-        u.trimLeft().startsWith('SOUTH AMERICA') ||
-        u.trimLeft().startsWith('WESTERN EUROPE') ||
-        u.trimLeft().startsWith('NORTHERN EUROPE') ||
-        u.trimLeft().startsWith('SOUTHERN EUROPE') ||
-        u.trimLeft().startsWith('EASTERN EUROPE') ||
-        u.trimLeft().startsWith('AUSTRALASIA') ||
-        (!isPartII && u.contains('OVERSEAS FILIPINOS')) ||
-        u.contains('OTHERS AND UNSPECIFIED NON-PHILIPPINE')) return _cBlue;
+        u.startsWith('AUSTRALASIA')) return _cBlue;
+
+    // ── Blue: sub-regions (bold + italic) ────────────────────────────────
+    if (u.startsWith('ASEAN') ||
+        u.startsWith('EAST ASIA') ||
+        u.startsWith('SOUTH ASIA') ||
+        u.startsWith('MIDDLE EAST') ||
+        u.startsWith('NORTH AMERICA') ||
+        u.startsWith('SOUTH AMERICA') ||
+        u.startsWith('WESTERN EUROPE') ||
+        u.startsWith('NORTHERN EUROPE') ||
+        u.startsWith('SOUTHERN EUROPE') ||
+        u.startsWith('EASTERN EUROPE')) return _cBlue;
+
+    // ── Blue: special rows (bold + italic) ───────────────────────────────
+    if (!isPartII && u.contains('OVERSEAS FILIPINOS')) return _cBlue;
+    if (u.contains('OTHERS AND UNSPECIFIED')) return _cBlue;
 
     return _cWhite;
   }
 
-  bool _isBold(String label, int rowIndex, {bool isPartII = false}) {
-    if (rowIndex < 10) return false;
-    final bg = _bgForRow(label, rowIndex, isPartII: isPartII);
+  // ── Bold ──────────────────────────────────────────────────────────────────
+  // Rules from Excel:
+  //   • All colored rows → bold
+  //   • Main section white rows → bold (country/nationality names are all bold)
+  //   • PART II: only 'PART II.' header, 'Alternative Submission', '1. Male',
+  //     '2. Female' are bold; DAE2 items and a/b/c/d sub-items are NOT bold
+  bool _isBold(String label, int rowIndex,
+      {bool isPartII = false, required int firstDataRow}) {
+    if (rowIndex < firstDataRow) return false;
+    final bg =
+        _bgForRow(label, rowIndex, isPartII: isPartII, firstDataRow: firstDataRow);
+    // All colored rows are bold
     if (bg != _cWhite) return true;
-    if (label.startsWith('       ') && label.trim().isNotEmpty) return true;
-    if (label.trim().toUpperCase() == 'X. TOTAL') return true;
+
+    if (isPartII) {
+      final u = label.trim().toUpperCase();
+      // Bold PART II rows (white background)
+      if (u.startsWith('PART II') ||
+          u == 'ALTERNATIVE SUBMISSION' ||
+          u.startsWith('1. MALE') ||
+          u.startsWith('2. FEMALE')) return true;
+      // Everything else in PART II (DAE2 items, sub-items, x. Total,
+      // footnotes, Prepared by) → NOT bold
+      return false;
+    }
+
+    // Main data section (white bg): all non-empty rows are bold
+    // (Filipino Nationality, Foreign Nationality, Brunei, etc. — all bold in Excel)
+    return label.trim().isNotEmpty;
+  }
+
+  // ── Italic ────────────────────────────────────────────────────────────────
+  // Rules from Excel (verified via openpyxl):
+  //   • Sub-region blue headers → italic (ASEAN, EAST ASIA, SOUTH ASIA…)
+  //   • OVERSEAS FILIPINOS* → italic (blue row, italic=True)
+  //   • OTHERS AND UNSPECIFIED → italic (blue row, italic=True)
+  //   • SUB-TOTAL rows → italic (light-blue, italic=True)
+  //   • All country/nationality names (leading spaces, white bg) → italic
+  //     Excludes: grand-total sub-rows like '   Total Philippine Residents'
+  //   • PART II: only Alternative Submission → italic
+  //   • Main regions (PHILIPPINE RESIDENTS, ASIA, etc.) → NOT italic
+  //   • TOTAL rows (green) → NOT italic
+  bool _isItalic(String label, int rowIndex,
+      {bool isPartII = false, required int firstDataRow}) {
+    if (rowIndex < firstDataRow) return false;
+    final u = label.trim().toUpperCase();
+
+    // Sub-region blue headers (bold + italic)
+    if (u.startsWith('ASEAN') ||
+        u.startsWith('EAST ASIA') ||
+        u.startsWith('SOUTH ASIA') ||
+        u.startsWith('MIDDLE EAST') ||
+        u.startsWith('NORTH AMERICA') ||
+        u.startsWith('SOUTH AMERICA') ||
+        u.startsWith('WESTERN EUROPE') ||
+        u.startsWith('NORTHERN EUROPE') ||
+        u.startsWith('SOUTHERN EUROPE') ||
+        u.startsWith('EASTERN EUROPE')) return true;
+
+    // Special blue rows confirmed italic in Excel
+    if (!isPartII && u.contains('OVERSEAS FILIPINOS')) return true;
+    if (u.contains('OTHERS AND UNSPECIFIED')) return true;
+
+    // SUB-TOTAL rows (light-blue, italic)
+    if (u.contains('SUB-TOTAL')) return true;
+
+    // Individual country/nationality rows in main section
+    // These are indented with leading spaces; green grand-total sub-rows
+    // also have leading spaces but start with "TOTAL" so we exclude them
+    if (label.startsWith(' ') &&
+        label.trim().isNotEmpty &&
+        !isPartII &&
+        !u.startsWith('TOTAL ') &&
+        !u.startsWith('GRAND')) return true;
+
+    // PART II: Alternative Submission only
+    if (u == 'ALTERNATIVE SUBMISSION') return true;
+
     return false;
   }
 
+  // ── Data font size ────────────────────────────────────────────────────────
+  // Excel uses: 8pt for all main data rows; 12pt for PART II section headers;
+  // 9pt for all PART II detail items (rooms, sex breakdown, footnotes)
+  double _dataFontSize(String label, {bool isPartII = false}) {
+    if (!isPartII) return 8.0;
+    final u = label.trim().toUpperCase();
+    if (u.startsWith('PART II') ||
+        u.startsWith('A. DAE') ||
+        u.startsWith('B. VOLUME') ||
+        u == 'ALTERNATIVE SUBMISSION') return 12.0;
+    return 9.0;
+  }
+
   // ── Base (unscaled) column widths ─────────────────────────────────────────
+  // Calibrated from ON Blank Form column dimensions:
+  //   Col A  = 45.66 chars × 7px ≈ 320px  (label column)
+  //   Day cols = 4.66 chars × 7px ≈ 33px  (columns B–AF)
+  //   TOTAL col = 14.44 chars × 7px ≈ 101px (last column)
   static const double _colLabelW = 320.0;
-  static const double _colDayW = 33.0;
+  static const double _colDayW   = 33.0;
   static const double _colTotalW = 101.0;
+  // Row height: Excel default 13.8pt → ~18px at 96 dpi
   static const double _rowH = 18.0;
 
   double _colWidth(int colIndex, int maxCols) {
     if (colIndex == 0) return _colLabelW;
     if (colIndex == maxCols - 1) return _colTotalW;
-    if (maxCols == 14) return 52.0;
-    if (maxCols == 2) return _colTotalW;
+    if (maxCols == 14) return 52.0; // Monthly summary sheet (12 months + label + total)
+    if (maxCols == 2) return _colTotalW; // Country-sum sheet (label + total only)
     return _colDayW;
   }
 
@@ -945,22 +1026,35 @@ class _SheetGridViewState extends State<_SheetGridView> {
     }
     if (maxCols == 0) maxCols = 1;
 
+    // ── Dynamically detect first data row ────────────────────────────────
+    // Walk rows until we find "COUNTRY OF RESIDENCE" or "PHILIPPINE RESIDENTS"
+    // which always marks the start of the actual data table. Fall back to 10
+    // if the sheet is in an unexpected format.
+    int firstDataRow = 10;
+    for (int i = 0; i < rows.length; i++) {
+      final val =
+          rows[i].isNotEmpty ? (rows[i][0]?.value?.toString() ?? '') : '';
+      final u = val.trim().toUpperCase();
+      if (u == 'COUNTRY OF RESIDENCE' || u == 'PHILIPPINE RESIDENTS') {
+        firstDataRow = i;
+        break;
+      }
+    }
+
     // ── Scaled total width ────────────────────────────────────────────────
-    // Multiplying each column by _scale so SingleChildScrollView reports the
-    // correct (zoomed) extent → horizontal scrollbar appears when needed.
     double totalW = 0;
     for (int c = 0; c < maxCols; c++) {
       totalW += _colWidth(c, maxCols) * _scale;
     }
 
-    // ── PART II range detection (unchanged logic) ─────────────────────────
+    // ── PART II range detection ───────────────────────────────────────────
     int partIIStart = rows.length;
-    int partIIEnd = rows.length;
+    int partIIEnd   = rows.length;
     for (int i = 0; i < rows.length; i++) {
       final first = rows[i].isNotEmpty
           ? (rows[i][0]?.value?.toString() ?? '').trim().toUpperCase()
           : '';
-      if (first == 'PART II.  OTHER INDICATORS') {
+      if (first.startsWith('PART II')) {
         partIIStart = i;
         break;
       }
@@ -970,7 +1064,7 @@ class _SheetGridViewState extends State<_SheetGridView> {
         final first = rows[i].isNotEmpty
             ? (rows[i][0]?.value?.toString() ?? '').trim().toUpperCase()
             : '';
-        if (first.startsWith('PART ')) {
+        if (first.startsWith('PART ') && !first.startsWith('PART II')) {
           partIIEnd = i;
           break;
         }
@@ -979,15 +1073,12 @@ class _SheetGridViewState extends State<_SheetGridView> {
 
     return Column(
       children: [
-        // ── Zoom toolbar ────────────────────────────────────────────────
         _ZoomBar(
           scale: _scale,
           onZoomIn: _zoomIn,
           onZoomOut: _zoomOut,
           onZoomReset: _zoomReset,
         ),
-
-        // ── Scrollable sheet ────────────────────────────────────────────
         Expanded(
           child: ScrollbarTheme(
             data: ScrollbarThemeData(
@@ -1016,7 +1107,6 @@ class _SheetGridViewState extends State<_SheetGridView> {
                   });
                 }
               },
-              // ── Vertical scrollbar OUTERMOST → always at modal right edge ──
               child: Scrollbar(
                 controller: _vertScrollCtrl,
                 scrollbarOrientation: ScrollbarOrientation.right,
@@ -1025,7 +1115,6 @@ class _SheetGridViewState extends State<_SheetGridView> {
                 trackVisibility: true,
                 thickness: 11,
                 radius: const Radius.circular(6),
-                // ── Horizontal scrollbar inside, renders at bottom ──────────
                 child: Scrollbar(
                   controller: _horizScrollCtrl,
                   scrollbarOrientation: ScrollbarOrientation.bottom,
@@ -1043,8 +1132,6 @@ class _SheetGridViewState extends State<_SheetGridView> {
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 8, 22),
                         child: SizedBox(
-                          // totalW is already scaled — the scroll view will
-                          // report the correct extent and show the scrollbar.
                           width: totalW,
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1057,6 +1144,7 @@ class _SheetGridViewState extends State<_SheetGridView> {
                                 maxCols,
                                 totalW,
                                 isPartII: isPartII,
+                                firstDataRow: firstDataRow,
                               );
                             }).toList(),
                           ),
@@ -1074,20 +1162,19 @@ class _SheetGridViewState extends State<_SheetGridView> {
   }
 
   // ── Row builder ───────────────────────────────────────────────────────────
-  // All dimensions are multiplied by _scale so layout size (and scroll extent)
-  // matches the visual zoom level — no Transform.scale wrapper needed.
-
   Widget _buildRow(
     int rowIndex,
     List<Data?> cells,
     int maxCols,
     double totalW, {
     bool isPartII = false,
+    required int firstDataRow,
   }) {
     final firstVal =
         cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
 
-    if (rowIndex < 10) {
+    // Meta header rows (before COUNTRY OF RESIDENCE) → faithful Excel styling
+    if (rowIndex < firstDataRow) {
       return _MetaRow(
         rowIndex: rowIndex,
         value: firstVal,
@@ -1096,11 +1183,17 @@ class _SheetGridViewState extends State<_SheetGridView> {
       );
     }
 
-    final bg = _bgForRow(firstVal, rowIndex, isPartII: isPartII);
-    final bold = _isBold(firstVal, rowIndex, isPartII: isPartII);
-    final tc = _textOn(bg);
-    final isColHdrRow =
-        firstVal.trim().toUpperCase() == 'COUNTRY OF RESIDENCE';
+    // ── Compute row-level style ───────────────────────────────────────────
+    final bg = _bgForRow(firstVal, rowIndex,
+        isPartII: isPartII, firstDataRow: firstDataRow);
+    final bold = _isBold(firstVal, rowIndex,
+        isPartII: isPartII, firstDataRow: firstDataRow);
+    final italic = _isItalic(firstVal, rowIndex,
+        isPartII: isPartII, firstDataRow: firstDataRow);
+    final fontSize = _dataFontSize(firstVal, isPartII: isPartII);
+
+    // Repeating column-header row ("COUNTRY OF RESIDENCE" with day numbers)
+    final isColHdrRow = firstVal.trim().toUpperCase() == 'COUNTRY OF RESIDENCE';
 
     final scaledRowH = _rowH * _scale;
 
@@ -1108,10 +1201,13 @@ class _SheetGridViewState extends State<_SheetGridView> {
       height: scaledRowH,
       child: Row(
         children: List.generate(maxCols, (colIndex) {
-          final cell = colIndex < cells.length ? cells[colIndex] : null;
-          final raw = cell?.value?.toString() ?? '';
+          final cell   = colIndex < cells.length ? cells[colIndex] : null;
+          final raw    = cell?.value?.toString() ?? '';
           final isFirst = colIndex == 0;
-          final colW = _colWidth(colIndex, maxCols) * _scale;
+          final colW   = _colWidth(colIndex, maxCols) * _scale;
+
+          // Day-number header cells use Bell MT bold+italic (matches Excel exactly)
+          final isDayNumCol = isColHdrRow && !isFirst;
 
           return Container(
             width: colW,
@@ -1119,27 +1215,31 @@ class _SheetGridViewState extends State<_SheetGridView> {
             decoration: BoxDecoration(
               color: bg,
               border: const Border(
-                top: BorderSide(color: _cGridBorder, width: 0.5),
+                top:    BorderSide(color: _cGridBorder, width: 0.5),
                 bottom: BorderSide(color: _cGridBorder, width: 0.5),
-                left: BorderSide(color: _cGridBorder, width: 0.5),
-                right: BorderSide(color: _cGridBorder, width: 0.5),
+                left:   BorderSide(color: _cGridBorder, width: 0.5),
+                right:  BorderSide(color: _cGridBorder, width: 0.5),
               ),
             ),
             padding: EdgeInsets.symmetric(
               horizontal: isFirst ? 4 * _scale : 1 * _scale,
-              vertical: 1 * _scale,
+              vertical:   1 * _scale,
             ),
             alignment: isFirst ? Alignment.centerLeft : Alignment.center,
             child: Text(
               raw,
               style: TextStyle(
-                fontFamily:
-                    (isColHdrRow && !isFirst) ? 'Bell MT' : 'Calibri',
-                fontSize: 8.5 * _scale,
-                fontWeight: bold || isColHdrRow
+                // Bell MT for day-number column headers, Arial for everything else
+                fontFamily: isDayNumCol ? 'Bell MT' : 'Arial',
+                fontSize:   (isDayNumCol ? 8.0 : fontSize) * _scale,
+                fontWeight: (bold || isDayNumCol)
                     ? FontWeight.bold
                     : FontWeight.normal,
-                color: tc,
+                fontStyle: (italic || isDayNumCol)
+                    ? FontStyle.italic
+                    : FontStyle.normal,
+                // ALL text black — matches ON Blank Form Excel exactly
+                color: _cBlack,
                 height: 1.1,
               ),
               maxLines: 1,
@@ -1153,7 +1253,23 @@ class _SheetGridViewState extends State<_SheetGridView> {
   }
 }
 
-// ─── Metadata header rows (0–9) ───────────────────────────────────────────────
+// ─── Meta Header Rows ─────────────────────────────────────────────────────────
+//
+// Faithfully reproduces the ON Blank Form header section (rows 1–24 in Excel):
+//
+//   Row 1  : DAE-1B (Manual)        → Arial 10, left, not bold
+//   Row 3  : Region: __4-A          → Arial 10, bold, centered
+//   Row 4  : __________________     → Arial 10, bold, centered (date underline)
+//   Row 5  : (Month, Year)          → Arial 10, italic, centered
+//   Row 7  : REPORT ON THE...       → Arial 12, bold, centered  ← main title
+//   Row 9  : Type of Accommodation  → Arial 10, bold, left
+//   Row 10-15: Accommodation items  → Arial 10, normal, left (indented)
+//   Row 17 : DOT Accreditation...   → Arial 10, bold, left
+//   Row 19-20: AE ID Code...        → Arial 10, bold, left
+//   Row 22-23: City/Province        → Arial 10, bold, left
+//
+// Style is detected from content rather than row index for robustness across
+// different generated report file structures.
 
 class _MetaRow extends StatelessWidget {
   const _MetaRow({
@@ -1163,41 +1279,74 @@ class _MetaRow extends StatelessWidget {
     required this.scale,
   });
 
-  final int rowIndex;
+  final int    rowIndex;
   final String value;
   final double totalW;
   final double scale;
 
   @override
   Widget build(BuildContext context) {
-    final isBigTitle = rowIndex == 4;
-    final isCentered = rowIndex >= 1 && rowIndex <= 4;
+    final v = value.trim();
+
+    // ── Style detection from content ──────────────────────────────────────
+
+    // Row 7 in Excel: "REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS"
+    // Arial 12, bold, centered
+    final bool isMainTitle = v.toUpperCase().contains('REPORT ON THE REGIONAL');
+
+    // Rows that are centered + bold: "Region: ..." and underline lines (all _)
+    final bool isRegionLine = v.startsWith('Region:');
+    final bool isUnderlineLine = v.isNotEmpty &&
+        v.replaceAll('_', '').replaceAll(' ', '').isEmpty;
+
+    // "(Month, Year)" — italic, centered
+    final bool isMonthYear = v.startsWith('(Month') || v == '(Month, Year)';
+
+    // Bold section-level field labels (left-aligned)
+    final bool isSectionField = v.startsWith('Type of Accommodation') ||
+        v.startsWith('DOT Accreditation') ||
+        v.startsWith('AE ID Code') ||
+        v.startsWith('City/Municipality') ||
+        v.startsWith('Province:');
+
+    // Derived styles
+    final double fontSize = isMainTitle ? 12.0 : 10.0;
+    final bool bold = isMainTitle ||
+        isRegionLine ||
+        isUnderlineLine ||
+        isSectionField;
+    final bool italic = isMonthYear;
+    final TextAlign align =
+        (isMainTitle || isRegionLine || isUnderlineLine || isMonthYear)
+            ? TextAlign.center
+            : TextAlign.left;
 
     return SizedBox(
       width: totalW,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: 6 * scale,
-          vertical: isBigTitle ? 3 * scale : 1.5 * scale,
+          vertical: isMainTitle ? 3 * scale : 1.5 * scale,
         ),
         child: Text(
+          // Use raw `value` (not trimmed) to preserve indentation for
+          // accommodation-type items like "                Hotel"
           value,
           style: TextStyle(
-            fontFamily: 'Calibri',
-            fontSize: isBigTitle ? 11.0 * scale : 9.0 * scale,
-            fontWeight: (rowIndex >= 5 || isBigTitle)
-                ? FontWeight.bold
-                : FontWeight.normal,
+            fontFamily: 'Arial',
+            fontSize:   fontSize * scale,
+            fontWeight: bold   ? FontWeight.bold   : FontWeight.normal,
+            fontStyle:  italic ? FontStyle.italic  : FontStyle.normal,
             color: const Color(0xFF000000),
           ),
-          textAlign: isCentered ? TextAlign.center : TextAlign.left,
+          textAlign: align,
         ),
       ),
     );
   }
 }
 
-// ─── Zoom toolbar ─────────────────────────────────────────────────────────────
+// ─── Zoom Toolbar ─────────────────────────────────────────────────────────────
 
 class _ZoomBar extends StatelessWidget {
   const _ZoomBar({
@@ -1227,7 +1376,9 @@ class _ZoomBar extends StatelessWidget {
       child: Row(
         children: [
           _ZoomBtn(
-              icon: Icons.remove_rounded, onTap: onZoomOut, tooltip: 'Zoom out'),
+              icon: Icons.remove_rounded,
+              onTap: onZoomOut,
+              tooltip: 'Zoom out'),
           GestureDetector(
             onTap: onZoomReset,
             child: Container(
@@ -1258,7 +1409,6 @@ class _ZoomBar extends StatelessWidget {
               ),
             ),
           ),
-          
         ],
       ),
     );

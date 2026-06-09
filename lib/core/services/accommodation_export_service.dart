@@ -84,8 +84,8 @@ class AccommodationExportService {
     BuildContext context,
   ) async {
     try {
-      final excel = Excel.createExcel();
-      excel.delete('Sheet1');
+    final excel = Excel.createExcel();
+      excel.rename('Sheet1', 'Accommodations'); // Rename the default sheet instead of deleting it
       final sheet = excel['Accommodations'];
 
       // ── Header row ──────────────────────────────────────────────────────

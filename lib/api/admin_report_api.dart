@@ -16,7 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── Generated Report Model (data model lives in the API layer) ──────────────
+// ─── Generated Report Model ───────────────────────────────────────────────────
 
 class GeneratedReport {
   const GeneratedReport({
@@ -41,16 +41,25 @@ class GeneratedReport {
 
   bool get hasFile => fileUrl != null && fileUrl!.isNotEmpty;
 
-  String get shortId =>
-      id.replaceAll('-', '').substring(0, 8).toUpperCase();
+  String get shortId => id.replaceAll('-', '').substring(0, 8).toUpperCase();
 
   String get periodLabel => '${_monthName(periodMonth)} $periodYear';
 
   static String _monthName(int m) {
     const n = [
       '',
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return (m >= 1 && m <= 12) ? n[m] : '—';
   }
@@ -64,12 +73,9 @@ class GeneratedReport {
     generatedAt: DateTime.parse(row['generated_at'] as String),
     generatedBy: row['generated_by'] as String?,
     sheetOptions: ReportSheetOptions(
-      includeDailySheet:
-          row['include_sheet_establishment'] as bool? ?? true,
-      includeCountrySumSheet:
-          row['include_sheet_country_sum'] as bool? ?? true,
-      includeMonthlySummarySheet:
-          row['include_sheet_monthly'] as bool? ?? true,
+      includeDailySheet: row['include_sheet_establishment'] as bool? ?? true,
+      includeCountrySumSheet: row['include_sheet_country_sum'] as bool? ?? true,
+      includeMonthlySummarySheet: row['include_sheet_monthly'] as bool? ?? true,
     ),
   );
 }
@@ -137,22 +143,40 @@ const List<_CountryGroup> kCountryRows = [
   _CountryGroup('EUROPE', 'SOUTHERN EUROPE', 'PORTUGAL'),
   _CountryGroup('EUROPE', 'SOUTHERN EUROPE', 'SPAIN'),
   _CountryGroup('EUROPE', 'SOUTHERN EUROPE', 'UNION OF SERBIA AND MONTENEGRO'),
-  _CountryGroup('EUROPE', 'EASTERN EUROPE', 'COMMONWEALTH OF INDEPENDENT STATES'),
+  _CountryGroup(
+    'EUROPE',
+    'EASTERN EUROPE',
+    'COMMONWEALTH OF INDEPENDENT STATES',
+  ),
   _CountryGroup('EUROPE', 'EASTERN EUROPE', 'POLAND'),
   _CountryGroup('EUROPE', 'EASTERN EUROPE', 'RUSSIA'),
   _CountryGroup('AUSTRALASIA/PACIFIC', 'AUSTRALASIA/PACIFIC', 'AUSTRALIA'),
   _CountryGroup('AUSTRALASIA/PACIFIC', 'AUSTRALASIA/PACIFIC', 'GUAM'),
   _CountryGroup('AUSTRALASIA/PACIFIC', 'AUSTRALASIA/PACIFIC', 'NAURU'),
   _CountryGroup('AUSTRALASIA/PACIFIC', 'AUSTRALASIA/PACIFIC', 'NEW ZEALAND'),
-  _CountryGroup('AUSTRALASIA/PACIFIC', 'AUSTRALASIA/PACIFIC', 'PAPUA NEW GUINEA'),
+  _CountryGroup(
+    'AUSTRALASIA/PACIFIC',
+    'AUSTRALASIA/PACIFIC',
+    'PAPUA NEW GUINEA',
+  ),
   _CountryGroup('AFRICA', 'AFRICA', 'NIGERIA'),
   _CountryGroup('AFRICA', 'AFRICA', 'SOUTH AFRICA'),
 ];
 
 const List<String> kMonthNames = [
   '',
-  'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+  'JANUARY',
+  'FEBRUARY',
+  'MARCH',
+  'APRIL',
+  'MAY',
+  'JUNE',
+  'JULY',
+  'AUGUST',
+  'SEPTEMBER',
+  'OCTOBER',
+  'NOVEMBER',
+  'DECEMBER',
 ];
 
 // ─── Shared Types ─────────────────────────────────────────────────────────────
@@ -179,18 +203,25 @@ class ReportParams {
   }) : assert(month >= 1 && month <= 12, 'month must be 1–12');
 }
 
+/// Updated: rawBusinessLines added for checkbox matching.
 class _BusinessInfo {
   final String id;
   final String name;
   final String businessLine;
+  final List<String> rawBusinessLines;
   final String region;
   final String cityMunicipality;
   final String province;
   final int totalRooms;
-  const _BusinessInfo({
-    required this.id, required this.name, required this.businessLine,
-    required this.region, required this.cityMunicipality,
-    required this.province, required this.totalRooms,
+  _BusinessInfo({
+    required this.id,
+    required this.name,
+    required this.businessLine,
+    required this.rawBusinessLines,
+    required this.region,
+    required this.cityMunicipality,
+    required this.province,
+    required this.totalRooms,
   });
 }
 
@@ -207,10 +238,14 @@ class _MonthData {
   final int guestNights;
   final int roomsAvailable;
   const _MonthData({
-    required this.month, required this.countryByDay,
-    required this.residentsByDay, required this.sexByDay,
-    required this.roomsOccupied, required this.guestNightsByDay,
-    required this.guestNightsPerArrivalDay, required this.guestNights,
+    required this.month,
+    required this.countryByDay,
+    required this.residentsByDay,
+    required this.sexByDay,
+    required this.roomsOccupied,
+    required this.guestNightsByDay,
+    required this.guestNightsPerArrivalDay,
+    required this.guestNights,
     required this.roomsAvailable,
   });
 }
@@ -219,19 +254,43 @@ class _MonthData {
 
 class ReportService {
   ReportService({SupabaseClient? client})
-      : _sb = client ?? Supabase.instance.client;
+    : _sb = client ?? Supabase.instance.client;
 
   final SupabaseClient _sb;
   static const _bucket = 'reports';
 
-  // ── Excel colour constants ────────────────────────────────────────────────
-  static const _kBlue        = 'FF0070C0';
-  static const _kGreen       = 'FF92D050';
-  static const _kLightBlue   = 'FF00B0F0';
-  static const _kYellow      = 'FFFFFF00';
+  // ── Excel colour constants ─────────────────────────────────────────────────
+  static const _kBlue = 'FF0070C0';
+  static const _kGreen = 'FF92D050';
+  static const _kOliveGreen = 'FFD8E4BC';
+  static const _kLightBlue = 'FF00B0F0';
+  static const _kYellow = 'FFFFFF00';
   static const _kLightYellow = 'FFFFFF66';
-  static const _kWhite       = 'FFFFFFFF';
-  static final _kThinBorder  = Border(borderStyle: BorderStyle.Thin);
+  static const _kWhite = 'FFFFFFFF';
+  static final _kThinBorder = Border(borderStyle: BorderStyle.Thin);
+
+  // ── Pre-computed sets for italic detection in PDF ─────────────────────────
+  // Sub-regions that are distinct from their region name (i.e., they get their
+  // own indented sub-region header row in the sheet).
+  static final Set<String> _pdfItalicSubRegions = kCountryRows
+      .where((cg) => cg.subRegion != cg.region)
+      .map((cg) => cg.subRegion.toUpperCase())
+      .toSet();
+
+  // All country names (always italic).
+  static final Set<String> _pdfItalicCountries = kCountryRows
+      .map((cg) => cg.country.toUpperCase())
+      .toSet();
+
+  // Accommodation type key → display label pairs used across sheet builders.
+  static const List<List<String>> _kAccTypes = [
+    ['hotel', 'Hotel'],
+    ['resort', 'Resort'],
+    ['pension_inn', 'Pension Inn/ Lodge'],
+    ['youth_hostel', 'Youth Hostel/ Dormitory'],
+    ['apartment', 'Apartel/ Rented Homes/ Apartment'],
+    ['others', 'Others, please specify: _________________________'],
+  ];
 
   // ══════════════════════════════════════════════════════════════════════════
   // PUBLIC API
@@ -258,20 +317,24 @@ class ReportService {
     return _sb.storage.from(_bucket).download(filePath);
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // EXCEL → PDF CONVERSION
+  // ══════════════════════════════════════════════════════════════════════════
+
   /// Converts already-downloaded Excel bytes into a PDF document.
   ///
-  /// Each sheet in the workbook becomes a page group:
-  ///  - 33-column daily sheets   → A3 landscape
-  ///  - 14-column monthly sheets → A3 landscape
-  ///  -  2-column summary sheets → A4 portrait
+  /// Sheet detection by column count:
+  ///  ≥ 30 cols → A3 landscape daily sheet  (headerRows = 24)
+  ///  ≥ 10 cols → A3 landscape monthly sheet (headerRows = 7)
+  ///   < 10 cols → A4 portrait summary sheet  (headerRows = 7)
   ///
-  /// Row colours and bold styling mirror the Excel export exactly.
+  /// Row colors, bold and italic styling mirror the Excel export exactly.
   Future<Uint8List> convertExcelToPdf(Uint8List excelBytes) async {
     final excel = Excel.decodeBytes(excelBytes);
-    final doc   = pw.Document();
+    final doc = pw.Document();
 
     for (final entry in excel.sheets.entries) {
-      final sheet     = entry.value;
+      final sheet = entry.value;
       final sheetRows = sheet.rows;
       if (sheetRows.isEmpty) continue;
 
@@ -281,22 +344,26 @@ class ReportService {
       }
       if (maxCols == 0) continue;
 
-      // Pick page format and compute per-column pixel widths
       final PdfPageFormat pageFormat;
       final List<double> colWidths;
+      final int headerRows;
 
       if (maxCols >= 30) {
-        // Daily sheet: 33 cols (label + 31 days + total)
+        // Daily establishment sheet – 33 cols (label + 31 days + total)
+        // Header occupies rows 0-23; col-header row is 24.
         pageFormat = PdfPageFormat.a3.landscape;
-        colWidths  = _pdfDailyColWidths(maxCols);
+        colWidths = _pdfDailyColWidths(maxCols);
+        headerRows = 26;
       } else if (maxCols >= 10) {
-        // Monthly summary: 14 cols (label + 12 months + total)
+        // Monthly summary sheet – 14 cols (label + 12 months + total)
         pageFormat = PdfPageFormat.a3.landscape;
-        colWidths  = _pdfMonthlyColWidths(maxCols);
+        colWidths = _pdfMonthlyColWidths(maxCols);
+        headerRows = 7;
       } else {
-        // Country summary: 2 cols
+        // Country summary sheet – 2 cols
         pageFormat = PdfPageFormat.a4;
-        colWidths  = _pdfSummaryColWidths(maxCols);
+        colWidths = _pdfSummaryColWidths(maxCols);
+        headerRows = 7;
       }
 
       final sheetName = entry.key;
@@ -319,7 +386,8 @@ class ReportService {
                 pw.Text(
                   sheetName,
                   style: pw.TextStyle(
-                    font: pw.Font.helveticaBold(), fontSize: 8,
+                    font: pw.Font.helveticaBold(),
+                    fontSize: 8,
                   ),
                 ),
                 pw.Text(
@@ -334,7 +402,7 @@ class ReportService {
             ),
           ),
           build: (ctx) => sheetRows.asMap().entries.map((e) {
-            return _buildPdfRow(e.value, e.key, maxCols, colWidths);
+            return _buildPdfRow(e.value, e.key, maxCols, colWidths, headerRows);
           }).toList(),
         ),
       );
@@ -343,23 +411,21 @@ class ReportService {
     return doc.save();
   }
 
-  // ── PDF column-width helpers ──────────────────────────────────────────────
-  // A3 landscape usable width ≈ 1190pt − 24pt margins = 1166pt
-  // A4 portrait  usable width ≈  595pt − 24pt margins =  571pt
+  // ── PDF column-width helpers ───────────────────────────────────────────────
+  // A3 landscape usable width ≈ 1190 pt − 24 pt margins = 1166 pt
+  // A4 portrait  usable width ≈  595 pt − 24 pt margins =  571 pt
 
   List<double> _pdfDailyColWidths(int maxCols) {
-    // label(350) + 31 × 22.5 + total(120) ≈ 1167
     return List.generate(maxCols, (c) {
-      if (c == 0)           return 350.0;
+      if (c == 0) return 350.0;
       if (c == maxCols - 1) return 120.0;
       return 22.5;
     });
   }
 
   List<double> _pdfMonthlyColWidths(int maxCols) {
-    // label(350) + 12 × 58 + total(120) = 1166
     return List.generate(maxCols, (c) {
-      if (c == 0)           return 350.0;
+      if (c == 0) return 350.0;
       if (c == maxCols - 1) return 120.0;
       return 58.0;
     });
@@ -367,80 +433,147 @@ class ReportService {
 
   List<double> _pdfSummaryColWidths(int maxCols) {
     if (maxCols <= 1) return [571.0];
-    // label(451) + total(120) = 571
     return List.generate(maxCols, (c) => c == 0 ? 451.0 : 120.0);
   }
 
-  // ── PDF row builder ───────────────────────────────────────────────────────
+  // ── PDF row builder ────────────────────────────────────────────────────────
 
   pw.Widget _buildPdfRow(
     List<Data?> cells,
     int rowIndex,
     int maxCols,
     List<double> colWidths,
+    int headerRows,
   ) {
-    final firstVal =
-        cells.isNotEmpty ? (cells[0]?.value?.toString() ?? '') : '';
+    final firstVal = cells.isNotEmpty
+        ? (cells[0]?.value?.toString() ?? '')
+        : '';
+    final lastVal = (maxCols > 1 && cells.length >= maxCols)
+        ? (cells[maxCols - 1]?.value?.toString() ?? '')
+        : '';
 
-    // Metadata header rows (0-9): full-width text, no grid
-    if (rowIndex < 10) {
-      final isBigTitle = rowIndex == 4;
-      final isCentered = rowIndex >= 1 && rowIndex <= 4;
+    final f = firstVal.trim();
+    final l = lastVal.trim();
+
+    // ── Footer row detection ─────────────────────────────────────────────────
+    // These rows are rendered as plain text (no cell grid) with optional
+    // right-aligned content (Date Submitted / date signature line).
+    final isFooter =
+        f.startsWith('* Philippine') ||
+        f.startsWith('and Former Filipinos') ||
+        f.startsWith('Prepared by:') ||
+        f.startsWith('Signature over') ||
+        (f.startsWith('_') && f.length > 5) ||
+        f == 'Position/Designation' ||
+        l.startsWith('Date Submitted') ||
+        (f.isEmpty && l.startsWith('________________'));
+
+    if (isFooter) {
       return pw.Padding(
-        padding: pw.EdgeInsets.symmetric(
-          horizontal: 2, vertical: isBigTitle ? 2 : 0.8,
-        ),
-        child: pw.Text(
-          firstVal,
-          style: pw.TextStyle(
-            font: (rowIndex >= 5 || isBigTitle)
-                ? pw.Font.helveticaBold()
-                : pw.Font.helvetica(),
-            fontSize: isBigTitle ? 9.0 : 7.0,
-          ),
-          textAlign: isCentered ? pw.TextAlign.center : pw.TextAlign.left,
+        padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 1.5),
+        child: pw.Row(
+          mainAxisAlignment: (f.isNotEmpty && l.isNotEmpty)
+              ? pw.MainAxisAlignment.spaceBetween
+              : (l.isNotEmpty
+                    ? pw.MainAxisAlignment.end
+                    : pw.MainAxisAlignment.start),
+          children: [
+            if (f.isNotEmpty)
+              pw.Text(
+                firstVal,
+                style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 7.0),
+              ),
+            if (l.isNotEmpty)
+              pw.Text(
+                lastVal,
+                style: pw.TextStyle(font: pw.Font.helvetica(), fontSize: 7.0),
+              ),
+          ],
         ),
       );
     }
 
-    // Normal data rows
-    final bg      = _pdfColorForRow(firstVal, rowIndex);
-    final bold    = _pdfIsBold(firstVal, rowIndex);
-    final isBlue  = _pdfIsBlueRow(firstVal, rowIndex);
-    final txtClr  = isBlue ? PdfColors.white : PdfColors.black;
+    // ── Metadata / header rows (plain text, no grid) ───────────────────────
+    if (rowIndex < headerRows) {
+      final isBigTitle = f.startsWith('REPORT ON');
+      final isBold =
+          isBigTitle ||
+          f.startsWith('Region:') ||
+          f == 'Type of Accommodation' ||
+          f.startsWith('DOT Accreditation') ||
+          f.startsWith('AE ID Code') ||
+          f.startsWith('City/Municipality') ||
+          f.startsWith('Province:') ||
+          f.startsWith('All Accommodation') ||
+          f.startsWith('DAE-1B');
+
+      return pw.Padding(
+        padding: pw.EdgeInsets.symmetric(
+          horizontal: 2,
+          vertical: isBigTitle ? 3 : 0.8,
+        ),
+        child: pw.Text(
+          firstVal,
+          style: pw.TextStyle(
+            font: isBold ? pw.Font.helveticaBold() : pw.Font.helvetica(),
+            fontSize: isBigTitle ? 9.0 : 7.0,
+          ),
+          textAlign: pw.TextAlign.left,
+        ),
+      );
+    }
+
+    // ── Normal data rows ───────────────────────────────────────────────────
+    final bg = _pdfColorForRow(firstVal, rowIndex, headerRows);
+    final bold = _pdfIsBold(firstVal, rowIndex, headerRows);
+    final isItalic = _pdfIsItalic(firstVal, rowIndex, headerRows);
+    final isBlue = _pdfIsBlueRow(firstVal, rowIndex, headerRows);
+    final txtClr = isBlue ? PdfColors.white : PdfColors.black;
 
     return pw.Container(
       decoration: pw.BoxDecoration(color: bg),
       child: pw.Row(
         children: List.generate(maxCols, (c) {
           final cell = c < cells.length ? cells[c] : null;
-          final raw  = cell?.value?.toString() ?? '';
-          final w    = c < colWidths.length ? colWidths[c] : 15.0;
+          final raw = cell?.value?.toString() ?? '';
+          final w = c < colWidths.length ? colWidths[c] : 15.0;
+
+          // Italic applies only to the label column (col 0).
+          final cellItalic = isItalic && c == 0;
+          final cellFont = (bold && cellItalic)
+              ? pw.Font.helveticaBoldOblique()
+              : bold
+              ? pw.Font.helveticaBold()
+              : cellItalic
+              ? pw.Font.helveticaOblique()
+              : pw.Font.helvetica();
 
           return pw.Container(
             width: w,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 1.5, vertical: 0.8),
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 1.5,
+              vertical: 0.8,
+            ),
             decoration: pw.BoxDecoration(
               border: pw.Border(
-                left:   c == 0
+                left: c == 0
                     ? const pw.BorderSide(color: PdfColors.grey400, width: 0.3)
                     : pw.BorderSide.none,
-                right:  const pw.BorderSide(color: PdfColors.grey400, width: 0.3),
-                top:    const pw.BorderSide(color: PdfColors.grey400, width: 0.3),
-                bottom: const pw.BorderSide(color: PdfColors.grey400, width: 0.3),
+                right: const pw.BorderSide(
+                  color: PdfColors.grey400,
+                  width: 0.3,
+                ),
+                top: const pw.BorderSide(color: PdfColors.grey400, width: 0.3),
+                bottom: const pw.BorderSide(
+                  color: PdfColors.grey400,
+                  width: 0.3,
+                ),
               ),
             ),
             child: pw.Text(
               raw,
-              style: pw.TextStyle(
-                font: bold
-                    ? pw.Font.helveticaBold()
-                    : pw.Font.helvetica(),
-                fontSize: 5.5,
-                color: txtClr,
-              ),
-              textAlign:
-                  c == 0 ? pw.TextAlign.left : pw.TextAlign.center,
+              style: pw.TextStyle(font: cellFont, fontSize: 5.5, color: txtClr),
+              textAlign: c == 0 ? pw.TextAlign.left : pw.TextAlign.center,
               overflow: pw.TextOverflow.clip,
               maxLines: 1,
             ),
@@ -450,19 +583,19 @@ class ReportService {
     );
   }
 
-  // ── PDF colour / style logic (mirrors _SheetGridView exactly) ─────────────
+  // ── PDF colour / style logic ───────────────────────────────────────────────
 
-  PdfColor _pdfColorForRow(String label, int rowIndex) {
-    if (rowIndex < 10) return PdfColors.white;
+  PdfColor _pdfColorForRow(String label, int rowIndex, int headerRows) {
+    if (rowIndex < headerRows) return PdfColors.white;
     final u = label.trim().toUpperCase();
 
-    if (u == 'COUNTRY OF RESIDENCE')      return PdfColor.fromHex('#FFFF66');
-    if (u.contains('GRAND TOTAL'))         return PdfColor.fromHex('#FFFF00');
+    if (u == 'COUNTRY OF RESIDENCE') return PdfColor.fromHex('#FFFF66');
+    if (u.contains('GRAND TOTAL')) return PdfColor.fromHex('#FFFF00');
     if (u == 'A. DAE2:' || u.contains('VOLUME PER SEX'))
-                                           return PdfColor.fromHex('#FFFF00');
-    if (_pdfIsGreenLabel(u))               return PdfColor.fromHex('#92D050');
-    if (u.contains('SUB-TOTAL'))           return PdfColor.fromHex('#00B0F0');
-    if (_pdfIsBlueLabel(u))               return PdfColor.fromHex('#0070C0');
+      return PdfColor.fromHex('#FFFF00');
+    if (_pdfIsGreenLabel(u)) return PdfColor.fromHex('#92D050');
+    if (u.contains('SUB-TOTAL')) return PdfColor.fromHex('#00B0F0');
+    if (_pdfIsBlueLabel(u)) return PdfColor.fromHex('#0070C0');
     return PdfColors.white;
   }
 
@@ -477,7 +610,10 @@ class ReportService {
   bool _pdfIsBlueLabel(String u) =>
       u == 'PHILIPPINE RESIDENTS' ||
       u == 'NON-PHILIPPINE RESIDENTS' ||
-      u == 'ASIA' || u == 'AMERICA' || u == 'EUROPE' || u == 'AFRICA' ||
+      u == 'ASIA' ||
+      u == 'AMERICA' ||
+      u == 'EUROPE' ||
+      u == 'AFRICA' ||
       u.startsWith('AUSTRALASIA') ||
       u.trimLeft().startsWith('ASEAN') ||
       u.trimLeft().startsWith('EAST ASIA') ||
@@ -491,29 +627,45 @@ class ReportService {
       u.trimLeft().startsWith('EASTERN EUROPE') ||
       u.trimLeft().startsWith('AUSTRALASIA') ||
       u.contains('OVERSEAS FILIPINOS') ||
-      u.contains('OTHERS AND UNSPECIFIED NON-PHILIPPINE');
+      // UPDATED: replaces the old single-row 'OTHERS AND UNSPECIFIED NON-PHILIPPINE RESIDENCES'
+      u == 'OTHERS AND UNSPECIFIED' ||
+      u == 'NON-PHILIPPINE RESIDENCES';
 
-  bool _pdfIsBlueRow(String label, int rowIndex) {
-    if (rowIndex < 10) return false;
+  bool _pdfIsBlueRow(String label, int rowIndex, int headerRows) {
+    if (rowIndex < headerRows) return false;
     return _pdfIsBlueLabel(label.trim().toUpperCase());
   }
 
-  bool _pdfIsBold(String label, int rowIndex) {
-    if (rowIndex < 10) return false;
+  bool _pdfIsBold(String label, int rowIndex, int headerRows) {
+    if (rowIndex < headerRows) return false;
     final u = label.trim().toUpperCase();
     if (u == 'COUNTRY OF RESIDENCE') return true;
-    if (u.contains('GRAND TOTAL'))    return true;
+    if (u.contains('GRAND TOTAL')) return true;
     if (u == 'A. DAE2:' || u.contains('VOLUME PER SEX')) return true;
-    if (_pdfIsGreenLabel(u))          return true;
-    if (u.contains('SUB-TOTAL'))      return true;
-    if (_pdfIsBlueLabel(u))           return true;
-    if (label.startsWith('       ')  && label.trim().isNotEmpty) return true;
-    if (u == 'X. TOTAL')              return true;
+    if (_pdfIsGreenLabel(u)) return true;
+    if (u.contains('SUB-TOTAL')) return true;
+    if (_pdfIsBlueLabel(u)) return true;
+    // Country rows are indented with 7 spaces.
+    if (label.startsWith('       ') && label.trim().isNotEmpty) return true;
+    if (u == 'X. TOTAL') return true;
+    return false;
+  }
+
+  /// Returns true when the label cell (col 0) should be italic.
+  /// Applies to: COUNTRY OF RESIDENCE header, FILIPINO/FOREIGN NATIONALITY
+  /// rows, all sub-region header rows, and all country rows.
+  bool _pdfIsItalic(String label, int rowIndex, int headerRows) {
+    if (rowIndex < headerRows) return false;
+    final u = label.trim().toUpperCase();
+    if (u == 'COUNTRY OF RESIDENCE') return true;
+    if (u == 'FILIPINO NATIONALITY' || u == 'FOREIGN NATIONALITY') return true;
+    if (_pdfItalicSubRegions.contains(u)) return true;
+    if (_pdfItalicCountries.contains(u)) return true;
     return false;
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // GENERATE & UPLOAD (existing)
+  // GENERATE & UPLOAD
   // ══════════════════════════════════════════════════════════════════════════
 
   Future<String> generateAndUpload(ReportParams params) async {
@@ -555,13 +707,16 @@ class ReportService {
         '_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     final storagePath = 'dae1b/$fileName';
 
-    await _sb.storage.from(_bucket).uploadBinary(
-      storagePath, bytes,
-      fileOptions: const FileOptions(
-        contentType:
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ),
-    );
+    await _sb.storage
+        .from(_bucket)
+        .uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: const FileOptions(
+            contentType:
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          ),
+        );
 
     final fileUrl = _sb.storage.from(_bucket).getPublicUrl(storagePath);
 
@@ -569,7 +724,9 @@ class ReportService {
     try {
       archivedIds = await _archiveMonthRecords(params.month, params.year);
     } catch (archiveErr) {
-      try { await _sb.storage.from(_bucket).remove([storagePath]); } catch (_) {}
+      try {
+        await _sb.storage.from(_bucket).remove([storagePath]);
+      } catch (_) {}
       throw Exception(
         'Report generation rolled back: could not archive guest records.\n'
         'Details: $archiveErr',
@@ -578,18 +735,20 @@ class ReportService {
 
     try {
       await _sb.from('reports').insert({
-        'report_type':              'DAE-1B',
-        'period_month':             params.month,
-        'period_year':              params.year,
-        'file_url':                 fileUrl,
-        'generated_by':             _sb.auth.currentUser?.id,
-        'include_sheet_establishment':params.sheetOptions.includeDailySheet,
-        'include_sheet_country_sum':  params.sheetOptions.includeCountrySumSheet,
-        'include_sheet_monthly':      params.sheetOptions.includeMonthlySummarySheet,
+        'report_type': 'DAE-1B',
+        'period_month': params.month,
+        'period_year': params.year,
+        'file_url': fileUrl,
+        'generated_by': _sb.auth.currentUser?.id,
+        'include_sheet_establishment': params.sheetOptions.includeDailySheet,
+        'include_sheet_country_sum': params.sheetOptions.includeCountrySumSheet,
+        'include_sheet_monthly': params.sheetOptions.includeMonthlySummarySheet,
       });
     } catch (insertErr) {
       await _unarchiveRecords(archivedIds);
-      try { await _sb.storage.from(_bucket).remove([storagePath]); } catch (_) {}
+      try {
+        await _sb.storage.from(_bucket).remove([storagePath]);
+      } catch (_) {}
       throw Exception(
         'Report generation rolled back: could not save report record.\n'
         'Details: $insertErr',
@@ -599,7 +758,7 @@ class ReportService {
     return fileUrl;
   }
 
-  // ── Archiving ─────────────────────────────────────────────────────────────
+  // ── Archiving ──────────────────────────────────────────────────────────────
 
   Future<void> _checkDuplicateReport(int month, int year) async {
     final existing = await _sb
@@ -619,9 +778,9 @@ class ReportService {
 
   Future<List<String>> _archiveMonthRecords(int month, int year) async {
     final firstDay = DateTime(year, month, 1);
-    final lastDay  = DateTime(year, month + 1, 0);
+    final lastDay = DateTime(year, month + 1, 0);
     final firstStr = firstDay.toIso8601String().substring(0, 10);
-    final lastStr  = lastDay.toIso8601String().substring(0, 10);
+    final lastStr = lastDay.toIso8601String().substring(0, 10);
 
     final rows = await _sb
         .from('guest_records')
@@ -637,8 +796,10 @@ class ReportService {
     const chunkSize = 100;
     for (int i = 0; i < ids.length; i += chunkSize) {
       final chunk = ids.sublist(i, (i + chunkSize).clamp(0, ids.length));
-      await _sb.from('guest_records')
-          .update({'status': 'archived'}).inFilter('id', chunk);
+      await _sb
+          .from('guest_records')
+          .update({'status': 'archived'})
+          .inFilter('id', chunk);
     }
     return ids;
   }
@@ -649,35 +810,48 @@ class ReportService {
     for (int i = 0; i < ids.length; i += chunkSize) {
       final chunk = ids.sublist(i, (i + chunkSize).clamp(0, ids.length));
       try {
-        await _sb.from('guest_records')
-            .update({'status': 'active'}).inFilter('id', chunk);
+        await _sb
+            .from('guest_records')
+            .update({'status': 'active'})
+            .inFilter('id', chunk);
       } catch (_) {}
     }
   }
 
-  // ── Data Fetching ─────────────────────────────────────────────────────────
+  // ── Data Fetching ──────────────────────────────────────────────────────────
 
   Future<List<_BusinessInfo>> _fetchAllBusinesses() async {
     final rows = await _sb
         .from('businesses')
-        .select('id, business_name, business_line, region, city_municipality, province, total_rooms')
+        .select(
+          'id, business_name, business_line, region, '
+          'city_municipality, province, total_rooms',
+        )
         .eq('status', 'approved')
         .order('business_name');
-    return (rows as List).map((r) => _BusinessInfo(
-      id: r['id'] as String,
-      name: r['business_name'] as String? ?? 'Unknown',
-      businessLine: _displayBusinessLine(r['business_line']),
-      region: r['region'] as String? ?? '4-A',
-      cityMunicipality: r['city_municipality'] as String? ?? '',
-      province: r['province'] as String? ?? '',
-      totalRooms: r['total_rooms'] as int? ?? 0,
-    )).toList();
+    return (rows as List)
+        .map(
+          (r) => _BusinessInfo(
+            id: r['id'] as String,
+            name: r['business_name'] as String? ?? 'Unknown',
+            businessLine: _displayBusinessLine(r['business_line']),
+            rawBusinessLines: _extractRawBusinessLines(r['business_line']),
+            region: r['region'] as String? ?? '4-A',
+            cityMunicipality: r['city_municipality'] as String? ?? '',
+            province: r['province'] as String? ?? '',
+            totalRooms: r['total_rooms'] as int? ?? 0,
+          ),
+        )
+        .toList();
   }
 
   Future<_MonthData> _fetchMonthData(
-      String businessId, int month, int year) async {
+    String businessId,
+    int month,
+    int year,
+  ) async {
     final firstDay = DateTime(year, month, 1);
-    final lastDay  = DateTime(year, month + 1, 0);
+    final lastDay = DateTime(year, month + 1, 0);
 
     final records = await _sb
         .from('guest_records')
@@ -688,94 +862,109 @@ class ReportService {
         .gte('check_in', firstDay.toIso8601String().substring(0, 10))
         .lte('check_in', lastDay.toIso8601String().substring(0, 10));
 
-    final recordIds =
-        (records as List).map((r) => r['id'] as String).toList();
+    final recordIds = (records as List).map((r) => r['id'] as String).toList();
     List breakdowns = [];
     if (recordIds.isNotEmpty) {
       breakdowns = await _sb
           .from('guest_breakdowns')
-          .select('guest_record_id, country, sex, nationality, count, is_overseas')
+          .select(
+            'guest_record_id, country, sex, nationality, count, is_overseas',
+          )
           .inFilter('guest_record_id', recordIds);
     }
 
     final Map<String, int> recordGuestCount = {};
     for (final raw in breakdowns) {
-      final b     = Map<String, dynamic>.from(raw as Map);
+      final b = Map<String, dynamic>.from(raw as Map);
       final recId = b['guest_record_id']?.toString() ?? '';
-      recordGuestCount[recId] = (recordGuestCount[recId] ?? 0) + _asInt(b['count']);
+      recordGuestCount[recId] =
+          (recordGuestCount[recId] ?? 0) + _asInt(b['count']);
     }
 
-    final Map<String, int>  recordDay              = {};
-    int                     totalGuestNights        = 0;
-    final _DayCountMap      countryByDay            = {};
+    final Map<String, int> recordDay = {};
+    int totalGuestNights = 0;
+    final _DayCountMap countryByDay = {};
     final Map<int, Map<String, int>> residentsByDay = {};
     final Map<int, Map<String, Map<String, int>>> sexByDay = {};
-    final Map<int, int>     roomsOccupiedByDay      = {};
-    final Map<int, int>     guestNightsByDay        = {};
-    final Map<int, int>     guestNightsPerArrivalDay= {};
+    final Map<int, int> roomsOccupiedByDay = {};
+    final Map<int, int> guestNightsByDay = {};
+    final Map<int, int> guestNightsPerArrivalDay = {};
 
     for (final r in records) {
-      final checkIn  = DateTime.parse(r['check_in']);
+      final checkIn = DateTime.parse(r['check_in']);
       final checkOut = DateTime.parse(r['check_out']);
-      final nights   = checkOut.difference(checkIn).inDays;
-      final rooms    = r['rooms_occupied'] as int? ?? 0;
+      final nights = checkOut.difference(checkIn).inDays;
+      final rooms = r['rooms_occupied'] as int? ?? 0;
       final guestCount = recordGuestCount[r['id'] as String] ?? 0;
       recordDay[r['id']] = checkIn.day;
       if (nights > 0) {
         totalGuestNights += nights * guestCount;
         guestNightsPerArrivalDay[checkIn.day] =
-            (guestNightsPerArrivalDay[checkIn.day] ?? 0) + (nights * guestCount);
+            (guestNightsPerArrivalDay[checkIn.day] ?? 0) +
+            (nights * guestCount);
         for (int n = 0; n < nights; n++) {
           final stayDate = checkIn.add(Duration(days: n));
           if (stayDate.year != year || stayDate.month != month) continue;
           final stayDay = stayDate.day;
-          roomsOccupiedByDay[stayDay] = (roomsOccupiedByDay[stayDay] ?? 0) + rooms;
-          guestNightsByDay[stayDay]   = (guestNightsByDay[stayDay]   ?? 0) + guestCount;
+          roomsOccupiedByDay[stayDay] =
+              (roomsOccupiedByDay[stayDay] ?? 0) + rooms;
+          guestNightsByDay[stayDay] =
+              (guestNightsByDay[stayDay] ?? 0) + guestCount;
         }
       }
     }
 
     for (final raw in breakdowns) {
-      final b           = Map<String, dynamic>.from(raw as Map);
-      final recId       = b['guest_record_id']?.toString() ?? '';
-      final day         = recordDay[recId] ?? 1;
-      final country     = _normalizeUpper(b['country']);
+      final b = Map<String, dynamic>.from(raw as Map);
+      final recId = b['guest_record_id']?.toString() ?? '';
+      final day = recordDay[recId] ?? 1;
+      final country = _normalizeUpper(b['country']);
       final nationality = _normalizeUpper(b['nationality']);
-      final sex         = _normalizeLower(b['sex']);
-      final isOverseas  = _asBool(b['is_overseas']);
-      final count       = _asInt(b['count']);
-      final bucket      = _classifyResidenceBucket(
-          country: country, nationality: nationality, isOverseas: isOverseas);
+      final sex = _normalizeLower(b['sex']);
+      final isOverseas = _asBool(b['is_overseas']);
+      final count = _asInt(b['count']);
+      final bucket = _classifyResidenceBucket(
+        country: country,
+        nationality: nationality,
+        isOverseas: isOverseas,
+      );
 
       if (bucket == 'foreign_resident' && country.isNotEmpty) {
         countryByDay.putIfAbsent(country, () => {});
-        countryByDay[country]![day] = (countryByDay[country]![day] ?? 0) + count;
-        countryByDay[country]![0]   = (countryByDay[country]![0]   ?? 0) + count;
+        countryByDay[country]![day] =
+            (countryByDay[country]![day] ?? 0) + count;
+        countryByDay[country]![0] = (countryByDay[country]![0] ?? 0) + count;
       }
 
       residentsByDay.putIfAbsent(day, () => {});
-      residentsByDay[day]![bucket] = (residentsByDay[day]![bucket] ?? 0) + count;
+      residentsByDay[day]![bucket] =
+          (residentsByDay[day]![bucket] ?? 0) + count;
       residentsByDay[0] ??= {};
-      residentsByDay[0]![bucket]   = (residentsByDay[0]![bucket]   ?? 0) + count;
+      residentsByDay[0]![bucket] = (residentsByDay[0]![bucket] ?? 0) + count;
 
       sexByDay.putIfAbsent(day, () => {});
       sexByDay[day]!.putIfAbsent(sex, () => {});
-      sexByDay[day]![sex]![bucket] = (sexByDay[day]![sex]![bucket] ?? 0) + count;
+      sexByDay[day]![sex]![bucket] =
+          (sexByDay[day]![sex]![bucket] ?? 0) + count;
       sexByDay[0] ??= {};
       sexByDay[0]!.putIfAbsent(sex, () => {});
-      sexByDay[0]![sex]![bucket]   = (sexByDay[0]![sex]![bucket]   ?? 0) + count;
+      sexByDay[0]![sex]![bucket] = (sexByDay[0]![sex]![bucket] ?? 0) + count;
     }
 
     return _MonthData(
-      month: month, countryByDay: countryByDay,
-      residentsByDay: residentsByDay, sexByDay: sexByDay,
-      roomsOccupied: roomsOccupiedByDay, guestNightsByDay: guestNightsByDay,
+      month: month,
+      countryByDay: countryByDay,
+      residentsByDay: residentsByDay,
+      sexByDay: sexByDay,
+      roomsOccupied: roomsOccupiedByDay,
+      guestNightsByDay: guestNightsByDay,
       guestNightsPerArrivalDay: guestNightsPerArrivalDay,
-      guestNights: totalGuestNights, roomsAvailable: 0,
+      guestNights: totalGuestNights,
+      roomsAvailable: 0,
     );
   }
 
-  // ── Merge ─────────────────────────────────────────────────────────────────
+  // ── Merge ──────────────────────────────────────────────────────────────────
 
   _MonthData _mergeMonthData(int month, List<_MonthData> list) {
     final _DayCountMap countryByDay = {};
@@ -790,7 +979,8 @@ class ReportService {
       md.countryByDay.forEach((country, days) {
         countryByDay.putIfAbsent(country, () => {});
         days.forEach((day, count) {
-          countryByDay[country]![day] = (countryByDay[country]![day] ?? 0) + count;
+          countryByDay[country]![day] =
+              (countryByDay[country]![day] ?? 0) + count;
         });
       });
       md.residentsByDay.forEach((day, cats) {
@@ -804,7 +994,8 @@ class ReportService {
         sexMap.forEach((sex, cats) {
           sexByDay[day]!.putIfAbsent(sex, () => {});
           cats.forEach((cat, count) {
-            sexByDay[day]![sex]![cat] = (sexByDay[day]![sex]![cat] ?? 0) + count;
+            sexByDay[day]![sex]![cat] =
+                (sexByDay[day]![sex]![cat] ?? 0) + count;
           });
         });
       });
@@ -815,17 +1006,22 @@ class ReportService {
         guestNightsByDay[day] = (guestNightsByDay[day] ?? 0) + count;
       });
       md.guestNightsPerArrivalDay.forEach((day, count) {
-        guestNightsPerArrivalDay[day] = (guestNightsPerArrivalDay[day] ?? 0) + count;
+        guestNightsPerArrivalDay[day] =
+            (guestNightsPerArrivalDay[day] ?? 0) + count;
       });
       guestNights += md.guestNights;
     }
 
     return _MonthData(
-      month: month, countryByDay: countryByDay,
-      residentsByDay: residentsByDay, sexByDay: sexByDay,
-      roomsOccupied: roomsOccupied, guestNightsByDay: guestNightsByDay,
+      month: month,
+      countryByDay: countryByDay,
+      residentsByDay: residentsByDay,
+      sexByDay: sexByDay,
+      roomsOccupied: roomsOccupied,
+      guestNightsByDay: guestNightsByDay,
       guestNightsPerArrivalDay: guestNightsPerArrivalDay,
-      guestNights: guestNights, roomsAvailable: 0,
+      guestNights: guestNights,
+      roomsAvailable: 0,
     );
   }
 
@@ -847,49 +1043,177 @@ class ReportService {
     if (opts.includeDailySheet) {
       for (int i = 0; i < businesses.length; i++) {
         _buildDailySheet(
-          excel, businesses[i], selectedMonthPerBiz[i], params.year, daysInMonth,
+          excel,
+          businesses[i],
+          selectedMonthPerBiz[i],
+          params.year,
+          daysInMonth,
         );
       }
     }
     if (opts.includeCountrySumSheet) {
       final merged = _mergeMonthData(params.month, selectedMonthPerBiz);
       _buildCountrySummarySheet(
-        excel, merged, totalRoomsAll, params.year, params.month, daysInMonth,
+        excel,
+        merged,
+        totalRoomsAll,
+        params.year,
+        params.month,
+        daysInMonth,
       );
     }
     if (opts.includeMonthlySummarySheet && allTwelveMonthsMerged != null) {
       _buildMonthlySummarySheet(
-          excel, allTwelveMonthsMerged, totalRoomsAll, params.year);
+        excel,
+        allTwelveMonthsMerged,
+        totalRoomsAll,
+        params.year,
+      );
     }
     excel.delete('Sheet1');
     return Uint8List.fromList(excel.encode()!);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SHEET 1: Daily
+  // SHEET 1 — Daily (per establishment)
   // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Header layout (rows 0-23 are plain-text metadata; row 24 = col-headers):
+  //
+  //  0  DAE-1B (Manual)
+  //  1  [blank]
+  //  2  Region: __X  (bold, centred, merged 0-32)
+  //  3  <establishment name>  (centred, merged 0-32)
+  //  4  <MONTH, YEAR>  (centred, merged 0-32)
+  //  5  [blank]
+  //  6  REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS  (bold, centred, merged)
+  //  7  [blank]
+  //  8  Type of Accommodation  (bold)
+  //  9  ☑/☐ Hotel
+  // 10  ☑/☐ Resort
+  // 11  ☑/☐ Pension Inn/ Lodge
+  // 12  ☑/☐ Youth Hostel/ Dormitory
+  // 13  ☑/☐ Apartel/ Rented Homes/ Apartment
+  // 14  ☑/☐ Others, please specify: _____
+  // 15  [blank]
+  // 16  DOT Accreditation Classification: ___________
+  // 17  [blank]
+  // 18  AE ID Code (LGU Assigned): ___
+  // 19  AE ID Code (LGU Assigned): ___
+  // 20  [blank]
+  // 21  City/Municipality: ___
+  // 22  Province: ___
+  // 23  [blank]
+  // 24  COUNTRY OF RESIDENCE | 1 | 2 | … | 31 | TOTAL  ← italic col-0 header
 
   void _buildDailySheet(
-    Excel excel, _BusinessInfo biz, _MonthData md, int year, int daysInMonth,
+    Excel excel,
+    _BusinessInfo biz,
+    _MonthData md,
+    int year,
+    int daysInMonth,
   ) {
     final sheet = excel[_sheetTabName(biz.name)];
     _setupDailyColumns(sheet);
     int row = 0;
 
+    // ── Header ──────────────────────────────────────────────────────────────
     _hdrCell(sheet, row++, 'DAE-1B (Manual)');
-    _hdrCell(sheet, row++, 'Region: __${biz.region}', bold: true, center: true, mergeToCol: 32);
-    _hdrCell(sheet, row++, '${kMonthNames[md.month]}, $year', center: true, mergeToCol: 32);
-    row++;
-    _hdrCell(sheet, row++, 'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
-        bold: true, center: true, size: 12, mergeToCol: 32);
-    _hdrCell(sheet, row++, 'Establishment: ${biz.name}', bold: true);
-    _hdrCell(sheet, row++, 'Type of Accommodation: ${_formatBusinessType(biz.businessLine)}', bold: true);
-    _hdrCell(sheet, row++, 'City/Municipality: ${biz.cityMunicipality}', bold: true);
-    _hdrCell(sheet, row++, 'Province: ${biz.province}', bold: true);
-    row++;
+    _hdrCell(sheet, row++, ''); // blank row 1
+    _hdrCell(
+      sheet,
+      row++,
+      'Region: __4-A',
+      bold: true,
+      center: true,
+      mergeToCol: 32,
+    );
+    _hdrCell(sheet, row++, biz.name, center: true, mergeToCol: 32);
+    _hdrCell(
+      sheet,
+      row++,
+      '     ${kMonthNames[md.month]}, $year    ',
+      underline: true,
+      center: true,
+      mergeToCol: 32,
+      underlineToCol: 6,
+    );
 
+    _hdrCell(sheet, row++, '(Month, Year)', center: true, mergeToCol: 32);
+    _hdrCell(sheet, row++, ''); // blank row 5
+    _hdrCell(
+      sheet,
+      row++,
+      'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
+      bold: true,
+      center: true,
+      size: 12,
+      mergeToCol: 32,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 7
+
+    // Accommodation type checkboxes (rows 8-14)
+    _hdrCell(sheet, row++, 'Type of Accommodation', bold: true);
+    for (final pair in _kAccTypes) {
+      final checked = biz.rawBusinessLines.contains(pair[0]);
+
+      // Col 0 — label only, no checkbox char, no row advance yet
+      _hdrCell(sheet, row, '    ${pair[1]}');
+
+      // Col 1 — acts as the checkbox: bordered cell, checkmark if selected
+      final checkCell = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: row),
+      );
+      checkCell.value = TextCellValue(checked ? '✔' : '');
+      checkCell.cellStyle = CellStyle(
+        fontFamily: 'Arial',
+        fontSize: 9,
+        bold: checked,
+        horizontalAlign: HorizontalAlign.Center,
+        verticalAlign: VerticalAlign.Center,
+        leftBorder: _kThinBorder,
+        rightBorder: _kThinBorder,
+        topBorder: _kThinBorder,
+        bottomBorder: _kThinBorder,
+      );
+
+      row++; // advance only after both cells are written
+    }
+
+    _hdrCell(sheet, row++, ''); // blank row 15
+    _hdrCell(
+      sheet,
+      row++,
+      'DOT Accreditation Classification: _____________________________',
+      bold: true,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 17
+    _hdrCell(
+      sheet,
+      row++,
+      'AE ID Code (LGU Assigned): _________________________________________',
+      bold: true,
+    );
+    _hdrCell(
+      sheet,
+      row++,
+      'AE ID Code (LGU Assigned): ____________________________________________',
+      bold: true,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 20
+    _hdrCell(
+      sheet,
+      row++,
+      'City/Municipality: ${biz.cityMunicipality}',
+      bold: true,
+    );
+    _hdrCell(sheet, row++, 'Province: ${biz.province}', bold: true);
+    _hdrCell(sheet, row++, ''); // blank row 23
+
+    // Row 24 — column headers (italic COUNTRY OF RESIDENCE)
     _writeDayColHeaders(sheet, row++);
 
+    // ── Data helpers (closures capture `row` by reference) ─────────────────
     int cnt(String country, int day) =>
         md.countryByDay[country.toUpperCase()]?[day] ?? 0;
     int countryTotal(int day) =>
@@ -900,108 +1224,227 @@ class ReportService {
       final cells = <String>[label];
       int total = 0;
       for (int d = 1; d <= 31; d++) {
-        if (d <= daysInMonth) { final v = fn(d); cells.add(v.toString()); total += v; }
-        else cells.add('');
+        if (d <= daysInMonth) {
+          final v = fn(d);
+          cells.add(v.toString());
+          total += v;
+        } else {
+          cells.add('');
+        }
       }
       cells.add(total.toString());
       return cells;
     }
 
+    // ── Part I — Arrivals ────────────────────────────────────────────────────
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
+    // Philippine Residents
     _sectionRow(sheet, row++, 'PHILIPPINE RESIDENTS', _kBlue, totalCols: 33);
-    _styledRow(sheet, row++,
-        dayValues('   FILIPINO NATIONALITY', (d) => res(d, 'philippine_resident_filipino')));
-    _styledRow(sheet, row++,
-        dayValues('   FOREIGN NATIONALITY',  (d) => res(d, 'philippine_resident_foreign')));
-    final prVals = dayValues('TOTAL PHILIPPINE RESIDENTS', (d) =>
-        res(d, 'philippine_resident_filipino') + res(d, 'philippine_resident_foreign'));
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   FILIPINO NATIONALITY',
+        (d) => res(d, 'philippine_resident_filipino'),
+      ),
+      italic: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   FOREIGN NATIONALITY',
+        (d) => res(d, 'philippine_resident_foreign'),
+      ),
+      italic: true,
+    );
+    final prVals = dayValues(
+      'TOTAL PHILIPPINE RESIDENTS',
+      (d) =>
+          res(d, 'philippine_resident_filipino') +
+          res(d, 'philippine_resident_foreign'),
+    );
     prVals[32] =
-        (res(0, 'philippine_resident_filipino') + res(0, 'philippine_resident_foreign')).toString();
+        (res(0, 'philippine_resident_filipino') +
+                res(0, 'philippine_resident_foreign'))
+            .toString();
     _styledRow(sheet, row++, prVals, bgHex: _kGreen, bold: true);
 
-    _blankDataRow(sheet, row++, 33);
-    _sectionRow(sheet, row++, 'NON-PHILIPPINE RESIDENTS', _kBlue, totalCols: 33);
-    _blankDataRow(sheet, row++, 33);
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
+    _sectionRow(
+      sheet,
+      row++,
+      'NON-PHILIPPINE RESIDENTS',
+      _kBlue,
+      totalCols: 33,
+    );
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
 
+    // Country rows
     String? lastRegion, lastSubRegion;
     for (final cg in kCountryRows) {
       if (cg.region != lastRegion) {
         _sectionRow(sheet, row++, cg.region, _kBlue, totalCols: 33);
-        lastRegion = cg.region; lastSubRegion = null;
+        lastRegion = cg.region;
+        lastSubRegion = null;
       }
       if (cg.subRegion != lastSubRegion && cg.subRegion != cg.region) {
-        _sectionRow(sheet, row++, '   ${cg.subRegion}', _kBlue, totalCols: 33);
+        _sectionRow(
+          sheet,
+          row++,
+          '   ${cg.subRegion}',
+          _kBlue,
+          totalCols: 33,
+          italic: true,
+        );
         lastSubRegion = cg.subRegion;
       }
-      _styledRow(sheet, row++,
-          dayValues('       ${cg.country}', (d) => cnt(cg.country, d)), bold: true);
+      _styledRow(
+        sheet,
+        row++,
+        dayValues('       ${cg.country}', (d) => cnt(cg.country, d)),
+        bold: true,
+        italic: true,
+      );
 
       final idx = kCountryRows.indexOf(cg);
-      final isLastInSub = idx == kCountryRows.length - 1 ||
+      final isLastInSub =
+          idx == kCountryRows.length - 1 ||
           kCountryRows[idx + 1].subRegion != cg.subRegion;
       if (isLastInSub) {
         final subCountries = kCountryRows
             .where((x) => x.region == cg.region && x.subRegion == cg.subRegion)
-            .map((x) => x.country).toList();
-        final stVals = dayValues('                 SUB-TOTAL',
-            (d) => subCountries.fold<int>(0, (a, c) => a + cnt(c, d)));
+            .map((x) => x.country)
+            .toList();
+        final stVals = dayValues(
+          '                 SUB-TOTAL',
+          (d) => subCountries.fold<int>(0, (a, c) => a + cnt(c, d)),
+        );
         stVals[32] = subCountries
-            .fold<int>(0, (a, c) => a + (md.countryByDay[c]?[0] ?? 0)).toString();
+            .fold<int>(0, (a, c) => a + (md.countryByDay[c]?[0] ?? 0))
+            .toString();
         _styledRow(sheet, row++, stVals, bgHex: _kLightBlue, bold: true);
-        _blankDataRow(sheet, row++, 33);
+        _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
       }
     }
 
-    _styledRow(sheet, row++,
-        dayValues('OTHERS AND UNSPECIFIED NON-PHILIPPINE RESIDENCES',
-            (d) => res(d, 'unspecified_guest')),
-        bgHex: _kBlue, bold: true);
+    // OTHERS AND UNSPECIFIED (section header, no data)
+    // NON-PHILIPPINE RESIDENCES (data row with unspecified_guest values)
+    _sectionRow(sheet, row++, 'OTHERS AND UNSPECIFIED', _kBlue, totalCols: 33);
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        'NON-PHILIPPINE RESIDENCES',
+        (d) => res(d, 'unspecified_guest'),
+      ),
+      bgHex: _kBlue,
+      bold: true,
+    );
 
-    _blankDataRow(sheet, row++, 33);
-    int nprTotal = md.countryByDay.values.fold<int>(0, (a, d) => a + (d[0] ?? 0)) +
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
+    final int nprTotal =
+        md.countryByDay.values.fold<int>(0, (a, d) => a + (d[0] ?? 0)) +
         res(0, 'unspecified_guest');
-    final nprVals = dayValues('TOTAL NON-PHILIPPINE RESIDENTS',
-        (d) => countryTotal(d) + res(d, 'unspecified_guest'));
+    final nprVals = dayValues(
+      'TOTAL NON-PHILIPPINE RESIDENTS',
+      (d) => countryTotal(d) + res(d, 'unspecified_guest'),
+    );
     nprVals[32] = nprTotal.toString();
     _styledRow(sheet, row++, nprVals, bgHex: _kGreen, bold: true);
 
-    _blankDataRow(sheet, row++, 33);
-    _styledRow(sheet, row++,
-        dayValues('OVERSEAS FILIPINOS*', (d) => res(d, 'overseas_filipino')),
-        bgHex: _kBlue, bold: true);
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
+    _styledRow(
+      sheet,
+      row++,
+      dayValues('OVERSEAS FILIPINOS*', (d) => res(d, 'overseas_filipino')),
+      bgHex: _kBlue,
+      bold: true,
+    );
 
-    _blankDataRow(sheet, row++, 33);
-    int gtTotal =
-        res(0, 'philippine_resident_filipino') + res(0, 'philippine_resident_foreign') +
-        nprTotal + res(0, 'overseas_filipino');
-    final gtVals = dayValues('GRAND TOTAL GUEST ARRIVALS', (d) =>
-        res(d, 'philippine_resident_filipino') + res(d, 'philippine_resident_foreign') +
-        countryTotal(d) + res(d, 'unspecified_guest') + res(d, 'overseas_filipino'));
+    _blankDataRow(sheet, row++, 33, bgHex: _kOliveGreen);
+    final int gtTotal =
+        res(0, 'philippine_resident_filipino') +
+        res(0, 'philippine_resident_foreign') +
+        nprTotal +
+        res(0, 'overseas_filipino');
+    final gtVals = dayValues(
+      'GRAND TOTAL GUEST ARRIVALS',
+      (d) =>
+          res(d, 'philippine_resident_filipino') +
+          res(d, 'philippine_resident_foreign') +
+          countryTotal(d) +
+          res(d, 'unspecified_guest') +
+          res(d, 'overseas_filipino'),
+    );
     gtVals[32] = gtTotal.toString();
     _styledRow(sheet, row++, gtVals, bgHex: _kYellow, bold: true);
 
-    _styledRow(sheet, row++,
-        dayValues('   Total Philippine Residents', (d) =>
-            res(d, 'philippine_resident_filipino') + res(d, 'philippine_resident_foreign')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        dayValues('   Total Non-Philippine Residents',
-            (d) => countryTotal(d) + res(d, 'unspecified_guest')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        dayValues('   Total Overseas Filipinos', (d) => res(d, 'overseas_filipino')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        dayValues('   Total Guest with Unspecified Residence',
-            (d) => res(d, 'unspecified_guest')),
-        bgHex: _kGreen, bold: true);
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   Total Philippine Residents',
+        (d) =>
+            res(d, 'philippine_resident_filipino') +
+            res(d, 'philippine_resident_foreign'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   Total Non-Philippine Residents',
+        (d) => countryTotal(d) + res(d, 'unspecified_guest'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   Total Overseas Filipinos',
+        (d) => res(d, 'overseas_filipino'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      dayValues(
+        '   Total Guest with Unspecified Residence',
+        (d) => res(d, 'unspecified_guest'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+
+    // ── Part II — Other Indicators ───────────────────────────────────────────
 
     _blankDataRow(sheet, row++, 33);
+    _hdrCell(sheet, row++, 'PART II.  Other Indicators', bold: true, size: 12);
     _blankDataRow(sheet, row++, 33);
-    _styledCell(sheet, row++, 0, 'PART II.  Other Indicators', bold: true);
-    _sectionRow(sheet, row++, 'A. DAE2:', _kYellow, totalCols: 33);
+    _sectionRow(
+      sheet,
+      row++,
+      'A. DAE2:',
+      _kYellow,
+      totalCols: 33,
+      bold: true,
+      size: 12,
+    );
 
-    final roomVals = dayValues('1. Rooms Occupied', (d) => md.roomsOccupied[d] ?? 0);
-    roomVals[32] = md.roomsOccupied.values.fold<int>(0, (a, b) => a + b).toString();
+    final roomVals = dayValues(
+      '1. Rooms Occupied',
+      (d) => md.roomsOccupied[d] ?? 0,
+    );
+    roomVals[32] = md.roomsOccupied.values
+        .fold<int>(0, (a, b) => a + b)
+        .toString();
     _styledRow(sheet, row++, roomVals);
 
     final availVals = <String>['2. Rooms available for the month'];
@@ -1011,25 +1454,43 @@ class ReportService {
     availVals.add((biz.totalRooms * daysInMonth).toString());
     _styledRow(sheet, row++, availVals);
 
-    final gnVals = dayValues('3. Total Guest nights', (d) => md.guestNightsByDay[d] ?? 0);
+    final gnVals = dayValues(
+      '3. Total Guest nights',
+      (d) => md.guestNightsByDay[d] ?? 0,
+    );
     gnVals[32] = md.guestNights.toString();
     _styledRow(sheet, row++, gnVals);
 
-    _blankDataRow(sheet, row++, 33);
-    _styledCell(sheet, row++, 0, 'Alternative Submission', bold: true);
+    _styledCell(
+      sheet,
+      row++,
+      0,
+      'Alternative Submission',
+      bold: true,
+      bgHex: _kOliveGreen,
+      size: 12,
+    );
 
     final totalRoomsOcc = md.roomsOccupied.values.fold<int>(0, (a, b) => a + b);
-    final roomsAvail    = biz.totalRooms * daysInMonth;
-    final occVals       = <String>['1. Average Monthly Occupancy Rate'];
+    final roomsAvail = biz.totalRooms * daysInMonth;
+    final occVals = <String>['1. Average Monthly Occupancy Rate'];
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final occDay = md.roomsOccupied[d] ?? 0;
-        occVals.add(biz.totalRooms > 0
-            ? (occDay / biz.totalRooms * 100).toStringAsFixed(2) : '0');
-      } else occVals.add('');
+        occVals.add(
+          biz.totalRooms > 0
+              ? (occDay / biz.totalRooms * 100).toStringAsFixed(2)
+              : '0',
+        );
+      } else {
+        occVals.add('');
+      }
     }
-    occVals.add(roomsAvail > 0
-        ? (totalRoomsOcc / roomsAvail * 100).toStringAsFixed(2) : '0');
+    occVals.add(
+      roomsAvail > 0
+          ? (totalRoomsOcc / roomsAvail * 100).toStringAsFixed(2)
+          : '0',
+    );
     _styledRow(sheet, row++, occVals);
 
     int guestArrivalsDay(int day) =>
@@ -1038,186 +1499,351 @@ class ReportService {
     for (int d = 1; d <= 31; d++) {
       if (d <= daysInMonth) {
         final arrivals = guestArrivalsDay(d);
-        final nights   = md.guestNightsPerArrivalDay[d] ?? 0;
-        alsVals.add(arrivals > 0 ? (nights / arrivals).toStringAsFixed(2) : '0');
-      } else alsVals.add('');
+        final nights = md.guestNightsPerArrivalDay[d] ?? 0;
+        alsVals.add(
+          arrivals > 0 ? (nights / arrivals).toStringAsFixed(2) : '0',
+        );
+      } else {
+        alsVals.add('');
+      }
     }
-    alsVals.add(gtTotal > 0 ? (md.guestNights / gtTotal).toStringAsFixed(2) : '0');
+    alsVals.add(
+      gtTotal > 0 ? (md.guestNights / gtTotal).toStringAsFixed(2) : '0',
+    );
     _styledRow(sheet, row++, alsVals);
 
     _blankDataRow(sheet, row++, 33);
-    _sectionRow(sheet, row++, 'B. VOLUME PER SEX', _kYellow, totalCols: 33);
+    _sectionRow(
+      sheet,
+      row++,
+      'B. VOLUME PER SEX',
+      _kYellow,
+      totalCols: 33,
+      bold: true,
+      size: 12,
+    );
 
     int sex(int day, String s, String cat) => md.sexByDay[day]?[s]?[cat] ?? 0;
 
     void sexSection(String gender, String label) {
       _styledCell(sheet, row++, 0, label, bold: true);
-      _styledRow(sheet, row++, dayValues('a. Philippine Residents', (d) =>
-          sex(d, gender, 'philippine_resident_filipino') +
-          sex(d, gender, 'philippine_resident_foreign')));
-      _styledRow(sheet, row++, dayValues(
+      _styledRow(
+        sheet,
+        row++,
+        dayValues(
+          'a. Philippine Residents',
+          (d) =>
+              sex(d, gender, 'philippine_resident_filipino') +
+              sex(d, gender, 'philippine_resident_foreign'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        dayValues(
           'b. Non-Philippine/Foreign Residents (including unspecified)',
-          (d) => sex(d, gender, 'foreign_resident')));
-      _styledRow(sheet, row++,
-          dayValues('c. Overseas Filipinos',       (d) => sex(d, gender, 'overseas_filipino')));
-      _styledRow(sheet, row++,
-          dayValues('d. Others/Unspecified Guest', (d) => sex(d, gender, 'unspecified_guest')));
-      final totVals = dayValues('x. Total', (d) =>
-          sex(d, gender, 'philippine_resident_filipino') +
-          sex(d, gender, 'philippine_resident_foreign') +
-          sex(d, gender, 'foreign_resident') +
-          sex(d, gender, 'unspecified_guest') +
-          sex(d, gender, 'overseas_filipino'));
-      totVals[32] = (
-          sex(0, gender, 'philippine_resident_filipino') +
-          sex(0, gender, 'philippine_resident_foreign') +
-          sex(0, gender, 'foreign_resident') +
-          sex(0, gender, 'unspecified_guest') +
-          sex(0, gender, 'overseas_filipino')).toString();
+          (d) => sex(d, gender, 'foreign_resident'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        dayValues(
+          'c. Overseas Filipinos',
+          (d) => sex(d, gender, 'overseas_filipino'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        dayValues(
+          'd. Others/Unspecified Guest',
+          (d) => sex(d, gender, 'unspecified_guest'),
+        ),
+      );
+      final totVals = dayValues(
+        'x. Total',
+        (d) =>
+            sex(d, gender, 'philippine_resident_filipino') +
+            sex(d, gender, 'philippine_resident_foreign') +
+            sex(d, gender, 'foreign_resident') +
+            sex(d, gender, 'unspecified_guest') +
+            sex(d, gender, 'overseas_filipino'),
+      );
+      totVals[32] =
+          (sex(0, gender, 'philippine_resident_filipino') +
+                  sex(0, gender, 'philippine_resident_foreign') +
+                  sex(0, gender, 'foreign_resident') +
+                  sex(0, gender, 'unspecified_guest') +
+                  sex(0, gender, 'overseas_filipino'))
+              .toString();
       _styledRow(sheet, row++, totVals, bold: true);
     }
 
-    sexSection('male',   '1. Male');
+    sexSection('male', '1. Male');
     sexSection('female', '2. Female');
 
-    row += 2;
-    _styledCell(sheet, row++, 0,
-        '* Philippine passport holders permanently residing abroad; '
-        'excludes overseas Filipino workers and Former Filipinos');
-    row++;
-    _styledCell(sheet, row++, 0,
-        'Prepared by:            ____________________________________'
-        '                         ________________________________________'
-        '                         ____________________________________');
-    _styledCell(sheet, row, 0,
-        '                                                      Signature over Printed Name'
-        '                                                     Position/Designation');
+    // ── Footer (2 blank rows gap + standard footer content) ─────────────────
+    _writeStandardFooter(sheet, row, 33);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SHEET 2: Country Summary
+  // SHEET 2 — Country Summary (all establishments combined)
   // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Header rows 0-6 are plain-text metadata; row 7 = col-headers.
 
   void _buildCountrySummarySheet(
-    Excel excel, _MonthData md, int totalRoomsAll,
-    int year, int month, int daysInMonth,
+    Excel excel,
+    _MonthData md,
+    int totalRoomsAll,
+    int year,
+    int month,
+    int daysInMonth,
   ) {
     final sheet = excel['AE DAE-1B by Country (Sum)'];
     _setupSummaryColumns(sheet);
     int row = 0;
 
+    // ── Header ──────────────────────────────────────────────────────────────
     _hdrCell(sheet, row++, 'DAE-1B(Manual-Summary)');
-    _hdrCell(sheet, row++, 'Region: __4-A', bold: true, center: true, mergeToCol: 1);
-    _hdrCell(sheet, row++, '${kMonthNames[month]}, $year', center: true, mergeToCol: 1);
-    row++;
-    _hdrCell(sheet, row++, 'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
-        bold: true, center: true, size: 12, mergeToCol: 1);
-    _hdrCell(sheet, row++, 'All Accommodation Establishments — Combined', bold: true);
-    row++;
+    _hdrCell(
+      sheet,
+      row++,
+      'Region: __4-A',
+      bold: true,
+      center: true,
+      mergeToCol: 1,
+    );
+    _hdrCell(
+      sheet,
+      row++,
+      '${kMonthNames[month]}, $year',
+      center: true,
+      mergeToCol: 1,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 3
+    _hdrCell(
+      sheet,
+      row++,
+      'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
+      bold: true,
+      center: true,
+      size: 12,
+      mergeToCol: 1,
+    );
+    _hdrCell(
+      sheet,
+      row++,
+      'All Accommodation Establishments — Combined',
+      bold: true,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 6
 
-    _styledCell(sheet, row, 0, 'COUNTRY OF RESIDENCE', bold: true, bgHex: _kLightYellow);
-    _styledCell(sheet, row++, 1, 'TOTAL', bold: true,
-        bgHex: _kLightYellow, halign: HorizontalAlign.Center);
+    // Row 7 — column headers
+    _styledCell(
+      sheet,
+      row,
+      0,
+      'COUNTRY OF RESIDENCE',
+      bold: true,
+      italic: true,
+      bgHex: _kLightYellow,
+    );
+    _styledCell(
+      sheet,
+      row++,
+      1,
+      'TOTAL',
+      bold: true,
+      bgHex: _kLightYellow,
+      halign: HorizontalAlign.Center,
+    );
     _blankDataRow(sheet, row++, 2);
 
+    // ── Data helpers ────────────────────────────────────────────────────────
     int totCnt(String c) => md.countryByDay[c.toUpperCase()]?[0] ?? 0;
     int totRes(String c) => md.residentsByDay[0]?[c] ?? 0;
-    int totCountryAll()  =>
+    int totCountryAll() =>
         md.countryByDay.values.fold<int>(0, (a, d) => a + (d[0] ?? 0));
 
+    // ── Philippine Residents ─────────────────────────────────────────────────
     _sectionRow(sheet, row++, 'PHILIPPINE RESIDENTS', _kBlue, totalCols: 2);
-    _styledRow(sheet, row++,
-        ['   FILIPINO NATIONALITY', totRes('philippine_resident_filipino').toString()]);
-    _styledRow(sheet, row++,
-        ['   FOREIGN NATIONALITY',  totRes('philippine_resident_foreign').toString()]);
     _styledRow(sheet, row++, [
-      'TOTAL PHILIPPINE RESIDENTS',
-      (totRes('philippine_resident_filipino') + totRes('philippine_resident_foreign')).toString(),
-    ], bgHex: _kGreen, bold: true);
+      '   FILIPINO NATIONALITY',
+      totRes('philippine_resident_filipino').toString(),
+    ], italic: true);
+    _styledRow(sheet, row++, [
+      '   FOREIGN NATIONALITY',
+      totRes('philippine_resident_foreign').toString(),
+    ], italic: true);
+    _styledRow(
+      sheet,
+      row++,
+      [
+        'TOTAL PHILIPPINE RESIDENTS',
+        (totRes('philippine_resident_filipino') +
+                totRes('philippine_resident_foreign'))
+            .toString(),
+      ],
+      bgHex: _kGreen,
+      bold: true,
+    );
 
     _blankDataRow(sheet, row++, 2);
     _sectionRow(sheet, row++, 'NON-PHILIPPINE RESIDENTS', _kBlue, totalCols: 2);
     _blankDataRow(sheet, row++, 2);
 
+    // Country rows
     String? lastRegion, lastSubRegion;
     for (final cg in kCountryRows) {
       if (cg.region != lastRegion) {
         _sectionRow(sheet, row++, cg.region, _kBlue, totalCols: 2);
-        lastRegion = cg.region; lastSubRegion = null;
+        lastRegion = cg.region;
+        lastSubRegion = null;
       }
       if (cg.subRegion != lastSubRegion && cg.subRegion != cg.region) {
-        _sectionRow(sheet, row++, '   ${cg.subRegion}', _kBlue, totalCols: 2);
+        _sectionRow(
+          sheet,
+          row++,
+          '   ${cg.subRegion}',
+          _kBlue,
+          totalCols: 2,
+          italic: true,
+        );
         lastSubRegion = cg.subRegion;
       }
-      _styledRow(sheet, row++,
-          ['       ${cg.country}', totCnt(cg.country).toString()], bold: true);
+      _styledRow(
+        sheet,
+        row++,
+        ['       ${cg.country}', totCnt(cg.country).toString()],
+        bold: true,
+        italic: true,
+      );
 
       final idx = kCountryRows.indexOf(cg);
-      final isLast = idx == kCountryRows.length - 1 ||
+      final isLast =
+          idx == kCountryRows.length - 1 ||
           kCountryRows[idx + 1].subRegion != cg.subRegion;
       if (isLast) {
         final subTotal = kCountryRows
             .where((x) => x.region == cg.region && x.subRegion == cg.subRegion)
             .fold<int>(0, (a, x) => a + totCnt(x.country));
-        _styledRow(sheet, row++,
-            ['                 SUB-TOTAL', subTotal.toString()],
-            bgHex: _kLightBlue, bold: true);
+        _styledRow(
+          sheet,
+          row++,
+          ['                 SUB-TOTAL', subTotal.toString()],
+          bgHex: _kLightBlue,
+          bold: true,
+        );
         _blankDataRow(sheet, row++, 2);
       }
     }
 
-    final nprTotal = totCountryAll() + totRes('unspecified_guest');
-    _styledRow(sheet, row++, [
-      'OTHERS AND UNSPECIFIED NON-PHILIPPINE RESIDENCES',
-      totRes('unspecified_guest').toString(),
-    ], bgHex: _kBlue, bold: true);
-    _styledRow(sheet, row++,
-        ['TOTAL NON-PHILIPPINE RESIDENTS', nprTotal.toString()],
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        ['OVERSEAS FILIPINOS*', totRes('overseas_filipino').toString()],
-        bgHex: _kBlue, bold: true);
+    // OTHERS AND UNSPECIFIED (no data) + NON-PHILIPPINE RESIDENCES (data)
+    _sectionRow(sheet, row++, 'OTHERS AND UNSPECIFIED', _kBlue, totalCols: 2);
+    _styledRow(
+      sheet,
+      row++,
+      ['NON-PHILIPPINE RESIDENCES', totRes('unspecified_guest').toString()],
+      bgHex: _kBlue,
+      bold: true,
+    );
 
-    final grandTotal = totRes('philippine_resident_filipino') +
-        totRes('philippine_resident_foreign') + nprTotal + totRes('overseas_filipino');
-    _styledRow(sheet, row++,
-        ['GRAND TOTAL GUEST ARRIVALS', grandTotal.toString()],
-        bgHex: _kYellow, bold: true);
-    _styledRow(sheet, row++, [
-      '   Total Philippine Residents',
-      (totRes('philippine_resident_filipino') + totRes('philippine_resident_foreign')).toString(),
-    ], bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        ['   Total Non-Philippine Residents', nprTotal.toString()],
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        ['   Total Overseas Filipinos', totRes('overseas_filipino').toString()],
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++, [
-      '   Total Guest with Unspecified Residence',
-      totRes('unspecified_guest').toString(),
-    ], bgHex: _kGreen, bold: true);
+    final int nprTotal = totCountryAll() + totRes('unspecified_guest');
+    _styledRow(
+      sheet,
+      row++,
+      ['TOTAL NON-PHILIPPINE RESIDENTS', nprTotal.toString()],
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      ['OVERSEAS FILIPINOS*', totRes('overseas_filipino').toString()],
+      bgHex: _kBlue,
+      bold: true,
+    );
 
+    final int grandTotal =
+        totRes('philippine_resident_filipino') +
+        totRes('philippine_resident_foreign') +
+        nprTotal +
+        totRes('overseas_filipino');
+    _styledRow(
+      sheet,
+      row++,
+      ['GRAND TOTAL GUEST ARRIVALS', grandTotal.toString()],
+      bgHex: _kYellow,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      [
+        '   Total Philippine Residents',
+        (totRes('philippine_resident_filipino') +
+                totRes('philippine_resident_foreign'))
+            .toString(),
+      ],
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      ['   Total Non-Philippine Residents', nprTotal.toString()],
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      ['   Total Overseas Filipinos', totRes('overseas_filipino').toString()],
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      [
+        '   Total Guest with Unspecified Residence',
+        totRes('unspecified_guest').toString(),
+      ],
+      bgHex: _kGreen,
+      bold: true,
+    );
+
+    // ── Part II ──────────────────────────────────────────────────────────────
     _blankDataRow(sheet, row++, 2);
     _blankDataRow(sheet, row++, 2);
     _styledCell(sheet, row++, 0, 'PART II.  Other Indicators', bold: true);
-    _sectionRow(sheet, row++, 'A. DAE2:', _kYellow, totalCols: 2);
+    _sectionRow(sheet, row++, 'A. DAE2:', _kYellow, totalCols: 2, size: 12);
 
-    final sumRoomsOcc   = md.roomsOccupied.values.fold<int>(0, (a, b) => a + b);
+    final sumRoomsOcc = md.roomsOccupied.values.fold<int>(0, (a, b) => a + b);
     final sumRoomsAvail = totalRoomsAll * daysInMonth;
-    _styledRow(sheet, row++, ['1. Rooms Occupied',                sumRoomsOcc.toString()]);
-    _styledRow(sheet, row++, ['2. Rooms available for the month', sumRoomsAvail.toString()]);
-    _styledRow(sheet, row++, ['3. Total Guest nights',            md.guestNights.toString()]);
+    _styledRow(sheet, row++, ['1. Rooms Occupied', sumRoomsOcc.toString()]);
+    _styledRow(sheet, row++, [
+      '2. Rooms available for the month',
+      sumRoomsAvail.toString(),
+    ]);
+    _styledRow(sheet, row++, [
+      '3. Total Guest nights',
+      md.guestNights.toString(),
+    ]);
 
     _blankDataRow(sheet, row++, 2);
     _styledCell(sheet, row++, 0, 'Alternative Submission', bold: true);
 
     final occRate = sumRoomsAvail > 0
-        ? (sumRoomsOcc / sumRoomsAvail * 100).toStringAsFixed(2) : '0';
+        ? (sumRoomsOcc / sumRoomsAvail * 100).toStringAsFixed(2)
+        : '0';
     _styledRow(sheet, row++, ['1. Average Monthly Occupancy Rate', occRate]);
 
     final als = grandTotal > 0
-        ? (md.guestNights / grandTotal).toStringAsFixed(2) : '0';
+        ? (md.guestNights / grandTotal).toStringAsFixed(2)
+        : '0';
     _styledRow(sheet, row++, ['2. Average Length of Stay (in Nights)', als]);
 
     _blankDataRow(sheet, row++, 2);
@@ -1230,66 +1856,117 @@ class ReportService {
       _styledRow(sheet, row++, [
         'a. Philippine Residents',
         (totSex(gender, 'philippine_resident_filipino') +
-            totSex(gender, 'philippine_resident_foreign')).toString(),
+                totSex(gender, 'philippine_resident_foreign'))
+            .toString(),
       ]);
       _styledRow(sheet, row++, [
         'b. Non-Philippine/Foreign Residents (including unspecified)',
         totSex(gender, 'foreign_resident').toString(),
       ]);
-      _styledRow(sheet, row++,
-          ['c. Overseas Filipinos',       totSex(gender, 'overseas_filipino').toString()]);
-      _styledRow(sheet, row++,
-          ['d. Others/Unspecified Guest', totSex(gender, 'unspecified_guest').toString()]);
+      _styledRow(sheet, row++, [
+        'c. Overseas Filipinos',
+        totSex(gender, 'overseas_filipino').toString(),
+      ]);
+      _styledRow(sheet, row++, [
+        'd. Others/Unspecified Guest',
+        totSex(gender, 'unspecified_guest').toString(),
+      ]);
       _styledRow(sheet, row++, [
         'x. Total',
         (totSex(gender, 'philippine_resident_filipino') +
-            totSex(gender, 'philippine_resident_foreign') +
-            totSex(gender, 'foreign_resident') +
-            totSex(gender, 'unspecified_guest') +
-            totSex(gender, 'overseas_filipino')).toString(),
+                totSex(gender, 'philippine_resident_foreign') +
+                totSex(gender, 'foreign_resident') +
+                totSex(gender, 'unspecified_guest') +
+                totSex(gender, 'overseas_filipino'))
+            .toString(),
       ], bold: true);
     }
 
-    sumSexRows('male',   '1. Male');
+    sumSexRows('male', '1. Male');
     sumSexRows('female', '2. Female');
 
-    row += 2;
-    _styledCell(sheet, row++, 0,
-        '* Philippine passport holders permanently residing abroad; '
-        'excludes overseas Filipino workers and Former Filipinos');
-    row++;
-    _styledCell(sheet, row, 0, 'Prepared by: ____________________________________');
+    // ── Footer ───────────────────────────────────────────────────────────────
+    _writeStandardFooter(sheet, row, 2);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SHEET 3: Monthly Summary
+  // SHEET 3 — Monthly Summary (all months, all establishments)
   // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Header rows 0-6 are plain-text metadata; row 7 = col-headers.
 
   void _buildMonthlySummarySheet(
-    Excel excel, List<_MonthData> allMonths, int totalRoomsAll, int year,
+    Excel excel,
+    List<_MonthData> allMonths,
+    int totalRoomsAll,
+    int year,
   ) {
     final sheet = excel['AE DAE-1B (Monthly)'];
     _setupMonthlyColumns(sheet);
     int row = 0;
 
+    // ── Header ──────────────────────────────────────────────────────────────
     _hdrCell(sheet, row++, 'DAE-1B(Manual-Summary)');
-    _hdrCell(sheet, row++, 'Region: __4-A', bold: true, center: true, mergeToCol: 13);
+    _hdrCell(
+      sheet,
+      row++,
+      'Region: __4-A',
+      bold: true,
+      center: true,
+      mergeToCol: 13,
+    );
     _hdrCell(sheet, row++, '$year', center: true, mergeToCol: 13);
-    row++;
-    _hdrCell(sheet, row++, 'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
-        bold: true, center: true, size: 12, mergeToCol: 13);
-    _hdrCell(sheet, row++, 'All Accommodation Establishments — Combined', bold: true);
-    row++;
+    _hdrCell(sheet, row++, ''); // blank row 3
+    _hdrCell(
+      sheet,
+      row++,
+      'REPORT ON THE REGIONAL DISTRIBUTION OF TRAVELERS',
+      bold: true,
+      center: true,
+      size: 12,
+      mergeToCol: 13,
+    );
+    _hdrCell(
+      sheet,
+      row++,
+      'All Accommodation Establishments — Combined',
+      bold: true,
+    );
+    _hdrCell(sheet, row++, ''); // blank row 6
 
-    _styledCell(sheet, row, 0, 'COUNTRY OF RESIDENCE', bold: true, bgHex: _kLightYellow);
+    // Row 7 — column headers
+    _styledCell(
+      sheet,
+      row,
+      0,
+      'COUNTRY OF RESIDENCE',
+      bold: true,
+      italic: true,
+      bgHex: _kLightYellow,
+    );
     for (int m = 1; m <= 12; m++) {
-      _styledCell(sheet, row, m, kMonthNames[m],
-          bold: true, bgHex: _kLightYellow, halign: HorizontalAlign.Center);
+      _styledCell(
+        sheet,
+        row,
+        m,
+        kMonthNames[m],
+        bold: true,
+        bgHex: _kLightYellow,
+        halign: HorizontalAlign.Center,
+      );
     }
-    _styledCell(sheet, row++, 13, 'TOTAL',
-        bold: true, bgHex: _kLightYellow, halign: HorizontalAlign.Center);
+    _styledCell(
+      sheet,
+      row++,
+      13,
+      'TOTAL',
+      bold: true,
+      bgHex: _kLightYellow,
+      halign: HorizontalAlign.Center,
+    );
     _blankDataRow(sheet, row++, 14);
 
+    // ── Data helpers ────────────────────────────────────────────────────────
     _MonthData mdFor(int m) =>
         allMonths.firstWhere((x) => x.month == m, orElse: () => _emptyMonth(m));
     int mCnt(String country, int m) =>
@@ -1301,95 +1978,223 @@ class ReportService {
     List<String> monthValues(String label, int Function(int m) fn) {
       final cells = <String>[label];
       int total = 0;
-      for (int m = 1; m <= 12; m++) { final v = fn(m); cells.add(v.toString()); total += v; }
+      for (int m = 1; m <= 12; m++) {
+        final v = fn(m);
+        cells.add(v.toString());
+        total += v;
+      }
       cells.add(total.toString());
       return cells;
     }
 
+    // ── Philippine Residents ─────────────────────────────────────────────────
     _sectionRow(sheet, row++, 'PHILIPPINE RESIDENTS', _kBlue, totalCols: 14);
-    _styledRow(sheet, row++,
-        monthValues('   FILIPINO NATIONALITY', (m) => mRes(m, 'philippine_resident_filipino')));
-    _styledRow(sheet, row++,
-        monthValues('   FOREIGN NATIONALITY',  (m) => mRes(m, 'philippine_resident_foreign')));
-    _styledRow(sheet, row++, monthValues('TOTAL PHILIPPINE RESIDENTS', (m) =>
-        mRes(m, 'philippine_resident_filipino') + mRes(m, 'philippine_resident_foreign')),
-        bgHex: _kGreen, bold: true);
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   FILIPINO NATIONALITY',
+        (m) => mRes(m, 'philippine_resident_filipino'),
+      ),
+      italic: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   FOREIGN NATIONALITY',
+        (m) => mRes(m, 'philippine_resident_foreign'),
+      ),
+      italic: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        'TOTAL PHILIPPINE RESIDENTS',
+        (m) =>
+            mRes(m, 'philippine_resident_filipino') +
+            mRes(m, 'philippine_resident_foreign'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
 
     _blankDataRow(sheet, row++, 14);
-    _sectionRow(sheet, row++, 'NON-PHILIPPINE RESIDENTS', _kBlue, totalCols: 14);
+    _sectionRow(
+      sheet,
+      row++,
+      'NON-PHILIPPINE RESIDENTS',
+      _kBlue,
+      totalCols: 14,
+    );
     _blankDataRow(sheet, row++, 14);
 
+    // Country rows
     String? lastRegion, lastSubRegion;
     for (final cg in kCountryRows) {
       if (cg.region != lastRegion) {
         _sectionRow(sheet, row++, cg.region, _kBlue, totalCols: 14);
-        lastRegion = cg.region; lastSubRegion = null;
+        lastRegion = cg.region;
+        lastSubRegion = null;
       }
       if (cg.subRegion != lastSubRegion && cg.subRegion != cg.region) {
-        _sectionRow(sheet, row++, '   ${cg.subRegion}', _kBlue, totalCols: 14);
+        _sectionRow(
+          sheet,
+          row++,
+          '   ${cg.subRegion}',
+          _kBlue,
+          totalCols: 14,
+          italic: true,
+        );
         lastSubRegion = cg.subRegion;
       }
-      _styledRow(sheet, row++,
-          monthValues('       ${cg.country}', (m) => mCnt(cg.country, m)), bold: true);
+      _styledRow(
+        sheet,
+        row++,
+        monthValues('       ${cg.country}', (m) => mCnt(cg.country, m)),
+        bold: true,
+        italic: true,
+      );
 
       final idx = kCountryRows.indexOf(cg);
-      final isLast = idx == kCountryRows.length - 1 ||
+      final isLast =
+          idx == kCountryRows.length - 1 ||
           kCountryRows[idx + 1].subRegion != cg.subRegion;
       if (isLast) {
         final subCountries = kCountryRows
             .where((x) => x.region == cg.region && x.subRegion == cg.subRegion)
-            .map((x) => x.country).toList();
-        _styledRow(sheet, row++,
-            monthValues('                 SUB-TOTAL',
-                (m) => subCountries.fold<int>(0, (a, c) => a + mCnt(c, m))),
-            bgHex: _kLightBlue, bold: true);
+            .map((x) => x.country)
+            .toList();
+        _styledRow(
+          sheet,
+          row++,
+          monthValues(
+            '                 SUB-TOTAL',
+            (m) => subCountries.fold<int>(0, (a, c) => a + mCnt(c, m)),
+          ),
+          bgHex: _kLightBlue,
+          bold: true,
+        );
         _blankDataRow(sheet, row++, 14);
       }
     }
 
-    _styledRow(sheet, row++,
-        monthValues('OTHERS AND UNSPECIFIED NON-PHILIPPINE RESIDENCES',
-            (m) => mRes(m, 'unspecified_guest')),
-        bgHex: _kBlue, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('TOTAL NON-PHILIPPINE RESIDENTS',
-            (m) => mCountryAll(m) + mRes(m, 'unspecified_guest')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('OVERSEAS FILIPINOS*', (m) => mRes(m, 'overseas_filipino')),
-        bgHex: _kBlue, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('GRAND TOTAL GUEST ARRIVALS', (m) =>
-            mRes(m, 'philippine_resident_filipino') + mRes(m, 'philippine_resident_foreign') +
-            mCountryAll(m) + mRes(m, 'unspecified_guest') + mRes(m, 'overseas_filipino')),
-        bgHex: _kYellow, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('   Total Philippine Residents', (m) =>
-            mRes(m, 'philippine_resident_filipino') + mRes(m, 'philippine_resident_foreign')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('   Total Non-Philippine Residents',
-            (m) => mCountryAll(m) + mRes(m, 'unspecified_guest')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('   Total Overseas Filipinos', (m) => mRes(m, 'overseas_filipino')),
-        bgHex: _kGreen, bold: true);
-    _styledRow(sheet, row++,
-        monthValues('   Total Guest with Unspecified Residence',
-            (m) => mRes(m, 'unspecified_guest')),
-        bgHex: _kGreen, bold: true);
+    // OTHERS AND UNSPECIFIED (no data) + NON-PHILIPPINE RESIDENCES (data)
+    _sectionRow(sheet, row++, 'OTHERS AND UNSPECIFIED', _kBlue, totalCols: 14);
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        'NON-PHILIPPINE RESIDENCES',
+        (m) => mRes(m, 'unspecified_guest'),
+      ),
+      bgHex: _kBlue,
+      bold: true,
+    );
 
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        'TOTAL NON-PHILIPPINE RESIDENTS',
+        (m) => mCountryAll(m) + mRes(m, 'unspecified_guest'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues('OVERSEAS FILIPINOS*', (m) => mRes(m, 'overseas_filipino')),
+      bgHex: _kBlue,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        'GRAND TOTAL GUEST ARRIVALS',
+        (m) =>
+            mRes(m, 'philippine_resident_filipino') +
+            mRes(m, 'philippine_resident_foreign') +
+            mCountryAll(m) +
+            mRes(m, 'unspecified_guest') +
+            mRes(m, 'overseas_filipino'),
+      ),
+      bgHex: _kYellow,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   Total Philippine Residents',
+        (m) =>
+            mRes(m, 'philippine_resident_filipino') +
+            mRes(m, 'philippine_resident_foreign'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   Total Non-Philippine Residents',
+        (m) => mCountryAll(m) + mRes(m, 'unspecified_guest'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   Total Overseas Filipinos',
+        (m) => mRes(m, 'overseas_filipino'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '   Total Guest with Unspecified Residence',
+        (m) => mRes(m, 'unspecified_guest'),
+      ),
+      bgHex: _kGreen,
+      bold: true,
+    );
+
+    // ── Part II ──────────────────────────────────────────────────────────────
     _blankDataRow(sheet, row++, 14);
     _blankDataRow(sheet, row++, 14);
     _styledCell(sheet, row++, 0, 'PART II.  Other Indicators', bold: true);
     _sectionRow(sheet, row++, 'A. DAE2:', _kYellow, totalCols: 14);
 
-    _styledRow(sheet, row++, monthValues('1. Rooms Occupied',
-        (m) => mdFor(m).roomsOccupied.values.fold<int>(0, (a, b) => a + b)));
-    _styledRow(sheet, row++, monthValues('2. Rooms available for the month',
-        (m) => totalRoomsAll * DateTime(year, m + 1, 0).day));
-    _styledRow(sheet, row++,
-        monthValues('3. Total Guest nights', (m) => mdFor(m).guestNights));
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '1. Rooms Occupied',
+        (m) => mdFor(m).roomsOccupied.values.fold<int>(0, (a, b) => a + b),
+      ),
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues(
+        '2. Rooms available for the month',
+        (m) => totalRoomsAll * DateTime(year, m + 1, 0).day,
+      ),
+    );
+    _styledRow(
+      sheet,
+      row++,
+      monthValues('3. Total Guest nights', (m) => mdFor(m).guestNights),
+    );
 
     _blankDataRow(sheet, row++, 14);
     _styledCell(sheet, row++, 0, 'Alternative Submission', bold: true);
@@ -1397,66 +2202,105 @@ class ReportService {
     final occCols = <String>['1. Average Monthly Occupancy Rate'];
     int totalOccupied = 0, totalAvailable = 0;
     for (int m = 1; m <= 12; m++) {
-      final occ   = mdFor(m).roomsOccupied.values.fold<int>(0, (a, b) => a + b);
+      final occ = mdFor(m).roomsOccupied.values.fold<int>(0, (a, b) => a + b);
       final avail = totalRoomsAll * DateTime(year, m + 1, 0).day;
-      totalOccupied  += occ;
+      totalOccupied += occ;
       totalAvailable += avail;
       occCols.add(avail > 0 ? (occ / avail * 100).toStringAsFixed(2) : '0');
     }
-    occCols.add(totalAvailable > 0
-        ? (totalOccupied / totalAvailable * 100).toStringAsFixed(2) : '0');
+    occCols.add(
+      totalAvailable > 0
+          ? (totalOccupied / totalAvailable * 100).toStringAsFixed(2)
+          : '0',
+    );
     _styledRow(sheet, row++, occCols);
 
     final alsCols = <String>['2. Average Length of Stay (in Nights)'];
     int totalGuestNights = 0, totalGuests = 0;
     for (int m = 1; m <= 12; m++) {
-      final md2    = mdFor(m);
-      final guests = mRes(m, 'philippine_resident_filipino') +
+      final md2 = mdFor(m);
+      final guests =
+          mRes(m, 'philippine_resident_filipino') +
           mRes(m, 'philippine_resident_foreign') +
-          mCountryAll(m) + mRes(m, 'unspecified_guest') + mRes(m, 'overseas_filipino');
+          mCountryAll(m) +
+          mRes(m, 'unspecified_guest') +
+          mRes(m, 'overseas_filipino');
       totalGuestNights += md2.guestNights;
-      totalGuests      += guests;
-      alsCols.add(guests > 0 ? (md2.guestNights / guests).toStringAsFixed(2) : '0');
+      totalGuests += guests;
+      alsCols.add(
+        guests > 0 ? (md2.guestNights / guests).toStringAsFixed(2) : '0',
+      );
     }
-    alsCols.add(totalGuests > 0
-        ? (totalGuestNights / totalGuests).toStringAsFixed(2) : '0');
+    alsCols.add(
+      totalGuests > 0
+          ? (totalGuestNights / totalGuests).toStringAsFixed(2)
+          : '0',
+    );
     _styledRow(sheet, row++, alsCols);
 
     _blankDataRow(sheet, row++, 14);
     _sectionRow(sheet, row++, 'B. VOLUME PER SEX', _kYellow, totalCols: 14);
 
-    int mSex(int m, String s, String cat) => mdFor(m).sexByDay[0]?[s]?[cat] ?? 0;
+    int mSex(int m, String s, String cat) =>
+        mdFor(m).sexByDay[0]?[s]?[cat] ?? 0;
 
     void mSexSection(String gender, String label) {
       _styledCell(sheet, row++, 0, label, bold: true);
-      _styledRow(sheet, row++, monthValues('a. Philippine Residents', (m) =>
-          mSex(m, gender, 'philippine_resident_filipino') +
-          mSex(m, gender, 'philippine_resident_foreign')));
-      _styledRow(sheet, row++, monthValues(
+      _styledRow(
+        sheet,
+        row++,
+        monthValues(
+          'a. Philippine Residents',
+          (m) =>
+              mSex(m, gender, 'philippine_resident_filipino') +
+              mSex(m, gender, 'philippine_resident_foreign'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        monthValues(
           'b. Non-Philippine/Foreign Residents (including unspecified)',
-          (m) => mSex(m, gender, 'foreign_resident')));
-      _styledRow(sheet, row++,
-          monthValues('c. Overseas Filipinos',       (m) => mSex(m, gender, 'overseas_filipino')));
-      _styledRow(sheet, row++,
-          monthValues('d. Others/Unspecified Guest', (m) => mSex(m, gender, 'unspecified_guest')));
-      _styledRow(sheet, row++, monthValues('x. Total', (m) =>
-          mSex(m, gender, 'philippine_resident_filipino') +
-          mSex(m, gender, 'philippine_resident_foreign') +
-          mSex(m, gender, 'foreign_resident') +
-          mSex(m, gender, 'unspecified_guest') +
-          mSex(m, gender, 'overseas_filipino')),
-          bold: true);
+          (m) => mSex(m, gender, 'foreign_resident'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        monthValues(
+          'c. Overseas Filipinos',
+          (m) => mSex(m, gender, 'overseas_filipino'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        monthValues(
+          'd. Others/Unspecified Guest',
+          (m) => mSex(m, gender, 'unspecified_guest'),
+        ),
+      );
+      _styledRow(
+        sheet,
+        row++,
+        monthValues(
+          'x. Total',
+          (m) =>
+              mSex(m, gender, 'philippine_resident_filipino') +
+              mSex(m, gender, 'philippine_resident_foreign') +
+              mSex(m, gender, 'foreign_resident') +
+              mSex(m, gender, 'unspecified_guest') +
+              mSex(m, gender, 'overseas_filipino'),
+        ),
+        bold: true,
+      );
     }
 
-    mSexSection('male',   '1. Male');
+    mSexSection('male', '1. Male');
     mSexSection('female', '2. Female');
 
-    row += 2;
-    _styledCell(sheet, row++, 0,
-        '* Philippine passport holders permanently residing abroad; '
-        'excludes overseas Filipino workers and Former Filipinos');
-    row++;
-    _styledCell(sheet, row, 0, 'Prepared by: ____________________________________');
+    // ── Footer ───────────────────────────────────────────────────────────────
+    _writeStandardFooter(sheet, row, 14);
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -1484,10 +2328,20 @@ class ReportService {
   // EXCEL STYLE HELPERS
   // ══════════════════════════════════════════════════════════════════════════
 
+  /// Writes a single-cell plain-text header row (no borders).
+  /// Used exclusively for the metadata header section (rows 0-23 on daily
+  /// sheets; rows 0-6 on summary/monthly sheets).
   void _hdrCell(
-    Sheet sheet, int row, String value, {
-    bool bold = false, bool center = false,
-    double size = 10, int? mergeToCol,
+    Sheet sheet,
+    int row,
+    String value, {
+    bool bold = false,
+    bool italic = false,
+    bool underline = false,
+    bool center = false,
+    double size = 10,
+    int? mergeToCol,
+    int? underlineToCol, // ← new: controls underline width separately
   }) {
     if (mergeToCol != null) {
       sheet.merge(
@@ -1495,102 +2349,293 @@ class ReportService {
         CellIndex.indexByColumnRow(columnIndex: mergeToCol, rowIndex: row),
       );
     }
-    final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row));
+    final cell = sheet.cell(
+      CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
+    );
     cell.value = TextCellValue(value);
     cell.cellStyle = CellStyle(
-      bold: bold, fontFamily: 'Arial', fontSize: size.toInt(),
+      bold: bold,
+      italic: italic,
+      fontFamily: 'Arial',
+      fontSize: size.toInt(),
       horizontalAlign: center ? HorizontalAlign.Center : HorizontalAlign.Left,
     );
+
+    // Apply bottom border only across underlineToCol columns
+    if (underline) {
+      final endCol = underlineToCol ?? 0;
+      for (int c = 0; c <= endCol; c++) {
+        final borderCell = sheet.cell(
+          CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row),
+        );
+        borderCell.cellStyle = CellStyle(
+          bold: c == 0 ? bold : false,
+          italic: c == 0 ? italic : false,
+          fontFamily: 'Arial',
+          fontSize: size.toInt(),
+          horizontalAlign: center
+              ? HorizontalAlign.Center
+              : HorizontalAlign.Left,
+          bottomBorder: Border(borderStyle: BorderStyle.Thin),
+        );
+      }
+    }
   }
 
+  /// Writes a single styled cell (no borders). Used for footnote / footer text
+  /// and standalone label cells inside the data section.
   void _styledCell(
-    Sheet sheet, int row, int col, String value, {
-    bool bold = false, String? bgHex, HorizontalAlign? halign,
+    Sheet sheet,
+    int row,
+    int col,
+    String value, {
+    bool bold = false,
+    bool italic = false,
+    bool underline = false,
+    String? bgHex,
+    HorizontalAlign? halign,
+    int size = 8,
   }) {
-    final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row));
+    final cell = sheet.cell(
+      CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row),
+    );
     cell.value = TextCellValue(value);
     cell.cellStyle = CellStyle(
-      bold: bold, fontFamily: 'Arial', fontSize: 8,
+      bold: bold,
+      italic: italic,
+      underline: underline ? Underline.Single : Underline.None,
+      fontFamily: 'Arial',
+      fontSize: size,
       backgroundColorHex: ExcelColor.fromHexString(bgHex ?? _kWhite),
       horizontalAlign: halign ?? HorizontalAlign.Left,
     );
   }
 
+  /// Writes a full-width blue section-header row (all cells coloured, borders
+  /// on every cell, label only in col 0).
   void _sectionRow(
-    Sheet sheet, int row, String label, String bgHex, {
-    int totalCols = 33, bool bold = true,
+    Sheet sheet,
+    int row,
+    String label,
+    String bgHex, {
+    int totalCols = 33,
+    bool bold = true,
+    bool italic = false,
+    int size = 8,
   }) {
     for (int c = 0; c < totalCols; c++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row));
+      final cell = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row),
+      );
       if (c == 0) cell.value = TextCellValue(label);
       cell.cellStyle = CellStyle(
-        bold: c == 0 ? bold : false, fontFamily: 'Arial', fontSize: 8,
+        bold: c == 0 ? bold : false,
+        italic: c == 0 ? italic : false,
+        fontFamily: 'Arial',
+        fontSize: size,
         backgroundColorHex: ExcelColor.fromHexString(bgHex),
-        leftBorder: _kThinBorder, rightBorder: _kThinBorder,
-        topBorder: _kThinBorder,  bottomBorder: _kThinBorder,
+        leftBorder: _kThinBorder,
+        rightBorder: _kThinBorder,
+        topBorder: _kThinBorder,
+        bottomBorder: _kThinBorder,
       );
     }
   }
 
+  /// Writes a data row.  The first element of [values] is the row label
+  /// (col 0); remaining elements are numeric or empty strings for day/month
+  /// columns.
+  ///
+  /// [italic] applies to the label cell (col 0) only — numeric cells are
+  /// never italicised.
   void _styledRow(
-    Sheet sheet, int row, List<String> values, {
-    bool bold = false, String? bgHex,
+    Sheet sheet,
+    int row,
+    List<String> values, {
+    bool bold = false,
+    String? bgHex,
+    bool italic = false,
   }) {
     for (int c = 0; c < values.length; c++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row));
-      final raw  = values[c];
-      final parsed = int.tryParse(raw);
-      if (parsed != null) cell.value = IntCellValue(parsed);
-      else                cell.value = TextCellValue(raw);
+      final cell = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row),
+      );
+      final raw = values[c];
+
+      // ✅ Fixed — try int, then double, then fall back to text
+      final intVal = int.tryParse(raw);
+      if (intVal != null) {
+        cell.value = IntCellValue(intVal);
+      } else {
+        final doubleVal = double.tryParse(raw);
+        if (doubleVal != null) {
+          cell.value = DoubleCellValue(doubleVal);
+        } else {
+          cell.value = TextCellValue(raw);
+        }
+      }
+
       cell.cellStyle = CellStyle(
-        bold: bold, fontFamily: 'Arial', fontSize: 8,
+        bold: bold,
+        italic: c == 0 ? italic : false,
+        fontFamily: 'Arial',
+        fontSize: 8,
         backgroundColorHex: ExcelColor.fromHexString(bgHex ?? _kWhite),
-        leftBorder: _kThinBorder, rightBorder: _kThinBorder,
-        topBorder: _kThinBorder,  bottomBorder: _kThinBorder,
+        leftBorder: _kThinBorder,
+        rightBorder: _kThinBorder,
+        topBorder: _kThinBorder,
+        bottomBorder: _kThinBorder,
       );
     }
   }
 
-  void _blankDataRow(Sheet sheet, int row, int numCols) {
+  /// Writes a blank (visually empty) data row with thin borders.
+  void _blankDataRow(Sheet sheet, int row, int numCols, {String? bgHex}) {
     for (int c = 0; c < numCols; c++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row));
+      final cell = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: c, rowIndex: row),
+      );
       cell.value = TextCellValue('');
       cell.cellStyle = CellStyle(
-        fontFamily: 'Arial', fontSize: 8,
-        backgroundColorHex: ExcelColor.fromHexString(_kWhite),
+        fontFamily: 'Arial',
+        fontSize: 8,
+        backgroundColorHex: ExcelColor.fromHexString(bgHex ?? _kWhite),
       );
     }
   }
 
+  /// Writes the column-header row for daily sheets:
+  ///   Col 0 = "COUNTRY OF RESIDENCE" (bold, italic, light-yellow)
+  ///   Cols 1-31 = day numbers 1–31
+  ///   Col 32 = "TOTAL"
   void _writeDayColHeaders(Sheet sheet, int row) {
-    final labelCell =
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row));
+    // Col 0 — COUNTRY OF RESIDENCE (bold AND italic per requirements)
+    final labelCell = sheet.cell(
+      CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: row),
+    );
     labelCell.value = TextCellValue('COUNTRY OF RESIDENCE');
     labelCell.cellStyle = CellStyle(
-      bold: true, fontFamily: 'Arial', fontSize: 8,
+      bold: true,
+      italic: true,
+      fontFamily: 'Arial',
+      fontSize: 8,
       backgroundColorHex: ExcelColor.fromHexString(_kLightYellow),
-      leftBorder: _kThinBorder, rightBorder: _kThinBorder,
-      topBorder: _kThinBorder,  bottomBorder: _kThinBorder,
+      leftBorder: _kThinBorder,
+      rightBorder: _kThinBorder,
+      topBorder: _kThinBorder,
+      bottomBorder: _kThinBorder,
     );
+
+    // Cols 1-31 — day numbers
     for (int d = 1; d <= 31; d++) {
-      final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: d, rowIndex: row));
+      final cell = sheet.cell(
+        CellIndex.indexByColumnRow(columnIndex: d, rowIndex: row),
+      );
       cell.value = TextCellValue(d.toString());
       cell.cellStyle = CellStyle(
-        bold: true, fontFamily: 'Bell MT', fontSize: 8,
+        bold: true,
+        fontFamily: 'Bell MT',
+        fontSize: 8,
         backgroundColorHex: ExcelColor.fromHexString(_kLightYellow),
-        leftBorder: _kThinBorder, rightBorder: _kThinBorder,
-        topBorder: _kThinBorder,  bottomBorder: _kThinBorder,
+        leftBorder: _kThinBorder,
+        rightBorder: _kThinBorder,
+        topBorder: _kThinBorder,
+        bottomBorder: _kThinBorder,
       );
     }
-    final totalCell =
-        sheet.cell(CellIndex.indexByColumnRow(columnIndex: 32, rowIndex: row));
+
+    // Col 32 — TOTAL
+    final totalCell = sheet.cell(
+      CellIndex.indexByColumnRow(columnIndex: 32, rowIndex: row),
+    );
     totalCell.value = TextCellValue('TOTAL');
     totalCell.cellStyle = CellStyle(
-      bold: true, fontFamily: 'Arial', fontSize: 8,
+      bold: true,
+      fontFamily: 'Arial',
+      fontSize: 8,
       backgroundColorHex: ExcelColor.fromHexString(_kLightYellow),
       horizontalAlign: HorizontalAlign.Center,
-      leftBorder: _kThinBorder, rightBorder: _kThinBorder,
-      topBorder: _kThinBorder,  bottomBorder: _kThinBorder,
+      leftBorder: _kThinBorder,
+      rightBorder: _kThinBorder,
+      topBorder: _kThinBorder,
+      bottomBorder: _kThinBorder,
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STANDARD FOOTER
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Writes the standard DOT footer that appears on EVERY sheet type.
+  ///
+  /// Layout (2 blank rows gap then):
+  ///
+  ///  * Philippine passport holders permanently residing abroad;
+  ///    excludes overseas Filipino workers
+  ///  and Former Filipinos                          [Date Submitted: ____]
+  ///                                                              (next row)
+  ///  Prepared by:  ___________________________     [________________]
+  ///                    Signature over Printed Name
+  ///
+  ///                _____________________________________
+  ///                          Position/Designation
+  ///
+  /// [Right-side content] is placed in the last column (totalCols − 1).
+  void _writeStandardFooter(Sheet sheet, int startRow, int totalCols) {
+    int row = startRow;
+    final lastCol = totalCols - 1;
+
+    // 2 blank rows gap before footer
+
+    // Line 1 — asterisk footnote (long line)
+    _styledCell(
+      sheet,
+      row++,
+      0,
+      '* Philippine passport holders permanently residing abroad; '
+      'excludes overseas Filipino workers',
+    );
+
+    // Line 2 — "and Former Filipinos" (col 0)
+    _styledCell(sheet, row++, 0, 'and Former Filipinos');
+
+    // Line 3 — Date Submitted in right column only
+    _styledCell(sheet, row++, 3, 'Date Submitted:');
+
+    // Line 4 — Prepared by (col 0) + date/signature underline (right col)
+    _styledCell(
+      sheet,
+      row,
+      0,
+      'Prepared by:        ____________________________________',
+    );
+    _styledCell(sheet, row++, 3, '________________');
+
+    // Line 5 — Signature over Printed Name label (indented, col 0)
+    _styledCell(
+      sheet,
+      row++,
+      0,
+      '                           Signature over Printed Name',
+    );
+
+    // Line 6 — blank
+    row++;
+
+    // Line 7 — Position underline
+    _styledCell(
+      sheet,
+      row++,
+      0,
+      '                    _____________________________________',
+    );
+
+    // Line 8 — Position/Designation label
+    _styledCell(
+      sheet,
+      row,
+      0,
+      '                              Position/Designation',
     );
   }
 
@@ -1599,9 +2644,15 @@ class ReportService {
   // ══════════════════════════════════════════════════════════════════════════
 
   _MonthData _emptyMonth(int month) => _MonthData(
-    month: month, countryByDay: {}, residentsByDay: {}, sexByDay: {},
-    roomsOccupied: {}, guestNightsByDay: {}, guestNightsPerArrivalDay: {},
-    guestNights: 0, roomsAvailable: 0,
+    month: month,
+    countryByDay: {},
+    residentsByDay: {},
+    sexByDay: {},
+    roomsOccupied: {},
+    guestNightsByDay: {},
+    guestNightsPerArrivalDay: {},
+    guestNights: 0,
+    roomsAvailable: 0,
   );
 
   String _sheetTabName(String name) {
@@ -1611,33 +2662,69 @@ class ReportService {
 
   String _formatBusinessType(String raw) {
     switch (raw.toLowerCase()) {
-      case 'hotel':        return 'Hotel';
-      case 'resort':       return 'Resort';
-      case 'motel':        return 'Motel';
-      case 'pension_inn':  return 'Pension Inn/ Lodge';
-      case 'youth_hostel': return 'Youth Hostel/ Dormitory';
-      case 'apartment':    return 'Apartel/ Rented Homes/ Apartment';
-      case 'others':       return 'Others';
-      default:             return raw;
+      case 'hotel':
+        return 'Hotel';
+      case 'resort':
+        return 'Resort';
+      case 'motel':
+        return 'Motel';
+      case 'pension_inn':
+        return 'Pension Inn/ Lodge';
+      case 'youth_hostel':
+        return 'Youth Hostel/ Dormitory';
+      case 'apartment':
+        return 'Apartel/ Rented Homes/ Apartment';
+      case 'others':
+        return 'Others';
+      default:
+        return raw;
     }
   }
 
   String _displayBusinessLine(Object? value) {
     if (value is List) {
-      return value.whereType<String>().map((e) => e.trim())
-          .where((e) => e.isNotEmpty).map(_formatBusinessType).join(', ');
+      return value
+          .whereType<String>()
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .map(_formatBusinessType)
+          .join(', ');
     }
     if (value is String) {
-      final parts = value.split(RegExp(r'[,|\n]'))
-          .map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      final parts = value
+          .split(RegExp(r'[,|\n]'))
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
       if (parts.length > 1) return parts.map(_formatBusinessType).join(', ');
       return _formatBusinessType(value);
     }
     return '';
   }
 
+  /// Extracts raw lowercase business-line keys for checkbox matching.
+  /// Handles both List<String> (from Postgres array) and comma-delimited
+  /// String values.
+  List<String> _extractRawBusinessLines(Object? value) {
+    if (value is List) {
+      return value
+          .whereType<String>()
+          .map((e) => e.trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      return value
+          .split(RegExp(r'[,|\n]'))
+          .map((e) => e.trim().toLowerCase())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return [];
+  }
+
   String _normalizeUpper(Object? v) => v?.toString().trim().toUpperCase() ?? '';
-  String _normalizeLower(Object? v) => v?.toString().trim().toLowerCase()  ?? '';
+  String _normalizeLower(Object? v) => v?.toString().trim().toLowerCase() ?? '';
 
   int _asInt(Object? v) {
     if (v is int) return v;
@@ -1660,7 +2747,7 @@ class ReportService {
     if (country.isEmpty || country == 'OTHERS') return 'unspecified_guest';
     if (country == 'PHILIPPINES') {
       if (nationality == 'FILIPINO') return 'philippine_resident_filipino';
-      if (nationality == 'FOREIGN')  return 'philippine_resident_foreign';
+      if (nationality == 'FOREIGN') return 'philippine_resident_foreign';
       return 'unspecified_guest';
     }
     return 'foreign_resident';

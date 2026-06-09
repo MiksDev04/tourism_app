@@ -8,6 +8,7 @@ import '../../shared/layouts/admin_layout.dart';
 import '../../shared/pages/error_page.dart';
 import '../../../api/admin_compliance_api.dart';
 import '../../shared/widgets/paginator.dart';
+import '../widgets/business_tourist_stats_modal.dart';
 
 // ─── Filter Options ───────────────────────────────────────────────────────────
 
@@ -19,10 +20,17 @@ const _activityStatusOptions = [
   'No Activity',
 ];
 
-const _businessStatusOptions = [
-  'All Business Statuses',
-  'Approved',
-  'Warning',
+const _businessStatusOptions = ['All Business Statuses', 'Approved', 'Warning'];
+
+const _businessLineOptions = [
+  'All Business Lines',
+  'Hotel',
+  'Resort',
+  'Motel',
+  'Pension Inn',
+  'Youth Hostel',
+  'Apartment',
+  'Others',
 ];
 
 // ─── Admin Compliance Page ────────────────────────────────────────────────────
@@ -44,7 +52,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
   String _searchQuery = '';
   String _selectedActivityStatus = 'All Statuses';
   String _selectedBusinessStatus = 'All Business Statuses';
-  String _selectedBusinessLine = 'All Types';
+  String _selectedBusinessLine = 'All Business Lines';
 
   int _currentPage = 0;
   int _pageSize = 10;
@@ -107,9 +115,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
     }
   }
 
-  // ── Status change ──────────────────────────────────────────────────────────
+  // ── Dialogs ────────────────────────────────────────────────────────────────
 
-  /// Opens the Manage Status modal for [record].
   void _openActionDialog(BusinessActivityRecord record) {
     showDialog(
       context: context,
@@ -120,7 +127,16 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
     );
   }
 
-  /// Calls the API and optimistically updates local state.
+  void _openStatsModal(BusinessActivityRecord record) {
+    showDialog(
+      context: context,
+      builder: (_) => BusinessTouristStatsModal(
+        businessId: record.id,
+        businessName: record.businessName,
+      ),
+    );
+  }
+
   Future<void> _handleStatusChange(
     BusinessActivityRecord record,
     BusinessStatusLevel newStatus,
@@ -130,17 +146,12 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       setState(() {
         final idx = _allRecords.indexWhere((r) => r.id == record.id);
         if (idx != -1) {
-          _allRecords[idx] = _allRecords[idx].copyWith(businessStatus: newStatus);
+          _allRecords[idx] = _allRecords[idx].copyWith(
+            businessStatus: newStatus,
+          );
         }
       });
     }
-  }
-
-  // ── Derived type options (dynamic from data) ───────────────────────────────
-  List<String> get _typeOptions {
-    final types = _allRecords.expand((r) => r.businessLine).toSet().toList()
-      ..sort();
-    return ['All Types', ...types];
   }
 
   // ── Summary counts ─────────────────────────────────────────────────────────
@@ -160,6 +171,28 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
       )
       .length;
 
+  // ── Business line label → raw DB value ────────────────────────────────────
+  String _rawBusinessLine(String label) {
+    switch (label) {
+      case 'Hotel':
+        return 'hotel';
+      case 'Resort':
+        return 'resort';
+      case 'Motel':
+        return 'motel';
+      case 'Pension Inn':
+        return 'pension_inn';
+      case 'Youth Hostel':
+        return 'youth_hostel';
+      case 'Apartment':
+        return 'apartment';
+      case 'Others':
+        return 'others';
+      default:
+        return label.toLowerCase();
+    }
+  }
+
   // ── Filtered list ──────────────────────────────────────────────────────────
   List<BusinessActivityRecord> get _filtered {
     return _allRecords.where((r) {
@@ -168,8 +201,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
         return false;
       }
 
-      if (_selectedBusinessLine != 'All Types' &&
-          !r.businessLine.contains(_selectedBusinessLine)) {
+      if (_selectedBusinessLine != 'All Business Lines' &&
+          !r.businessLine.contains(_rawBusinessLine(_selectedBusinessLine))) {
         return false;
       }
 
@@ -266,9 +299,8 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                   _selectedBusinessStatus = v!;
                   _resetPage();
                 }),
-                selectedType: _selectedBusinessLine,
-                typeOptions: _typeOptions,
-                onTypeChanged: (v) => setState(() {
+                selectedBusinessLine: _selectedBusinessLine,
+                onBusinessLineChanged: (v) => setState(() {
                   _selectedBusinessLine = v!;
                   _resetPage();
                 }),
@@ -288,6 +320,7 @@ class _AdminCompliancePageState extends State<AdminCompliancePage> {
                 _ComplianceTable(
                   rows: _pagedRows,
                   onAction: _openActionDialog,
+                  onViewStats: _openStatsModal,
                 ),
               if (!_isLoading) ...[
                 const SizedBox(height: 12),
@@ -486,9 +519,8 @@ class _FilterRow extends StatelessWidget {
     required this.onActivityStatusChanged,
     required this.selectedBusinessStatus,
     required this.onBusinessStatusChanged,
-    required this.selectedType,
-    required this.typeOptions,
-    required this.onTypeChanged,
+    required this.selectedBusinessLine,
+    required this.onBusinessLineChanged,
   });
 
   final TextEditingController searchCtrl;
@@ -497,19 +529,24 @@ class _FilterRow extends StatelessWidget {
   final ValueChanged<String?> onActivityStatusChanged;
   final String selectedBusinessStatus;
   final ValueChanged<String?> onBusinessStatusChanged;
-  final String selectedType;
-  final List<String> typeOptions;
-  final ValueChanged<String?> onTypeChanged;
+  final String selectedBusinessLine;
+  final ValueChanged<String?> onBusinessLineChanged;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 600) {
+        final width = constraints.maxWidth;
+
+        if (width < 600) {
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _SearchField(controller: searchCtrl, onChanged: onSearchChanged),
-              const SizedBox(height: 10),
+              _SearchField(
+                controller: searchCtrl,
+                onChanged: onSearchChanged,
+              ),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -519,12 +556,67 @@ class _FilterRow extends StatelessWidget {
                       onChanged: onActivityStatusChanged,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _DropdownFilter(
                       value: selectedBusinessStatus,
                       items: _businessStatusOptions,
                       onChanged: onBusinessStatusChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _DropdownFilter(
+                value: selectedBusinessLine,
+                items: _businessLineOptions,
+                onChanged: onBusinessLineChanged,
+              ),
+            ],
+          );
+        } else if (width < 900) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 38,
+                      child: _SearchField(
+                        controller: searchCtrl,
+                        onChanged: onSearchChanged,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 3,
+                    child: _DropdownFilter(
+                      value: selectedActivityStatus,
+                      items: _activityStatusOptions,
+                      onChanged: onActivityStatusChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusinessStatus,
+                      items: _businessStatusOptions,
+                      onChanged: onBusinessStatusChanged,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _DropdownFilter(
+                      value: selectedBusinessLine,
+                      items: _businessLineOptions,
+                      onChanged: onBusinessLineChanged,
                     ),
                   ),
                 ],
@@ -561,9 +653,9 @@ class _FilterRow extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: _DropdownFilter(
-                  value: selectedType,
-                  items: typeOptions,
-                  onChanged: onTypeChanged,
+                  value: selectedBusinessLine,
+                  items: _businessLineOptions,
+                  onChanged: onBusinessLineChanged,
                 ),
               ),
             ],
@@ -622,6 +714,8 @@ class _DropdownFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final safeValue = items.contains(value) ? value : items.first;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -631,7 +725,7 @@ class _DropdownFilter extends StatelessWidget {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: value,
+          value: safeValue,
           isExpanded: true,
           isDense: true,
           dropdownColor: AppColors.cardBackground,
@@ -653,10 +747,12 @@ class _ComplianceTable extends StatelessWidget {
   const _ComplianceTable({
     required this.rows,
     required this.onAction,
+    required this.onViewStats,
   });
 
   final List<BusinessActivityRecord> rows;
   final ValueChanged<BusinessActivityRecord> onAction;
+  final ValueChanged<BusinessActivityRecord> onViewStats;
 
   @override
   Widget build(BuildContext context) {
@@ -688,6 +784,7 @@ class _ComplianceTable extends StatelessWidget {
               itemBuilder: (_, i) => _ComplianceRow(
                 record: rows[i],
                 onAction: onAction,
+                onViewStats: onViewStats,
               ),
             ),
         ],
@@ -721,10 +818,8 @@ class _TableHeader extends StatelessWidget {
                 Expanded(flex: 3, child: _HeaderCell('Business Line')),
                 Expanded(flex: 2, child: _HeaderCell('Business Status')),
                 Expanded(flex: 3, child: _HeaderCell('Activity Status')),
-                Expanded(flex: 2, child: _HeaderCell('Records')),
-                Expanded(flex: 2, child: _HeaderCell('Guests')),
                 Expanded(flex: 3, child: _HeaderCell('Last Activity')),
-                Expanded(flex: 2, child: _HeaderCell('Action')),
+                Expanded(flex: 4, child: _HeaderCell('Action')),
               ],
             ),
           );
@@ -757,10 +852,12 @@ class _ComplianceRow extends StatelessWidget {
   const _ComplianceRow({
     required this.record,
     required this.onAction,
+    required this.onViewStats,
   });
 
   final BusinessActivityRecord record;
   final ValueChanged<BusinessActivityRecord> onAction;
+  final ValueChanged<BusinessActivityRecord> onViewStats;
 
   String _formatLastActivity(DateTime? dt) {
     if (dt == null) return '—';
@@ -781,10 +878,7 @@ class _ComplianceRow extends StatelessWidget {
     return years == 1 ? '1 year ago' : '$years years ago';
   }
 
-  String _formatNumber(int n) =>
-      n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : '$n';
-
-  Widget _buildActionButton() {
+  Widget _buildManageButton() {
     return OutlinedButton.icon(
       onPressed: () => onAction(record),
       icon: const Icon(Icons.manage_accounts_rounded, size: 14),
@@ -792,9 +886,22 @@ class _ComplianceRow extends StatelessWidget {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.primaryCyan,
         side: BorderSide(color: AppColors.primaryCyan.withOpacity(0.4)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+  }
+
+  Widget _buildViewStatsButton() {
+    return OutlinedButton.icon(
+      onPressed: () => onViewStats(record),
+      icon: const Icon(Icons.bar_chart_rounded, size: 14),
+      label: const Text('View', style: TextStyle(fontSize: 12)),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.accentGreen,
+        side: BorderSide(color: AppColors.accentGreen.withOpacity(0.4)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
@@ -806,7 +913,7 @@ class _ComplianceRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 900) {
-          // ── Mobile ──────────────────────────────────────────────────────────
+          // ── Mobile layout ──────────────────────────────────────────────
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
@@ -838,7 +945,16 @@ class _ComplianceRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    _buildActionButton(),
+                    // Stacked action buttons on mobile
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _buildManageButton(),
+                        const SizedBox(height: 6),
+                        _buildViewStatsButton(),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -853,20 +969,6 @@ class _ComplianceRow extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.receipt_long_outlined,
-                      size: 12,
-                      color: AppColors.textSubtle,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${record.totalRecords} records · ${_formatNumber(record.totalGuests)} guests',
-                      style: const TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     const Icon(
                       Icons.access_time_rounded,
                       size: 12,
@@ -886,7 +988,7 @@ class _ComplianceRow extends StatelessWidget {
             ),
           );
         } else {
-          // ── Desktop ─────────────────────────────────────────────────────────
+          // ── Desktop layout ─────────────────────────────────────────────
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
             child: Row(
@@ -927,26 +1029,6 @@ class _ComplianceRow extends StatelessWidget {
                   ),
                 ),
                 Expanded(
-                  flex: 2,
-                  child: Text(
-                    '${record.totalRecords}',
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    _formatNumber(record.totalGuests),
-                    style: const TextStyle(
-                      color: AppColors.textGray,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-                Expanded(
                   flex: 3,
                   child: Text(
                     _formatLastActivity(record.lastActivity),
@@ -958,11 +1040,16 @@ class _ComplianceRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                // Action column — Manage + View Stats side by side, wraps if narrow
                 Expanded(
-                  flex: 2,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _buildActionButton(),
+                  flex: 4,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _buildManageButton(),
+                      _buildViewStatsButton(),
+                    ],
                   ),
                 ),
               ],
@@ -977,10 +1064,7 @@ class _ComplianceRow extends StatelessWidget {
 // ─── Status Change Dialog ─────────────────────────────────────────────────────
 
 class _StatusChangeDialog extends StatefulWidget {
-  const _StatusChangeDialog({
-    required this.record,
-    required this.onConfirm,
-  });
+  const _StatusChangeDialog({required this.record, required this.onConfirm});
 
   final BusinessActivityRecord record;
   final Future<void> Function(BusinessStatusLevel) onConfirm;
@@ -993,25 +1077,19 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
   late BusinessStatusLevel _selected;
   bool _isSaving = false;
 
-  // ── Business rules ─────────────────────────────────────────────────────────
-
-  /// Inactive or No Activity + currently Approved → admin can escalate to Warning.
   bool get _canSetWarning =>
       (widget.record.activityStatus == ActivityStatus.inactive ||
           widget.record.activityStatus == ActivityStatus.noActivity) &&
       widget.record.businessStatus == BusinessStatusLevel.approved;
 
-  /// Currently Warning → admin can revert to Approved.
   bool get _canSetApproved =>
       widget.record.businessStatus == BusinessStatusLevel.warning;
 
-  /// True when at least one action is available.
   bool get _hasAction => _canSetWarning || _canSetApproved;
 
   @override
   void initState() {
     super.initState();
-    // Pre-select the only available target so Confirm works immediately.
     if (_canSetWarning) {
       _selected = BusinessStatusLevel.warning;
     } else if (_canSetApproved) {
@@ -1047,7 +1125,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Header ─────────────────────────────────────────────────────
               Row(
                 children: [
                   Container(
@@ -1089,8 +1166,9 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                     ),
                   ),
                   IconButton(
-                    onPressed:
-                        _isSaving ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     icon: const Icon(Icons.close_rounded, size: 18),
                     color: AppColors.textGray,
                     padding: EdgeInsets.zero,
@@ -1101,8 +1179,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
               const SizedBox(height: 20),
               const Divider(color: AppColors.cardBorder, height: 1),
               const SizedBox(height: 20),
-
-              // ── Current Status Row ─────────────────────────────────────────
               Row(
                 children: [
                   const Text(
@@ -1114,8 +1190,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                 ],
               ),
               const SizedBox(height: 16),
-
-              // ── No-action restriction notice ───────────────────────────────
               if (!_hasAction) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -1129,15 +1203,15 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                       color: AppColors.accentOrange.withOpacity(0.25),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.info_outline_rounded,
                         size: 14,
                         color: AppColors.accentOrange,
                       ),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'No status change is available. Warning can only be set for '
                           'Inactive or No Activity businesses, and only when their '
@@ -1152,7 +1226,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                // ── Close only ───────────────────────────────────────────────
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
@@ -1169,8 +1242,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                   ),
                 ),
               ],
-
-              // ── Available action option(s) ─────────────────────────────────
               if (_hasAction) ...[
                 const Text(
                   'Available Action',
@@ -1181,8 +1252,6 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Escalate → Warning
                 if (_canSetWarning)
                   _StatusOption(
                     label: 'Set to Warning',
@@ -1191,12 +1260,9 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                     icon: Icons.warning_amber_rounded,
                     color: AppColors.accentOrange,
                     isSelected: _selected == BusinessStatusLevel.warning,
-                    onTap: () => setState(
-                      () => _selected = BusinessStatusLevel.warning,
-                    ),
+                    onTap: () =>
+                        setState(() => _selected = BusinessStatusLevel.warning),
                   ),
-
-                // Revert → Approved
                 if (_canSetApproved)
                   _StatusOption(
                     label: 'Revert to Approved',
@@ -1208,10 +1274,7 @@ class _StatusChangeDialogState extends State<_StatusChangeDialog> {
                       () => _selected = BusinessStatusLevel.approved,
                     ),
                   ),
-
                 const SizedBox(height: 24),
-
-                // ── Actions ──────────────────────────────────────────────────
                 Row(
                   children: [
                     Expanded(
@@ -1333,7 +1396,8 @@ class _StatusOption extends StatelessWidget {
                 ],
               ),
             ),
-            if (isSelected) Icon(Icons.check_circle_rounded, color: color, size: 16),
+            if (isSelected)
+              Icon(Icons.check_circle_rounded, color: color, size: 16),
           ],
         ),
       ),
@@ -1398,25 +1462,25 @@ class _ActivityBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status) {
       ActivityStatus.active => const _StatusChip(
-          color: AppColors.accentGreen,
-          label: 'Active',
-          icon: Icons.check_circle_outline_rounded,
-        ),
+        color: AppColors.accentGreen,
+        label: 'Active',
+        icon: Icons.check_circle_outline_rounded,
+      ),
       ActivityStatus.lowActivity => const _StatusChip(
-          color: AppColors.accentOrange,
-          label: 'Low Activity',
-          icon: Icons.warning_amber_rounded,
-        ),
+        color: AppColors.accentOrange,
+        label: 'Low Activity',
+        icon: Icons.warning_amber_rounded,
+      ),
       ActivityStatus.inactive => const _StatusChip(
-          color: AppColors.accentRed,
-          label: 'Inactive',
-          icon: Icons.cancel_outlined,
-        ),
+        color: AppColors.accentRed,
+        label: 'Inactive',
+        icon: Icons.cancel_outlined,
+      ),
       ActivityStatus.noActivity => const _StatusChip(
-          color: AppColors.textSubtle,
-          label: 'No Activity',
-          icon: Icons.remove_circle_outline_rounded,
-        ),
+        color: AppColors.textSubtle,
+        label: 'No Activity',
+        icon: Icons.remove_circle_outline_rounded,
+      ),
     };
   }
 }
@@ -1432,20 +1496,20 @@ class _BusinessStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (status) {
       BusinessStatusLevel.approved => const _StatusChip(
-          color: AppColors.accentGreen,
-          label: 'Approved',
-          icon: Icons.verified_outlined,
-        ),
+        color: AppColors.accentGreen,
+        label: 'Approved',
+        icon: Icons.verified_outlined,
+      ),
       BusinessStatusLevel.warning => const _StatusChip(
-          color: AppColors.accentOrange,
-          label: 'Warning',
-          icon: Icons.warning_amber_rounded,
-        ),
+        color: AppColors.accentOrange,
+        label: 'Warning',
+        icon: Icons.warning_amber_rounded,
+      ),
       BusinessStatusLevel.suspended => const _StatusChip(
-          color: AppColors.accentRed,
-          label: 'Suspended',
-          icon: Icons.block_rounded,
-        ),
+        color: AppColors.accentRed,
+        label: 'Suspended',
+        icon: Icons.block_rounded,
+      ),
     };
   }
 }
