@@ -346,15 +346,18 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
   int get _demoTotal => _demoRows.fold(0, (sum, e) => sum + e.count);
   int get _totalGuests => int.tryParse(_guestsCtrl.text.trim()) ?? 0;
 
+  // AFTER
   void _recalcNights() {
     final checkIn = DateTime.tryParse(_checkInCtrl.text.trim());
     final checkOut = DateTime.tryParse(_checkOutCtrl.text.trim());
-    if (checkIn != null && checkOut != null && checkOut.isAfter(checkIn)) {
-      final nights = checkOut.difference(checkIn).inDays;
-      setState(() => _lengthOfStay = '$nights night${nights == 1 ? '' : 's'}');
-    } else {
+    if (checkIn == null || checkOut == null) {
       setState(() => _lengthOfStay = '0 nights');
+      return;
     }
+    final nights = checkOut.difference(checkIn).inDays.clamp(0, 999);
+    setState(() {
+      _lengthOfStay = '$nights night${nights == 1 ? '' : 's'}';
+    });
   }
 
   // ─── Row management ───────────────────────────────────────────────────────
@@ -426,7 +429,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
       errors['checkOut'] = 'Invalid date — use yyyy-mm-dd format.';
       hasError = true;
     } else if (checkIn != null && checkOut.isBefore(checkIn)) {
-      errors['checkOut'] = 'Check-out must be the same day as check-in or later.';
+      errors['checkOut'] =
+          'Check-out must be the same day as check-in or later.';
       hasError = true;
     }
 
@@ -442,8 +446,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
 
     // ── Rooms Occupied ──────────────────────────────────────────────────────
     final rooms = int.tryParse(_roomsCtrl.text.trim());
-    if (rooms == null || rooms <= 0) {
-      errors['roomsOccupied'] = 'Enter at least 1 room.';
+    if (rooms == null || rooms < 0) {
+      errors['roomsOccupied'] = 'Enter a valid number of rooms.';
       hasError = true;
     } else if (guests != null && guests > 0 && rooms > guests) {
       errors['roomsOccupied'] = 'Rooms cannot exceed total guests.';
@@ -733,6 +737,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                         controller: _checkInCtrl,
                                         hint: 'yyyy-mm-dd',
                                         hasError: _errors['checkIn'] != null,
+                                        lastDate:
+                                            DateTime.now(), // ← no future check-ins
                                         onPicked: () {
                                           _recalcNights();
                                           _clearFieldError('checkIn');
@@ -746,10 +752,17 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                     child: _FieldCol(
                                       label: 'Check-out Date *',
                                       errorText: _errors['checkOut'],
+                                      // AFTER — check-out field (both layouts)
                                       child: _DateField(
                                         controller: _checkOutCtrl,
                                         hint: 'yyyy-mm-dd',
                                         hasError: _errors['checkOut'] != null,
+                                        firstDate:
+                                            DateTime.tryParse(
+                                              _checkInCtrl.text.trim(),
+                                            ) // ← same day allowed
+                                            ??
+                                            DateTime(2020),
                                         onPicked: () {
                                           _recalcNights();
                                           _clearFieldError('checkOut');
@@ -777,6 +790,8 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                         controller: _checkInCtrl,
                                         hint: 'yyyy-mm-dd',
                                         hasError: _errors['checkIn'] != null,
+                                        lastDate:
+                                            DateTime.now(), // ← no future check-ins
                                         onPicked: () {
                                           _recalcNights();
                                           _clearFieldError('checkIn');
@@ -790,10 +805,17 @@ class _EditGuestDialogState extends State<_EditGuestDialog> {
                                     child: _FieldCol(
                                       label: 'Check-out Date *',
                                       errorText: _errors['checkOut'],
+                                      // AFTER — check-out field (both layouts)
                                       child: _DateField(
                                         controller: _checkOutCtrl,
                                         hint: 'yyyy-mm-dd',
                                         hasError: _errors['checkOut'] != null,
+                                        firstDate:
+                                            DateTime.tryParse(
+                                              _checkInCtrl.text.trim(),
+                                            ) // ← same day allowed
+                                            ??
+                                            DateTime(2020),
                                         onPicked: () {
                                           _recalcNights();
                                           _clearFieldError('checkOut');
@@ -1916,11 +1938,15 @@ class _DateField extends StatelessWidget {
     required this.hint,
     this.hasError = false,
     this.onPicked,
+    this.firstDate,
+    this.lastDate,
   });
   final TextEditingController controller;
   final String hint;
   final bool hasError;
   final VoidCallback? onPicked;
+  final DateTime? firstDate;
+  final DateTime? lastDate;
 
   @override
   Widget build(BuildContext context) {
@@ -1944,11 +1970,21 @@ class _DateField extends StatelessWidget {
         onTap: () async {
           final current = DateTime.tryParse(controller.text);
           final now = DateTime.now();
+          // AFTER
+          final resolvedFirst = firstDate ?? DateTime(2020);
+          final resolvedLast = lastDate ?? now.add(const Duration(days: 730));
+          final safeInitial =
+              (current != null &&
+                  !current.isBefore(resolvedFirst) &&
+                  !current.isAfter(resolvedLast))
+              ? current
+              : resolvedFirst;
+
           final picked = await showDatePicker(
             context: context,
-            initialDate: current ?? now,
-            firstDate: DateTime(2020),
-            lastDate: now.add(const Duration(days: 730)),
+            initialDate: safeInitial,
+            firstDate: resolvedFirst,
+            lastDate: resolvedLast,
             builder: (ctx, child) => Theme(
               data: ThemeData(
                 useMaterial3: true,

@@ -16,6 +16,12 @@ import '../../../api/messages_api.dart';
 import '../../../core/services/session_service.dart';
 import '../../../api/admin_accommodation_api.dart';
 
+// ─── View mode ────────────────────────────────────────────────────────────────
+
+enum _ViewMode { info, rankings }
+
+// ─── Filter tabs (info mode only) ────────────────────────────────────────────
+
 class _FilterTab {
   const _FilterTab({required this.label, this.status});
   final String label;
@@ -44,6 +50,11 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   final _api = AdminAccommodationApi();
   final _messagesApi = MessagesApi();
 
+  // ── View toggle ───────────────────────────────────────────────────────────
+  _ViewMode _viewMode = _ViewMode.info;
+  int _rankingsRefreshKey = 0;
+
+  // ── Info mode state ───────────────────────────────────────────────────────
   int _selectedTab = 0;
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
@@ -97,7 +108,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      // map common exceptions to status codes
       final isConnErr =
           e.toString().toLowerCase().contains('socket') ||
           e.toString().toLowerCase().contains('network') ||
@@ -109,6 +119,16 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
       });
     }
   }
+
+  void _handleRefresh() {
+    if (_viewMode == _ViewMode.info) {
+      _loadAccommodations();
+    } else {
+      setState(() => _rankingsRefreshKey++);
+    }
+  }
+
+  // ── Filtering / paging ────────────────────────────────────────────────────
 
   List<Accommodation> get _filtered {
     final tabStatus = _filterTabs[_selectedTab].status;
@@ -124,7 +144,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   }
 
   int get _totalPages => (_filtered.length / _pageSize).ceil().clamp(1, 999);
-
   int get _clampedPage => _currentPage.clamp(0, _totalPages - 1);
 
   List<Accommodation> get _pagedRows {
@@ -159,11 +178,9 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   Future<void> _runExport({required bool excel}) async {
     if (_isExporting) return;
     setState(() => _isExporting = true);
-
     try {
       final rows = await _api.fetchExportRows();
       if (!mounted) return;
-
       if (rows.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -173,7 +190,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
         );
         return;
       }
-
       if (excel) {
         await AccommodationExportService.exportToExcel(rows, context);
       } else {
@@ -192,7 +208,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
     String? remarks,
   }) async {
     AccommodationResult result;
-
     switch (newStatus) {
       case AccommodationStatus.approved:
         result = await _api.approve(item.id, remarks: remarks);
@@ -216,9 +231,7 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
           _accommodations[index] = item.copyWith(status: newStatus);
         }
       });
-
       await _sendDecisionLetter(item, newStatus, remarks: remarks);
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${item.name} has been ${newStatus.name}.'),
@@ -269,12 +282,10 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
 
     const subject = 'Accommodation Application Approved';
     final remarksText = remarks?.trim();
-    final remarksSection = remarksText?.isNotEmpty == true
-        ? '\n\nRemarks: $remarksText'
-        : '';
+    final remarksSection =
+        remarksText?.isNotEmpty == true ? '\n\nRemarks: $remarksText' : '';
     final body =
         'We\'re pleased to let you know your accommodation application has been approved.$remarksSection';
-
     const messageType = MessageType.announcement;
 
     try {
@@ -287,7 +298,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
         senderPhone: senderPhone,
         messageType: messageType,
       );
-
       await _messagesApi.sendToSelected(
         senderId: senderId,
         businessIds: [item.id],
@@ -295,7 +305,6 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
         subject: subject,
         content: letter,
       );
-
       unawaited(MessageBadgeController.instance.refresh());
     } catch (e) {
       if (!mounted) return;
@@ -317,13 +326,15 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
     super.dispose();
   }
 
+  // ── Build ─────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
       title: 'Accommodations',
       selectedIndex: 1,
       onNavSelected: (_) {},
-      child: _error != null
+      child: _error != null && _viewMode == _ViewMode.info
           ? ErrorPage(
               statusCode: _errorCode ?? 500,
               onRetry: _loadAccommodations,
@@ -331,19 +342,46 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
           : LayoutBuilder(
               builder: (context, constraints) {
                 final isNarrow = constraints.maxWidth < 900;
+                final isMobile = constraints.maxWidth < 600;
+                final padding = EdgeInsets.all(isNarrow ? 16 : 24);
+
+                final header = _PageHeader(
+                  onRefresh: _handleRefresh,
+                  onExport: _showExportDialog,
+                  isExporting: _isExporting,
+                  viewMode: _viewMode,
+                  onViewModeChanged: (m) => setState(() => _viewMode = m),
+                  isNarrow: isMobile,
+                );
+
+                // ── Rankings mode ─────────────────────────────────────
+                if (_viewMode == _ViewMode.rankings) {
+                  return SingleChildScrollView(
+                    padding: padding,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        header,
+                        const SizedBox(height: 20),
+                        _RankingsView(
+                          key: ValueKey(_rankingsRefreshKey),
+                          api: _api,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // ── Info mode ─────────────────────────────────────────
                 return RefreshIndicator(
                   onRefresh: _loadAccommodations,
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.all(isNarrow ? 16 : 24),
+                    padding: padding,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _PageHeader(
-                          onRefresh: _loadAccommodations,
-                          onExport: _showExportDialog,
-                          isExporting: _isExporting,
-                        ),
+                        header,
                         const SizedBox(height: 20),
                         _FilterTabBar(
                           selectedTab: _selectedTab,
@@ -410,6 +448,96 @@ class _AdminAccommodationsPageState extends State<AdminAccommodationsPage> {
   }
 }
 
+// ─── View Toggle ──────────────────────────────────────────────────────────────
+
+class _ViewToggle extends StatelessWidget {
+  const _ViewToggle({required this.selected, required this.onChanged});
+
+  final _ViewMode selected;
+  final ValueChanged<_ViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ToggleOption(
+            label: 'Info',
+            icon: Icons.list_alt_rounded,
+            isActive: selected == _ViewMode.info,
+            onTap: () => onChanged(_ViewMode.info),
+          ),
+          _ToggleOption(
+            label: 'Rankings',
+            icon: Icons.emoji_events_rounded,
+            isActive: selected == _ViewMode.rankings,
+            onTap: () => onChanged(_ViewMode.rankings),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToggleOption extends StatelessWidget {
+  const _ToggleOption({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          gradient: isActive
+              ? const LinearGradient(
+                  colors: [AppColors.gradientStart, AppColors.gradientEnd],
+                )
+              : null,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isActive ? Colors.white : AppColors.textGray,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.white : AppColors.textGray,
+                fontSize: 12.5,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Export Dialog ────────────────────────────────────────────────────────────
 
 class _ExportDialog extends StatelessWidget {
@@ -444,7 +572,6 @@ class _ExportDialog extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Header ─────────────────────────────────────────────────
                 Row(
                   children: [
                     Container(
@@ -505,8 +632,6 @@ class _ExportDialog extends StatelessWidget {
                 const SizedBox(height: 20),
                 const Divider(color: AppColors.cardBorder, height: 1),
                 const SizedBox(height: 20),
-
-                // ── Format buttons ──────────────────────────────────────────
                 _ExportFormatButton(
                   icon: Icons.table_chart_rounded,
                   label: 'Excel Spreadsheet',
@@ -523,8 +648,6 @@ class _ExportDialog extends StatelessWidget {
                   onTap: onExportPdf,
                 ),
                 const SizedBox(height: 16),
-
-                // ── Note ────────────────────────────────────────────────────
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -664,53 +787,72 @@ class _PageHeader extends StatelessWidget {
     required this.onRefresh,
     required this.onExport,
     required this.isExporting,
+    required this.viewMode,
+    required this.onViewModeChanged,
+    this.isNarrow = false,
   });
 
   final VoidCallback onRefresh;
   final VoidCallback onExport;
   final bool isExporting;
+  final _ViewMode viewMode;
+  final ValueChanged<_ViewMode> onViewModeChanged;
+  final bool isNarrow;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final titleSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Accommodations',
-                style: TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: const Text(
-                  'Manage registered accommodation establishments',
-                  style: TextStyle(color: AppColors.textGray, fontSize: 13),
-                ),
-              ),
-            ],
+        const Text(
+          'Accommodations',
+          style: TextStyle(
+            color: AppColors.textWhite,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        Row(
-          children: [
-            // ── Export button ───────────────────────────────────────────
-            Tooltip(
-              message: 'Export',
-              child: _ExportIconButton(
-                onTap: isExporting ? null : onExport,
-                isLoading: isExporting,
-              ),
+        const SizedBox(height: 4),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            viewMode == _ViewMode.info
+                ? 'Manage registered accommodation establishments'
+                : 'Tourist rankings by accommodation',
+            style: const TextStyle(
+              color: AppColors.textGray,
+              fontSize: 13,
             ),
-            const SizedBox(width: 4),
-            // ── Refresh button ──────────────────────────────────────────
+          ),
+        ),
+      ],
+    );
+
+    final actionSection = Row(
+      mainAxisSize: isNarrow ? MainAxisSize.max : MainAxisSize.min,
+      mainAxisAlignment:
+          isNarrow ? MainAxisAlignment.spaceBetween : MainAxisAlignment.end,
+      children: [
+        _ViewToggle(
+          selected: viewMode,
+          onChanged: onViewModeChanged,
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(width: 8),
+            // Export only shown in info mode
+            if (viewMode == _ViewMode.info) ...[
+              Tooltip(
+                message: 'Export',
+                child: _ExportIconButton(
+                  onTap: isExporting ? null : onExport,
+                  isLoading: isExporting,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             IconButton(
               onPressed: onRefresh,
               icon: const Icon(
@@ -721,6 +863,26 @@ class _PageHeader extends StatelessWidget {
             ),
           ],
         ),
+      ],
+    );
+
+    if (isNarrow) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleSection,
+          const SizedBox(height: 16),
+          actionSection,
+        ],
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(child: titleSection),
+        const SizedBox(width: 16),
+        actionSection,
       ],
     );
   }
@@ -801,6 +963,447 @@ class _ExportIconButtonState extends State<_ExportIconButton> {
   }
 }
 
+// ─── Rankings View ────────────────────────────────────────────────────────────
+
+class _RankingsView extends StatefulWidget {
+  const _RankingsView({super.key, required this.api});
+  final AdminAccommodationApi api;
+
+  @override
+  State<_RankingsView> createState() => _RankingsViewState();
+}
+
+class _RankingsViewState extends State<_RankingsView> {
+  static const _monthNames = [
+    'January', 'February', 'March', 'April',
+    'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December',
+  ];
+
+  late int _month;
+  late int _year;
+  List<AccommodationRankingRow> _rankings = [];
+  bool _isLoading = false;
+  String? _error;
+
+  // Prevents stale responses from overwriting newer results
+  int _loadId = 0;
+
+  List<int> get _years {
+    final now = DateTime.now().year;
+    return [0, ...List.generate(5, (i) => now - 4 + i)];
+  }
+
+  int get _totalGuests => _rankings.fold(0, (sum, r) => sum + r.totalGuests);
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _month = now.month;
+    _year = now.year;
+    _load();
+  }
+
+  Future<void> _load() async {
+    final id = ++_loadId;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final data = await widget.api.fetchRankings(month: _month, year: _year);
+      if (!mounted || id != _loadId) return;
+      setState(() {
+        _rankings = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || id != _loadId) return;
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  void _onMonthChanged(int? m) {
+    if (m == null) return;
+    setState(() => _month = m);
+    _load();
+  }
+
+  void _onYearChanged(int? y) {
+    if (y == null) return;
+    setState(() => _year = y);
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Period selector row ───────────────────────────────────
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.filter_list_rounded,
+                  color: AppColors.textSubtle,
+                  size: 15,
+                ),
+                const SizedBox(width: 6),
+                const Text(
+                  'Period:',
+                  style: TextStyle(
+                    color: AppColors.textSubtle,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _StyledDropdown<int>(
+                  value: _month,
+                  items: List.generate(13, (i) => i),
+                  labelBuilder: (m) => m == 0 ? 'All Months' : _monthNames[m - 1],
+                  onChanged: _onMonthChanged,
+                ),
+                const SizedBox(width: 8),
+                _StyledDropdown<int>(
+                  value: _year,
+                  items: _years,
+                  labelBuilder: (y) => y == 0 ? 'All Years' : y.toString(),
+                  onChanged: _onYearChanged,
+                ),
+              ],
+            ),
+            // Total tourists chip — only shown when data is ready
+            if (!_isLoading && _rankings.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryCyan.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: AppColors.primaryCyan.withOpacity(0.2),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.people_rounded,
+                      color: AppColors.primaryCyan,
+                      size: 15,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_commify(_totalGuests)} total tourists',
+                      style: const TextStyle(
+                        color: AppColors.primaryCyan,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        // ── Rankings content ──────────────────────────────────────
+        _buildContent(),
+      ],
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 60),
+          child: CircularProgressIndicator(
+            color: AppColors.primaryCyan,
+            strokeWidth: 2,
+          ),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 60),
+          child: Column(
+            children: [
+              Icon(
+                Icons.error_outline_rounded,
+                color: AppColors.textGray.withOpacity(0.5),
+                size: 44,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Failed to load rankings',
+                style: TextStyle(color: AppColors.textGray, fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _load,
+                child: const Text(
+                  'Try again',
+                  style: TextStyle(color: AppColors.primaryCyan),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_rankings.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 60),
+          child: Column(
+            children: [
+              Icon(
+                Icons.emoji_events_outlined,
+                color: AppColors.textGray.withOpacity(0.25),
+                size: 52,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'No tourist records found',
+                style: TextStyle(
+                  color: AppColors.textGray.withOpacity(0.7),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${_month == 0 ? "All Months" : _monthNames[_month - 1]} ${_year == 0 ? "All Years" : _year}',
+                style: const TextStyle(
+                  color: AppColors.textSubtle,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final maxGuests = _rankings.first.totalGuests;
+
+    return Column(
+      children: _rankings.asMap().entries.map((entry) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: entry.key < _rankings.length - 1 ? 10 : 0,
+          ),
+          child: _RankingCard(row: entry.value, maxGuests: maxGuests),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ─── Styled Dropdown ──────────────────────────────────────────────────────────
+
+class _StyledDropdown<T> extends StatelessWidget {
+  const _StyledDropdown({
+    required this.value,
+    required this.items,
+    required this.labelBuilder,
+    required this.onChanged,
+  });
+
+  final T value;
+  final List<T> items;
+  final String Function(T) labelBuilder;
+  final void Function(T?) onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          dropdownColor: AppColors.cardBackground,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textGray,
+            size: 18,
+          ),
+          style: const TextStyle(
+            color: AppColors.textWhite,
+            fontSize: 13.5,
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(
+                    labelBuilder(item),
+                    style: const TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Ranking Card ─────────────────────────────────────────────────────────────
+
+class _RankingCard extends StatelessWidget {
+  const _RankingCard({required this.row, required this.maxGuests});
+
+  final AccommodationRankingRow row;
+  final int maxGuests;
+
+  static const _medals = ['🥇', '🥈', '🥉'];
+
+  Color get _rankColor {
+    switch (row.rank) {
+      case 1:
+        return const Color(0xFFFFD700);
+      case 2:
+        return const Color(0xFFC0C0C0);
+      case 3:
+        return const Color(0xFFCD7F32);
+      default:
+        return AppColors.textGray;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isTop3 = row.rank <= 3;
+    final rankColor = _rankColor;
+    final progress = maxGuests > 0 ? row.totalGuests / maxGuests : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isTop3 ? rankColor.withOpacity(0.06) : AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isTop3 ? rankColor.withOpacity(0.28) : AppColors.cardBorder,
+        ),
+      ),
+      child: Row(
+        children: [
+          // ── Rank badge ────────────────────────────────────────
+          SizedBox(
+            width: 48,
+            child: Center(
+              child: isTop3
+                  ? Text(
+                      _medals[row.rank - 1],
+                      style: const TextStyle(fontSize: 28),
+                    )
+                  : Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBorder.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          '${row.rank}',
+                          style: const TextStyle(
+                            color: AppColors.textGray,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // ── Name + progress bar ───────────────────────────────
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  row.businessName,
+                  style: TextStyle(
+                    color: isTop3 ? AppColors.textWhite : AppColors.textGray,
+                    fontSize: isTop3 ? 14.5 : 14,
+                    fontWeight: isTop3 ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 7),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: AppColors.cardBorder.withOpacity(0.3),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      isTop3
+                          ? rankColor.withOpacity(0.65)
+                          : AppColors.primaryCyan.withOpacity(0.35),
+                    ),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          // ── Tourist count ─────────────────────────────────────
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                _commify(row.totalGuests),
+                style: TextStyle(
+                  color: isTop3 ? rankColor : AppColors.textWhite,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                'tourists',
+                style: TextStyle(color: AppColors.textSubtle, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Filter Tab Bar ───────────────────────────────────────────────────────────
 
 class _FilterTabBar extends StatelessWidget {
@@ -821,7 +1424,6 @@ class _FilterTabBar extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isNarrow = constraints.maxWidth < 600;
-
         if (!isNarrow) {
           return SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -843,7 +1445,6 @@ class _FilterTabBar extends StatelessWidget {
             ),
           );
         }
-
         return Wrap(
           spacing: 6,
           runSpacing: 6,
@@ -1439,18 +2040,8 @@ String _formatRegisteredDate(String? rawValue) {
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return value;
   const monthNames = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
   ];
   final local = parsed.toLocal();
   return '${monthNames[local.month - 1]} ${local.day}, ${local.year}';
@@ -1475,7 +2066,6 @@ class _ActionButtons extends StatelessWidget {
         ? Icons.check_circle_outline_rounded
         : Icons.cancel_outlined;
     final label = isApprove ? 'Approve' : 'Reject';
-
     final remarksCtrl = TextEditingController();
 
     final confirmed = await showDialog<bool>(
@@ -1571,7 +2161,10 @@ class _ActionButtons extends StatelessWidget {
                   const SizedBox(height: 4),
                   const Text(
                     'This will be visible to the business owner.',
-                    style: TextStyle(color: AppColors.textSubtle, fontSize: 12),
+                    style: TextStyle(
+                      color: AppColors.textSubtle,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   TextField(
@@ -1645,14 +2238,12 @@ class _ActionButtons extends StatelessWidget {
       final remarks = remarksCtrl.text.trim();
       onStatusUpdate(item, action, remarks: remarks.isEmpty ? null : remarks);
     }
-
     remarksCtrl.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isPending = item.status == AccommodationStatus.pending;
-
     return FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
@@ -1833,3 +2424,11 @@ class _ActionIconState extends State<_ActionIcon> {
     );
   }
 }
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+/// Formats an integer with thousands commas (e.g. 12345 → "12,345").
+String _commify(int n) => n.toString().replaceAllMapped(
+  RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+  (m) => '${m[1]},',
+);

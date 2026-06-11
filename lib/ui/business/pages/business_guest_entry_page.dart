@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
@@ -356,7 +355,8 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
       errors['checkOut'] = 'Please select a check-out date.';
       hasError = true;
     } else if (_checkIn != null && _checkOut!.isBefore(_checkIn!)) {
-      errors['checkOut'] = 'Check-out must be the same day as check-in or later.';
+      errors['checkOut'] =
+          'Check-out must be the same day as check-in or later.';
       hasError = true;
     }
 
@@ -370,11 +370,11 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     }
 
     final rooms = int.tryParse(_roomsOccupiedCtrl.text);
-    if (rooms == null || rooms <= 0) {
-      errors['roomsOccupied'] = 'Enter at least 1 room.';
+    if (rooms == null || rooms < 0) {
+      errors['roomsOccupied'] = 'Enter a valid number of rooms.';
       hasError = true;
     } else if (guests != null && guests > 0 && rooms > guests) {
-      errors['roomsOccupied'] = 'Cannot exceed total guests.';
+      errors['roomsOccupied'] = 'Rooms cannot exceed total guests.';
       hasError = true;
     }
 
@@ -530,11 +530,11 @@ class _BusinessGuestEntryPageState extends State<BusinessGuestEntryPage> {
     final today = DateTime(now.year, now.month, now.day);
     final firstDate = isCheckIn
         ? DateTime(2020)
-        : (_checkIn != null ? _checkIn!.add(const Duration(days: 1)) : today);
+        : (_checkIn != null ? _checkIn! : today);
     final lastDate = isCheckIn ? today : today.add(const Duration(days: 730));
     final initialDate = isCheckIn
         ? today
-        : (_checkIn != null ? _checkIn!.add(const Duration(days: 1)) : today);
+        : (_checkIn != null ? _checkIn! : today);
 
     final picked = await showDatePicker(
       context: context,
@@ -912,9 +912,7 @@ class _StayInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    final nightsLabel = nights > 0
-        ? '$nights night${nights > 1 ? 's' : ''}'
-        : '—';
+    final nightsLabel = '$nights night${nights == 1 ? '' : 's'}';
 
     return _SectionCard(
       title: 'Stay Information',
@@ -1249,8 +1247,11 @@ class _DemographicCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
-                  Icon(Icons.lightbulb_outline,
-                      color: Color(0xFFD4A017), size: 13),
+                  Icon(
+                    Icons.lightbulb_outline,
+                    color: Color(0xFFD4A017),
+                    size: 13,
+                  ),
                   SizedBox(width: 6),
                   Expanded(
                     child: Text(

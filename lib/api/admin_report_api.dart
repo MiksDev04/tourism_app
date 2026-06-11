@@ -679,17 +679,17 @@ class ReportService {
     );
 
     List<_MonthData>? allTwelveMonthsMerged;
-    if (params.sheetOptions.includeMonthlySummarySheet) {
+   if (params.sheetOptions.includeMonthlySummarySheet) {
       allTwelveMonthsMerged = [];
       for (int m = 1; m <= 12; m++) {
-        if (m == params.month) {
-          allTwelveMonthsMerged.add(_mergeMonthData(m, selectedMonthPerBiz));
-        } else {
-          final perBiz = await Future.wait(
-            businesses.map((b) => _fetchMonthData(b.id, m, params.year)),
-          );
-          allTwelveMonthsMerged.add(_mergeMonthData(m, perBiz));
-        }
+        // Always re-fetch with includeArchived=true so past months that have
+        // already been archived (via a prior report run) are counted too.
+        final perBiz = await Future.wait(
+          businesses.map(
+            (b) => _fetchMonthData(b.id, m, params.year, includeArchived: true),
+          ),
+        );
+        allTwelveMonthsMerged.add(_mergeMonthData(m, perBiz));
       }
     }
 
@@ -845,22 +845,27 @@ class ReportService {
         .toList();
   }
 
-  Future<_MonthData> _fetchMonthData(
-    String businessId,
-    int month,
-    int year,
-  ) async {
-    final firstDay = DateTime(year, month, 1);
-    final lastDay = DateTime(year, month + 1, 0);
+  // AFTER
+Future<_MonthData> _fetchMonthData(
+  String businessId,
+  int month,
+  int year, {
+  bool includeArchived = false,        // ← new optional flag
+}) async {
+  final firstDay = DateTime(year, month, 1);
+  final lastDay = DateTime(year, month + 1, 0);
 
-    final records = await _sb
-        .from('guest_records')
-        .select('id, check_in, check_out, rooms_occupied')
-        .eq('business_id', businessId)
-        .eq('status', 'active')
-        .eq('is_deleted', false)
-        .gte('check_in', firstDay.toIso8601String().substring(0, 10))
-        .lte('check_in', lastDay.toIso8601String().substring(0, 10));
+  final baseQuery = _sb
+      .from('guest_records')
+      .select('id, check_in, check_out, rooms_occupied')
+      .eq('business_id', businessId)
+      .eq('is_deleted', false)
+      .gte('check_in', firstDay.toIso8601String().substring(0, 10))
+      .lte('check_in', lastDay.toIso8601String().substring(0, 10));
+
+  final records = includeArchived
+      ? await baseQuery.inFilter('status', ['active', 'archived'])  // ← both
+      : await baseQuery.eq('status', 'active');                     // ← active only
 
     final recordIds = (records as List).map((r) => r['id'] as String).toList();
     List breakdowns = [];

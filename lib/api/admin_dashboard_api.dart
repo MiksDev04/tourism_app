@@ -45,6 +45,13 @@ class GenderDistribution {
 
 typedef SexDistribution = GenderDistribution;
 
+class AgeGroupCount {
+  const AgeGroupCount({required this.ageGroup, required this.count});
+
+  final String ageGroup;
+  final int count;
+}
+
 class NationalityCount {
   const NationalityCount({required this.nationality, required this.count});
 
@@ -68,11 +75,22 @@ class RegionCount {
   final int count;
 }
 
+class AccommodationTypeCount {
+  const AccommodationTypeCount({required this.type, required this.count});
+
+  final String type;
+  final int count;
+}
+
+class PurposeCount {
+  const PurposeCount({required this.purpose, required this.count});
+
+  final String purpose;
+  final int count;
+}
+
 class ComplianceData {
-  const ComplianceData({
-    required this.compliant,
-    required this.nonCompliant,
-  });
+  const ComplianceData({required this.compliant, required this.nonCompliant});
 
   final int compliant;
   final int nonCompliant;
@@ -87,18 +105,24 @@ class AdminDashboardData {
   const AdminDashboardData({
     required this.stats,
     required this.genderDistribution,
+    required this.ageGroups,
     required this.topNationalities,
     required this.transportModes,
     required this.compliance,
     required this.topRegions,
+    required this.accommodationTypes,
+    required this.purposeOfVisit,
   });
 
   final AdminDashboardStats stats;
   final GenderDistribution genderDistribution;
+  final List<AgeGroupCount> ageGroups;
   final List<NationalityCount> topNationalities;
   final List<TransportCount> transportModes;
   final ComplianceData compliance;
   final List<RegionCount> topRegions;
+  final List<AccommodationTypeCount> accommodationTypes;
+  final List<PurposeCount> purposeOfVisit;
 }
 
 typedef DashboardData = AdminDashboardData;
@@ -127,11 +151,12 @@ class MonthlyCount {
   final int month; // 1–12
   final int count;
 }
+
 // ─── API ──────────────────────────────────────────────────────────────────────
 
 class AdminDashboardApi {
   AdminDashboardApi({SupabaseClient? client})
-      : _supabase = client ?? Supabase.instance.client;
+    : _supabase = client ?? Supabase.instance.client;
 
   final SupabaseClient _supabase;
 
@@ -171,7 +196,9 @@ class AdminDashboardApi {
   }) async {
     final response = await _supabase
         .from('guest_records')
-        .select('id, check_in, check_out, total_guests, rooms_occupied')
+        .select(
+          'id, business_id, check_in, check_out, total_guests, rooms_occupied, purpose_of_visit',
+        )
         .eq('is_deleted', false)
         .gte('check_in', startDate)
         .lte('check_in', endDate);
@@ -211,6 +238,66 @@ class AdminDashboardApi {
     return (response as List).length;
   }
 
+  List<String> _extractBusinessLines(Object? value) {
+    if (value is List) {
+      return value
+          .map((e) => (e?.toString() ?? '').trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      return value
+          .split(RegExp(r'[,|\n]'))
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+    return const [];
+  }
+
+  /// Aggregates period tourist counts by each approved business_line value.
+  Future<List<AccommodationTypeCount>> _fetchAccommodationTypes(
+    List<Map<String, dynamic>> periodRecords,
+  ) async {
+    final businessIds = periodRecords
+        .map((record) => record['business_id'] as String?)
+        .whereType<String>()
+        .toSet()
+        .toList();
+    if (businessIds.isEmpty) return const [];
+
+    final response = await _supabase
+        .from('businesses')
+        .select('id, business_line')
+        .inFilter('id', businessIds)
+        .eq('status', 'approved')
+        .isFilter('deleted_at', null);
+
+    final businesses = List<Map<String, dynamic>>.from(response as List);
+    final linesByBusiness = {
+      for (final business in businesses)
+        if (business['id'] case final String id)
+          id: _extractBusinessLines(business['business_line']),
+    };
+    final typeMap = <String, int>{};
+
+    for (final record in periodRecords) {
+      final businessId = record['business_id'] as String?;
+      final lines = linesByBusiness[businessId] ?? const [];
+      if (lines.isEmpty) continue;
+
+      final guestCount = (record['total_guests'] as num?)?.toInt() ?? 0;
+      for (final type in lines) {
+        typeMap[type] = (typeMap[type] ?? 0) + guestCount;
+      }
+    }
+
+    return typeMap.entries
+        .map((e) => AccommodationTypeCount(type: e.key, count: e.value))
+        .toList()
+      ..sort((a, b) => b.count.compareTo(a.count));
+  }
+
   Future<AdminDashboardData> fetchDashboardData({
     required int month,
     required int year,
@@ -225,15 +312,16 @@ class AdminDashboardApi {
 
     final yearRecords = (month == 0)
         ? periodRecords
-        : await _fetchGuestRecords(
-            startDate: yearStart,
-            endDate: yearEnd,
-          );
+        : await _fetchGuestRecords(startDate: yearStart, endDate: yearEnd);
 
-    final touristsThisPeriod =
-        periodRecords.fold<int>(0, (s, r) => s + (r['total_guests'] as int));
-    final touristsThisYear =
-        yearRecords.fold<int>(0, (s, r) => s + (r['total_guests'] as int));
+    final touristsThisPeriod = periodRecords.fold<int>(
+      0,
+      (s, r) => s + (r['total_guests'] as int),
+    );
+    final touristsThisYear = yearRecords.fold<int>(
+      0,
+      (s, r) => s + (r['total_guests'] as int),
+    );
 
     final activeAccommodations = await _countBusinessProfiles();
     final pendingRegistrations = await _countPendingRegistrations();
@@ -242,6 +330,7 @@ class AdminDashboardApi {
       periodRecords.map((r) => r['id'] as String).toList(),
     );
 
+    // ── Gender distribution ──────────────────────────────────────────────────
     int male = 0, female = 0, other = 0;
     for (final breakdown in breakdowns) {
       final sex = (breakdown['sex'] as String? ?? '').toLowerCase();
@@ -255,6 +344,21 @@ class AdminDashboardApi {
       }
     }
 
+    // ── Age group distribution ───────────────────────────────────────────────
+    final ageGroupMap = <String, int>{};
+    for (final breakdown in breakdowns) {
+      final ageGroup = (breakdown['age_group'] as String? ?? '').trim();
+      if (ageGroup.isEmpty) continue;
+      ageGroupMap[ageGroup] =
+          (ageGroupMap[ageGroup] ?? 0) + (breakdown['count'] as int? ?? 0);
+    }
+    final ageGroups =
+        ageGroupMap.entries
+            .map((e) => AgeGroupCount(ageGroup: e.key, count: e.value))
+            .toList()
+          ..sort((a, b) => b.count.compareTo(a.count));
+
+    // ── Top nationalities / countries ────────────────────────────────────────
     final nationalityMap = <String, int>{};
     for (final breakdown in breakdowns) {
       final country = (breakdown['country'] as String? ?? '').trim();
@@ -262,16 +366,20 @@ class AdminDashboardApi {
       nationalityMap[country] =
           (nationalityMap[country] ?? 0) + (breakdown['count'] as int? ?? 0);
     }
-    final topNationalities = (nationalityMap.entries
-            .map((entry) => NationalityCount(
-                  nationality: entry.key,
-                  count: entry.value,
-                ))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topNationalities =
+        (nationalityMap.entries
+                .map(
+                  (entry) => NationalityCount(
+                    nationality: entry.key,
+                    count: entry.value,
+                  ),
+                )
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
 
+    // ── Top Philippine regions ───────────────────────────────────────────────
     final regionMap = <String, int>{};
     for (final breakdown in breakdowns) {
       final region = (breakdown['philippines_region'] as String? ?? '').trim();
@@ -279,12 +387,34 @@ class AdminDashboardApi {
       regionMap[region] =
           (regionMap[region] ?? 0) + (breakdown['count'] as int? ?? 0);
     }
-    final topRegions = (regionMap.entries
-            .map((entry) => RegionCount(region: entry.key, count: entry.value))
-            .toList()
-          ..sort((a, b) => b.count.compareTo(a.count)))
-        .take(5)
-        .toList();
+    final topRegions =
+        (regionMap.entries
+                .map(
+                  (entry) => RegionCount(region: entry.key, count: entry.value),
+                )
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
+
+    // ── Purpose of visit ─────────────────────────────────────────────────────
+    final purposeMap = <String, int>{};
+    for (final record in periodRecords) {
+      final purpose = (record['purpose_of_visit'] as String? ?? '').trim();
+      if (purpose.isEmpty) continue;
+      purposeMap[purpose] =
+          (purposeMap[purpose] ?? 0) + (record['total_guests'] as int? ?? 0);
+    }
+    final purposeOfVisit =
+        (purposeMap.entries
+                .map((e) => PurposeCount(purpose: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
+
+    // ── Accommodation types ──────────────────────────────────────────────────
+    final accommodationTypes = await _fetchAccommodationTypes(periodRecords);
 
     return AdminDashboardData(
       stats: AdminDashboardStats(
@@ -293,8 +423,12 @@ class AdminDashboardApi {
         pendingRegistrations: pendingRegistrations,
         touristsThisYear: touristsThisYear,
       ),
-      genderDistribution:
-          GenderDistribution(male: male, female: female, other: other),
+      genderDistribution: GenderDistribution(
+        male: male,
+        female: female,
+        other: other,
+      ),
+      ageGroups: ageGroups,
       topNationalities: topNationalities,
       transportModes: const [],
       compliance: ComplianceData(
@@ -302,6 +436,8 @@ class AdminDashboardApi {
         nonCompliant: pendingRegistrations,
       ),
       topRegions: topRegions,
+      accommodationTypes: accommodationTypes,
+      purposeOfVisit: purposeOfVisit,
     );
   }
 
@@ -312,10 +448,7 @@ class AdminDashboardApi {
 
     for (final year in years) {
       final (start, end) = _dateRange(0, year);
-      final records = await _fetchGuestRecords(
-        startDate: start,
-        endDate: end,
-      );
+      final records = await _fetchGuestRecords(startDate: start, endDate: end);
 
       final monthMap = <int, int>{};
       for (final record in records) {
@@ -326,7 +459,8 @@ class AdminDashboardApi {
 
       result[year] = List.generate(
         12,
-        (index) => MonthlyCount(month: index + 1, count: monthMap[index + 1] ?? 0),
+        (index) =>
+            MonthlyCount(month: index + 1, count: monthMap[index + 1] ?? 0),
       );
     }
 
@@ -339,14 +473,13 @@ class AdminDashboardApi {
     required int year,
   }) async {
     final (start, end) = _dateRange(month, year);
-    final records = await _fetchGuestRecords(
-      startDate: start,
-      endDate: end,
-    );
+    final records = await _fetchGuestRecords(startDate: start, endDate: end);
     final recordIds = records.map((record) => record['id'] as String).toList();
     final breakdowns = await _fetchBreakdowns(recordIds);
 
-    final recordMap = {for (final record in records) record['id'] as String: record};
+    final recordMap = {
+      for (final record in records) record['id'] as String: record,
+    };
 
     final buffer = StringBuffer()
       ..writeln('Business,$businessName')
@@ -380,18 +513,18 @@ class AdminDashboardApi {
   String _csvCell(String value) => value.contains(',') ? '"$value"' : value;
 
   String _monthName(int month) => const [
-        '',
-        'January',
-        'February',
-        'March',
-        'April',
-        'May',
-        'June',
-        'July',
-        'August',
-        'September',
-        'October',
-        'November',
-        'December',
-      ][month];
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ][month];
 }

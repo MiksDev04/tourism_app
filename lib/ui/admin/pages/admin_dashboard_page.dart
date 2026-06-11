@@ -170,6 +170,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       );
       buf.writeln();
 
+      // ── Age Group Distribution ─────────────────────────────────────────────
+      buf.writeln('AGE GROUP DISTRIBUTION');
+      buf.writeln('Age Group,Count,Percentage');
+      final totalAge = d.ageGroups.fold<int>(0, (s, a) => s + a.count);
+      for (final a in d.ageGroups) {
+        final pct = totalAge == 0 ? 0.0 : (a.count / totalAge * 100);
+        buf.writeln(
+          '${_csvCell(a.ageGroup)},${a.count},${pct.toStringAsFixed(1)}%',
+        );
+      }
+      buf.writeln();
+
       // ── Top Nationalities ──────────────────────────────────────────────────
       buf.writeln('TOP 5 COUNTRIES/NATIONALITIES');
       buf.writeln('Nationality,Tourists');
@@ -183,6 +195,22 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       buf.writeln('Region,Tourists');
       for (final r in d.topRegions) {
         buf.writeln('${_csvCell(r.region)},${r.count}');
+      }
+      buf.writeln();
+
+      // ── Accommodation Types ────────────────────────────────────────────────
+      buf.writeln('ACCOMMODATION TYPES');
+      buf.writeln('Type,Tourists');
+      for (final a in d.accommodationTypes) {
+        buf.writeln('${_csvCell(a.type)},${a.count}');
+      }
+      buf.writeln();
+
+      // ── Purpose of Visit ───────────────────────────────────────────────────
+      buf.writeln('PURPOSE OF VISIT');
+      buf.writeln('Purpose,Tourists');
+      for (final pv in d.purposeOfVisit) {
+        buf.writeln('${_csvCell(pv.purpose)},${pv.count}');
       }
       buf.writeln();
 
@@ -248,6 +276,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       final y2Data =
           _trendData[_trendYear2] ??
           List.generate(12, (i) => MonthlyCount(month: i + 1, count: 0));
+
+      final totalAge = d.ageGroups.fold<int>(0, (s, a) => s + a.count);
 
       doc.addPage(
         pw.MultiPage(
@@ -321,6 +351,26 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             ),
             pw.SizedBox(height: 16),
 
+            // ── Age Group Distribution ────────────────────────────────────────
+            pw.Text(
+              'Age Group Distribution',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Age Group', 'Count', 'Percentage'],
+              data: d.ageGroups.map((a) {
+                final pct = totalAge == 0 ? 0.0 : (a.count / totalAge * 100);
+                return [a.ageGroup, '${a.count}', '${pct.toStringAsFixed(1)}%'];
+              }).toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
             // ── Top Nationalities ─────────────────────────────────────────────
             pw.Text(
               'Top 5 Countries/Nationalities',
@@ -349,6 +399,44 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             pw.Table.fromTextArray(
               headers: ['Region', 'Tourists'],
               data: d.topRegions.map((r) => [r.region, '${r.count}']).toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Accommodation Types ───────────────────────────────────────────
+            pw.Text(
+              'Accommodation Types',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Type', 'Tourists'],
+              data: d.accommodationTypes
+                  .map((a) => [a.type, '${a.count}'])
+                  .toList(),
+              cellStyle: const pw.TextStyle(fontSize: 10),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+            ),
+            pw.SizedBox(height: 16),
+
+            // ── Purpose of Visit ──────────────────────────────────────────────
+            pw.Text(
+              'Purpose of Visit',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Table.fromTextArray(
+              headers: ['Purpose', 'Tourists'],
+              data: d.purposeOfVisit
+                  .map((pv) => [pv.purpose, '${pv.count}'])
+                  .toList(),
               cellStyle: const pw.TextStyle(fontSize: 10),
               headerStyle: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -654,8 +742,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                             const SizedBox(height: 20),
                             _DonutChartsRow(
                               genderDist: _dashData!.genderDistribution,
+                              ageGroups: _dashData!.ageGroups,
                               topNationalities: _dashData!.topNationalities,
                               topRegions: _dashData!.topRegions,
+                              accommodationTypes: _dashData!.accommodationTypes,
+                              purposeOfVisit: _dashData!.purposeOfVisit,
                               isNarrow: isNarrow,
                               isMedium: isMedium,
                             ),
@@ -1199,34 +1290,47 @@ class _StatCard extends StatelessWidget {
 class _DonutChartsRow extends StatelessWidget {
   const _DonutChartsRow({
     required this.genderDist,
+    required this.ageGroups,
     required this.topNationalities,
     required this.topRegions,
+    required this.accommodationTypes,
+    required this.purposeOfVisit,
     required this.isNarrow,
     required this.isMedium,
   });
 
   final GenderDistribution genderDist;
+  final List<AgeGroupCount> ageGroups;
   final List<NationalityCount> topNationalities;
   final List<RegionCount> topRegions;
+  final List<AccommodationTypeCount> accommodationTypes;
+  final List<PurposeCount> purposeOfVisit;
   final bool isNarrow;
   final bool isMedium;
 
   @override
   Widget build(BuildContext context) {
-    final genderCard = _GenderDonut(dist: genderDist);
-    final nationalitiesCard = _NationalitiesDonut(
-      nationalities: topNationalities,
+    final genderAgeCard = _GenderAgeCard(
+      genderDist: genderDist,
+      ageGroups: ageGroups,
     );
-    final regionsCard = _RegionsDonut(regions: topRegions);
+    final countriesRegionsCard = _CountriesRegionsCard(
+      topNationalities: topNationalities,
+      topRegions: topRegions,
+    );
+    final accommodationPurposeCard = _AccommodationPurposeCard(
+      accommodationTypes: accommodationTypes,
+      purposeOfVisit: purposeOfVisit,
+    );
 
     if (isNarrow) {
       return Column(
         children: [
-          genderCard,
+          genderAgeCard,
           const SizedBox(height: 14),
-          nationalitiesCard,
+          countriesRegionsCard,
           const SizedBox(height: 14),
-          regionsCard,
+          accommodationPurposeCard,
         ],
       );
     }
@@ -1234,13 +1338,14 @@ class _DonutChartsRow extends StatelessWidget {
     if (isMedium) {
       return Column(
         children: [
-          genderCard,
+          genderAgeCard,
           const SizedBox(height: 14),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: nationalitiesCard),
+              Expanded(child: countriesRegionsCard),
               const SizedBox(width: 14),
-              Expanded(child: regionsCard),
+              Expanded(child: accommodationPurposeCard),
             ],
           ),
         ],
@@ -1248,189 +1353,181 @@ class _DonutChartsRow extends StatelessWidget {
     }
 
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: genderCard),
+        Expanded(child: genderAgeCard),
         const SizedBox(width: 14),
-        Expanded(child: nationalitiesCard),
+        Expanded(child: countriesRegionsCard),
         const SizedBox(width: 14),
-        Expanded(child: regionsCard),
+        Expanded(child: accommodationPurposeCard),
       ],
     );
   }
 }
 
-// ─── Gender Donut ─────────────────────────────────────────────────────────────
+// ─── Toggle Card Title ────────────────────────────────────────────────────────
 
-class _GenderDonut extends StatelessWidget {
-  const _GenderDonut({required this.dist});
-
-  final GenderDistribution dist;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = dist.total;
-
-    return _DonutCard(
-      title: 'Gender Distribution',
-      emptyHint: total == 0 ? 'No data for this period' : null,
-      segments: [
-        _Segment(
-          value: total == 0 ? 0.5 : dist.maleRatio,
-          color: AppColors.chartCyan,
-          label: 'Male',
-          percentage: '${dist.male} visitors',
-          isEmpty: total == 0,
-        ),
-        _Segment(
-          value: total == 0 ? 0.5 : dist.femaleRatio,
-          color: AppColors.chartPurple,
-          label: 'Female',
-          percentage: '${dist.female} visitors',
-          isEmpty: total == 0,
-        ),
-      ],
-      legend: const [
-        _LegendItem(label: 'Male', color: AppColors.chartCyan),
-        _LegendItem(label: 'Female', color: AppColors.chartPurple),
-      ],
-    );
-  }
-}
-
-// ─── Nationalities Donut ──────────────────────────────────────────────────────
-
-class _NationalitiesDonut extends StatelessWidget {
-  const _NationalitiesDonut({required this.nationalities});
-
-  final List<NationalityCount> nationalities;
-
-  static const _colors = [
-    AppColors.chartGreen,
-    AppColors.chartBlue,
-    AppColors.chartOrange,
-    AppColors.chartPurple,
-    AppColors.chartGray,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    if (nationalities.isEmpty) {
-      return _DonutCard(
-        title: 'Top 5 Countries',
-        emptyHint: 'No data for this period',
-        segments: List.generate(
-          5,
-          (i) => _Segment(value: 0.2, color: _colors[i], isEmpty: true),
-        ),
-        legend: const [],
-      );
-    }
-
-    final total = nationalities.fold<int>(0, (s, n) => s + n.count);
-    final segments = nationalities.asMap().entries.map((e) {
-      final ratio = total == 0
-          ? 1 / nationalities.length
-          : e.value.count / total;
-      return _Segment(
-        value: ratio,
-        color: _colors[e.key % _colors.length],
-        label: e.value.nationality,
-        percentage: '${e.value.count} visitors',
-      );
-    }).toList();
-
-    final legend = nationalities
-        .asMap()
-        .entries
-        .map(
-          (e) => _LegendItem(
-            label: e.value.nationality,
-            color: _colors[e.key % _colors.length],
-          ),
-        )
-        .toList();
-
-    return _DonutCard(
-      title: 'Top 5 Countries',
-      segments: segments,
-      legend: legend,
-    );
-  }
-}
-
-// ─── Regions Donut ────────────────────────────────────────────────────────────
-
-class _RegionsDonut extends StatelessWidget {
-  const _RegionsDonut({required this.regions});
-
-  final List<RegionCount> regions;
-
-  static const _colors = [
-    AppColors.chartCyan,
-    AppColors.chartGreen,
-    AppColors.chartOrange,
-    AppColors.chartPurple,
-    AppColors.chartGray,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    if (regions.isEmpty) {
-      return _DonutCard(
-        title: 'Top Local Regions',
-        emptyHint: 'No Philippine visitors for this period',
-        segments: List.generate(
-          5,
-          (i) => _Segment(value: 0.2, color: _colors[i], isEmpty: true),
-        ),
-        legend: const [],
-      );
-    }
-
-    final total = regions.fold<int>(0, (s, r) => s + r.count);
-    final segments = regions.asMap().entries.map((e) {
-      final ratio = total == 0 ? 1 / regions.length : e.value.count / total;
-      return _Segment(
-        value: ratio,
-        color: _colors[e.key % _colors.length],
-        label: e.value.region,
-        percentage: '${e.value.count} visitors',
-      );
-    }).toList();
-
-    final legend = regions
-        .asMap()
-        .entries
-        .map(
-          (e) => _LegendItem(
-            label: e.value.region,
-            color: _colors[e.key % _colors.length],
-          ),
-        )
-        .toList();
-
-    return _DonutCard(
-      title: 'Top Local Regions',
-      segments: segments,
-      legend: legend,
-    );
-  }
-}
-
-// ─── Shared Donut Card ────────────────────────────────────────────────────────
-
-class _DonutCard extends StatelessWidget {
-  const _DonutCard({
-    required this.title,
-    required this.segments,
-    required this.legend,
-    this.emptyHint,
+/// Renders two (or more) tab labels as the card title. The active label is
+/// white + bold with a 1.5 px cyan underline; inactive labels are gray.
+/// A "/" separator sits between each pair.
+class _ToggleCardTitle extends StatelessWidget {
+  const _ToggleCardTitle({
+    required this.options,
+    required this.selectedIndex,
+    required this.onChanged,
   });
 
-  final String title;
-  final List<_Segment> segments;
-  final List<_LegendItem> legend;
-  final String? emptyHint;
+  final List<String> options;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final widgets = <Widget>[];
+    for (int i = 0; i < options.length; i++) {
+      if (i > 0) {
+        widgets.add(
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '/',
+              style: TextStyle(
+                color: AppColors.textSubtle,
+                fontSize: 12,
+                fontWeight: FontWeight.w300,
+              ),
+            ),
+          ),
+        );
+      }
+      final isSelected = i == selectedIndex;
+      widgets.add(
+        GestureDetector(
+          onTap: () => onChanged(i),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.only(bottom: 3),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isSelected
+                      ? AppColors.primaryCyan
+                      : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+            ),
+            child: Text(
+              options[i],
+              style: TextStyle(
+                color: isSelected ? AppColors.textWhite : AppColors.textGray,
+                fontSize: 13.5,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Row(mainAxisSize: MainAxisSize.min, children: widgets);
+  }
+}
+
+// ─── Gender / Age Group Card ──────────────────────────────────────────────────
+
+class _GenderAgeCard extends StatefulWidget {
+  const _GenderAgeCard({required this.genderDist, required this.ageGroups});
+
+  final GenderDistribution genderDist;
+  final List<AgeGroupCount> ageGroups;
+
+  @override
+  State<_GenderAgeCard> createState() => _GenderAgeCardState();
+}
+
+class _GenderAgeCardState extends State<_GenderAgeCard> {
+  int _tab = 0; // 0 = Gender, 1 = Age Group
+
+  static const _ageColors = [
+    AppColors.chartBlue,
+    AppColors.chartGreen,
+    AppColors.chartOrange,
+    AppColors.chartPurple,
+    AppColors.chartCyan,
+    AppColors.chartGray,
+  ];
+
+  List<_Segment> get _segments {
+    if (_tab == 0) {
+      final d = widget.genderDist;
+      final isEmpty = d.total == 0;
+      return [
+        _Segment(
+          value: isEmpty ? 0.5 : d.maleRatio,
+          color: AppColors.chartCyan,
+          label: 'Male',
+          percentage: '${d.male} tourists',
+          isEmpty: isEmpty,
+        ),
+        _Segment(
+          value: isEmpty ? 0.5 : d.femaleRatio,
+          color: AppColors.chartPurple,
+          label: 'Female',
+          percentage: '${d.female} tourists',
+          isEmpty: isEmpty,
+        ),
+      ];
+    } else {
+      if (widget.ageGroups.isEmpty) {
+        return List.generate(
+          5,
+          (i) => _Segment(
+            value: 0.2,
+            color: _ageColors[i % _ageColors.length],
+            isEmpty: true,
+          ),
+        );
+      }
+      final total = widget.ageGroups.fold<int>(0, (s, a) => s + a.count);
+      return widget.ageGroups.asMap().entries.map((e) {
+        final ratio = total == 0
+            ? 1 / widget.ageGroups.length
+            : e.value.count / total;
+        return _Segment(
+          value: ratio,
+          color: _ageColors[e.key % _ageColors.length],
+          label: e.value.ageGroup,
+          percentage: '${e.value.count} tourists',
+        );
+      }).toList();
+    }
+  }
+
+  List<_LegendItem> get _legend {
+    if (_tab == 0) {
+      return const [
+        _LegendItem(label: 'Male', color: AppColors.chartCyan),
+        _LegendItem(label: 'Female', color: AppColors.chartPurple),
+      ];
+    }
+    return widget.ageGroups
+        .asMap()
+        .entries
+        .map(
+          (e) => _LegendItem(
+            label: e.value.ageGroup,
+            color: _ageColors[e.key % _ageColors.length],
+          ),
+        )
+        .toList();
+  }
+
+  String? get _emptyHint {
+    if (_tab == 0 && widget.genderDist.total == 0)
+      return 'No data for this period';
+    if (_tab == 1 && widget.ageGroups.isEmpty) return 'No data for this period';
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1438,22 +1535,374 @@ class _DonutCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(title: title),
-          if (emptyHint != null) ...[
+          _ToggleCardTitle(
+            options: const ['Gender', 'Age Group'],
+            selectedIndex: _tab,
+            onChanged: (i) => setState(() => _tab = i),
+          ),
+          if (_emptyHint != null) ...[
             const SizedBox(height: 6),
             Text(
-              emptyHint!,
+              _emptyHint!,
               style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
             ),
           ],
           const SizedBox(height: 16),
-          Center(child: _DonutChart(segments: segments, size: 130)),
-          if (legend.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            _Legend(items: legend),
-          ],
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: _DonutContent(
+              key: ValueKey(_tab),
+              segments: _segments,
+              legend: _legend,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+// ─── Countries / Local Regions Card ──────────────────────────────────────────
+
+class _CountriesRegionsCard extends StatefulWidget {
+  const _CountriesRegionsCard({
+    required this.topNationalities,
+    required this.topRegions,
+  });
+
+  final List<NationalityCount> topNationalities;
+  final List<RegionCount> topRegions;
+
+  @override
+  State<_CountriesRegionsCard> createState() => _CountriesRegionsCardState();
+}
+
+class _CountriesRegionsCardState extends State<_CountriesRegionsCard> {
+  int _tab = 0; // 0 = Countries, 1 = Local Regions
+
+  static const _countryColors = [
+    AppColors.chartGreen,
+    AppColors.chartBlue,
+    AppColors.chartOrange,
+    AppColors.chartPurple,
+    AppColors.chartGray,
+  ];
+
+  static const _regionColors = [
+    AppColors.chartCyan,
+    AppColors.chartGreen,
+    AppColors.chartOrange,
+    AppColors.chartPurple,
+    AppColors.chartGray,
+  ];
+
+  List<_Segment> get _segments {
+    if (_tab == 0) {
+      final list = widget.topNationalities;
+      if (list.isEmpty) {
+        return List.generate(
+          5,
+          (i) => _Segment(
+            value: 0.2,
+            color: _countryColors[i % _countryColors.length],
+            isEmpty: true,
+          ),
+        );
+      }
+      final total = list.fold<int>(0, (s, n) => s + n.count);
+      return list.asMap().entries.map((e) {
+        final ratio = total == 0 ? 1 / list.length : e.value.count / total;
+        return _Segment(
+          value: ratio,
+          color: _countryColors[e.key % _countryColors.length],
+          label: e.value.nationality,
+          percentage: '${e.value.count} tourists',
+        );
+      }).toList();
+    } else {
+      final list = widget.topRegions;
+      if (list.isEmpty) {
+        return List.generate(
+          5,
+          (i) => _Segment(
+            value: 0.2,
+            color: _regionColors[i % _regionColors.length],
+            isEmpty: true,
+          ),
+        );
+      }
+      final total = list.fold<int>(0, (s, r) => s + r.count);
+      return list.asMap().entries.map((e) {
+        final ratio = total == 0 ? 1 / list.length : e.value.count / total;
+        return _Segment(
+          value: ratio,
+          color: _regionColors[e.key % _regionColors.length],
+          label: e.value.region,
+          percentage: '${e.value.count} tourists',
+        );
+      }).toList();
+    }
+  }
+
+  List<_LegendItem> get _legend {
+    if (_tab == 0) {
+      return widget.topNationalities
+          .asMap()
+          .entries
+          .map(
+            (e) => _LegendItem(
+              label: e.value.nationality,
+              color: _countryColors[e.key % _countryColors.length],
+            ),
+          )
+          .toList();
+    }
+    return widget.topRegions
+        .asMap()
+        .entries
+        .map(
+          (e) => _LegendItem(
+            label: e.value.region,
+            color: _regionColors[e.key % _regionColors.length],
+          ),
+        )
+        .toList();
+  }
+
+  String? get _emptyHint {
+    if (_tab == 0 && widget.topNationalities.isEmpty)
+      return 'No data for this period';
+    if (_tab == 1 && widget.topRegions.isEmpty)
+      return 'No Philippine visitors for this period';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Top 5',
+                style: const TextStyle(
+                  color: AppColors.textWhite,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _ToggleCardTitle(
+                options: const ['Countries', 'Local Regions'],
+                selectedIndex: _tab,
+                onChanged: (i) => setState(() => _tab = i),
+              ),
+            ],
+          ),
+          if (_emptyHint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _emptyHint!,
+              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: _DonutContent(
+              key: ValueKey(_tab),
+              segments: _segments,
+              legend: _legend,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Accommodation / Purpose of Visit Card ────────────────────────────────────
+
+class _AccommodationPurposeCard extends StatefulWidget {
+  const _AccommodationPurposeCard({
+    required this.accommodationTypes,
+    required this.purposeOfVisit,
+  });
+
+  final List<AccommodationTypeCount> accommodationTypes;
+  final List<PurposeCount> purposeOfVisit;
+
+  @override
+  State<_AccommodationPurposeCard> createState() =>
+      _AccommodationPurposeCardState();
+}
+
+class _AccommodationPurposeCardState extends State<_AccommodationPurposeCard> {
+  int _tab = 0; // 0 = Accommodation, 1 = Purpose of Visit
+
+  static const _accommodationColors = [
+    AppColors.chartOrange,
+    AppColors.chartBlue,
+    AppColors.chartGreen,
+    AppColors.chartPurple,
+    AppColors.chartCyan,
+    AppColors.chartGray,
+  ];
+
+  static const _purposeColors = [
+    AppColors.chartPurple,
+    AppColors.chartOrange,
+    AppColors.chartBlue,
+    AppColors.chartGreen,
+    AppColors.chartCyan,
+    AppColors.chartGray,
+  ];
+
+  List<_Segment> get _segments {
+    if (_tab == 0) {
+      final list = widget.accommodationTypes;
+      if (list.isEmpty) {
+        return List.generate(
+          5,
+          (i) => _Segment(
+            value: 0.2,
+            color: _accommodationColors[i % _accommodationColors.length],
+            isEmpty: true,
+          ),
+        );
+      }
+      final total = list.fold<int>(0, (s, a) => s + a.count);
+      return list.asMap().entries.map((e) {
+        final ratio = total == 0 ? 1 / list.length : e.value.count / total;
+        return _Segment(
+          value: ratio,
+          color: _accommodationColors[e.key % _accommodationColors.length],
+          label: e.value.type,
+          percentage: '${e.value.count} tourists',
+        );
+      }).toList();
+    } else {
+      final list = widget.purposeOfVisit;
+      if (list.isEmpty) {
+        return List.generate(
+          5,
+          (i) => _Segment(
+            value: 0.2,
+            color: _purposeColors[i % _purposeColors.length],
+            isEmpty: true,
+          ),
+        );
+      }
+      final total = list.fold<int>(0, (s, p) => s + p.count);
+      return list.asMap().entries.map((e) {
+        final ratio = total == 0 ? 1 / list.length : e.value.count / total;
+        return _Segment(
+          value: ratio,
+          color: _purposeColors[e.key % _purposeColors.length],
+          label: e.value.purpose,
+          percentage: '${e.value.count} tourists',
+        );
+      }).toList();
+    }
+  }
+
+  List<_LegendItem> get _legend {
+    if (_tab == 0) {
+      return widget.accommodationTypes
+          .asMap()
+          .entries
+          .map(
+            (e) => _LegendItem(
+              label: e.value.type,
+              color: _accommodationColors[e.key % _accommodationColors.length],
+            ),
+          )
+          .toList();
+    }
+    return widget.purposeOfVisit
+        .asMap()
+        .entries
+        .map(
+          (e) => _LegendItem(
+            label: e.value.purpose,
+            color: _purposeColors[e.key % _purposeColors.length],
+          ),
+        )
+        .toList();
+  }
+
+  String? get _emptyHint {
+    if (_tab == 0 && widget.accommodationTypes.isEmpty)
+      return 'No accommodation data';
+    if (_tab == 1 && widget.purposeOfVisit.isEmpty)
+      return 'No data for this period';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _ToggleCardTitle(
+            options: const ['Accommodation', 'Purpose of Visit'],
+            selectedIndex: _tab,
+            onChanged: (i) => setState(() => _tab = i),
+          ),
+          if (_emptyHint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _emptyHint!,
+              style: const TextStyle(color: AppColors.textSubtle, fontSize: 11),
+            ),
+          ],
+          const SizedBox(height: 16),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: _DonutContent(
+              key: ValueKey(_tab),
+              segments: _segments,
+              legend: _legend,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Donut Content (chart + legend, no title) ─────────────────────────────────
+
+/// Shared content body used by all three toggleable donut cards.
+class _DonutContent extends StatelessWidget {
+  const _DonutContent({
+    super.key,
+    required this.segments,
+    required this.legend,
+  });
+
+  final List<_Segment> segments;
+  final List<_LegendItem> legend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Center(child: _DonutChart(segments: segments, size: 130)),
+        if (legend.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _Legend(items: legend),
+        ],
+      ],
     );
   }
 }

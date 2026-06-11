@@ -60,18 +60,36 @@ class MonthlyCount {
   final int count;
 }
 
+class AgeGroupCount {
+  const AgeGroupCount({required this.ageGroup, required this.count});
+
+  final String ageGroup;
+  final int count;
+}
+
+class PurposeCount {
+  const PurposeCount({required this.purpose, required this.count});
+
+  final String purpose;
+  final int count;
+}
+
 class DashboardData {
   const DashboardData({
     required this.stats,
     required this.sexDistribution,
     required this.topCountries,
     required this.topRegions,
+    required this.ageGroups,
+    required this.purposeOfVisit,
   });
 
   final DashboardStats stats;
   final SexDistribution sexDistribution;
   final List<CountryCount> topCountries;
   final List<RegionCount> topRegions;
+  final List<AgeGroupCount> ageGroups;
+  final List<PurposeCount> purposeOfVisit;
 }
 
 class BusinessDetails {
@@ -321,7 +339,11 @@ class BusinessDashboardApi {
 
     final breakdowns = await _fetchBreakdownsOnline(recordIds);
 
-    return _computeDashboardData(stats: stats, breakdowns: breakdowns);
+    return _computeDashboardData(
+      stats: stats,
+      breakdowns: breakdowns,
+      periodRecords: periodRecords,
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchGuestRecordsOnline({
@@ -331,7 +353,9 @@ class BusinessDashboardApi {
   }) async {
     final response = await _supabase
         .from('guest_records')
-        .select('id, check_in, check_out, total_guests, rooms_occupied')
+        .select(
+          'id, check_in, check_out, total_guests, rooms_occupied, purpose_of_visit',
+        )
         .eq('business_id', businessId)
         .eq('is_deleted', false)
         .gte('check_in', startDate)
@@ -394,7 +418,11 @@ class BusinessDashboardApi {
 
     final breakdowns = await _fetchBreakdownsOffline(recordIds);
 
-    return _computeDashboardData(stats: stats, breakdowns: breakdowns);
+    return _computeDashboardData(
+      stats: stats,
+      breakdowns: breakdowns,
+      periodRecords: periodRecords,
+    );
   }
 
   Future<List<Map<String, dynamic>>> _fetchGuestRecordsOffline({
@@ -411,6 +439,7 @@ class BusinessDashboardApi {
         'check_out',
         'total_guests',
         'rooms_occupied',
+        'purpose_of_visit',
       ],
       where:
           'business_id = ? AND is_deleted = 0  '
@@ -492,6 +521,7 @@ class BusinessDashboardApi {
   DashboardData _computeDashboardData({
     required DashboardStats stats,
     required List<Map<String, dynamic>> breakdowns,
+    required List<Map<String, dynamic>> periodRecords,
   }) {
     // Sex distribution
     int male = 0, female = 0, genderOther = 0;
@@ -506,6 +536,20 @@ class BusinessDashboardApi {
         genderOther += cnt;
       }
     }
+
+    // Age group distribution
+    final ageGroupMap = <String, int>{};
+    for (final b in breakdowns) {
+      final ageGroup = _stringValue(b, 'age_group')?.trim() ?? '';
+      if (ageGroup.isEmpty) continue;
+      ageGroupMap[ageGroup] =
+          (ageGroupMap[ageGroup] ?? 0) + ((_intValue(b, 'count')) ?? 0);
+    }
+    final ageGroups =
+        ageGroupMap.entries
+            .map((e) => AgeGroupCount(ageGroup: e.key, count: e.value))
+            .toList()
+          ..sort((a, b) => b.count.compareTo(a.count));
 
     // Top 5 countries
     final countryMap = <String, int>{};
@@ -539,6 +583,22 @@ class BusinessDashboardApi {
             .take(5)
             .toList();
 
+    // Purpose of visit
+    final purposeMap = <String, int>{};
+    for (final record in periodRecords) {
+      final purpose = _stringValue(record, 'purpose_of_visit')?.trim() ?? '';
+      if (purpose.isEmpty) continue;
+      purposeMap[purpose] =
+          (purposeMap[purpose] ?? 0) + ((_intValue(record, 'total_guests')) ?? 0);
+    }
+    final purposeOfVisit =
+        (purposeMap.entries
+                .map((e) => PurposeCount(purpose: e.key, count: e.value))
+                .toList()
+              ..sort((a, b) => b.count.compareTo(a.count)))
+            .take(5)
+            .toList();
+
     return DashboardData(
       stats: stats,
       sexDistribution: SexDistribution(
@@ -548,6 +608,8 @@ class BusinessDashboardApi {
       ),
       topCountries: topCountries,
       topRegions: topRegions,
+      ageGroups: ageGroups,
+      purposeOfVisit: purposeOfVisit,
     );
   }
 
