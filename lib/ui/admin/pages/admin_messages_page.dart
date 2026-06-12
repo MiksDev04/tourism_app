@@ -261,6 +261,7 @@ class _PageHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isSmall = constraints.maxWidth < 600;
+        final isMobile = constraints.maxWidth < 450;
         return Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -272,27 +273,31 @@ class _PageHeader extends StatelessWidget {
                     'Messages & Announcements',
                     style: TextStyle(
                       color: AppColors.textWhite,
-                      fontSize: isSmall ? 18 : 22,
+                      fontSize: isMobile ? 16 : (isSmall ? 18 : 22),
                       fontWeight: FontWeight.w700,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Send notices to accommodation establishments',
                     style: TextStyle(
                       color: AppColors.textGray,
-                      fontSize: isSmall ? 11 : 13,
+                      fontSize: isMobile ? 10 : (isSmall ? 11 : 13),
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             GestureDetector(
               onTap: onCompose,
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 12 : 16,
                   vertical: 9,
                 ),
                 decoration: BoxDecoration(
@@ -308,13 +313,14 @@ class _PageHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.send_rounded, color: Colors.white, size: 15),
-                    SizedBox(width: 7),
+                    const Icon(Icons.send_rounded, color: Colors.white, size: 15),
+                    const SizedBox(width: 7),
                     Text(
-                      'Compose Message',
-                      style: TextStyle(
+                      isSmall ? 'Compose' : 'Compose Message',
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,

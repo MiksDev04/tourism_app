@@ -358,44 +358,54 @@ class _PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Compliance Tracker ($totalAccommodations)',
-                style: const TextStyle(
-                  color: AppColors.textWhite,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 600;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Compliance Tracker ($totalAccommodations)',
+                    style: TextStyle(
+                      color: AppColors.textWhite,
+                      fontSize: isSmall ? 18 : 22,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Monitor guest recording activity of registered businesses',
+                    style: TextStyle(
+                      color: AppColors.textGray, 
+                      fontSize: isSmall ? 11 : 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            IconButton(
+              onPressed: onRefresh,
+              icon: Icon(Icons.refresh_rounded, size: isSmall ? 18 : 20),
+              color: AppColors.textGray,
+              tooltip: 'Refresh',
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.cardBackground,
+                padding: isSmall ? EdgeInsets.zero : null,
+                minimumSize: isSmall ? const Size(34, 34) : null,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: AppColors.cardBorder),
                 ),
               ),
-              const SizedBox(height: 4),
-              const Text(
-                'Monitor guest recording activity of registered businesses',
-                style: TextStyle(color: AppColors.textGray, fontSize: 13),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        IconButton(
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh_rounded, size: 20),
-          color: AppColors.textGray,
-          tooltip: 'Refresh',
-          style: IconButton.styleFrom(
-            backgroundColor: AppColors.cardBackground,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: AppColors.cardBorder),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -415,38 +425,46 @@ class _SummaryCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.check_circle_outline_rounded,
-            iconColor: AppColors.accentGreen,
-            borderColor: AppColors.accentGreen,
-            value: '$active',
-            label: 'Active',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.warning_amber_rounded,
-            iconColor: AppColors.accentOrange,
-            borderColor: AppColors.accentOrange,
-            value: '$atRisk',
-            label: 'Low Activity',
-          ),
-        ),
-        const SizedBox(width: 14),
-        Expanded(
-          child: _SummaryCard(
-            icon: Icons.cancel_outlined,
-            iconColor: AppColors.accentRed,
-            borderColor: AppColors.accentRed,
-            value: '$inactive',
-            label: 'Inactive',
-          ),
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 600;
+        return Row(
+          children: [
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: AppColors.accentGreen,
+                borderColor: AppColors.accentGreen,
+                value: '$active',
+                label: 'Active',
+                isSmall: isSmall,
+              ),
+            ),
+            SizedBox(width: isSmall ? 6 : 14),
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.warning_amber_rounded,
+                iconColor: AppColors.accentOrange,
+                borderColor: AppColors.accentOrange,
+                value: '$atRisk',
+                label: 'Low Activity',
+                isSmall: isSmall,
+              ),
+            ),
+            SizedBox(width: isSmall ? 6 : 14),
+            Expanded(
+              child: _SummaryCard(
+                icon: Icons.cancel_outlined,
+                iconColor: AppColors.accentRed,
+                borderColor: AppColors.accentRed,
+                value: '$inactive',
+                label: 'Inactive',
+                isSmall: isSmall,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -458,6 +476,7 @@ class _SummaryCard extends StatelessWidget {
     required this.borderColor,
     required this.value,
     required this.label,
+    this.isSmall = false,
   });
 
   final IconData icon;
@@ -465,38 +484,44 @@ class _SummaryCard extends StatelessWidget {
   final Color borderColor;
   final String value;
   final String label;
+  final bool isSmall;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmall ? 6 : 14,
+        vertical: isSmall ? 8 : 10,
+      ),
       decoration: BoxDecoration(
         color: iconColor.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(isSmall ? 8 : 12),
         border: Border.all(color: borderColor.withOpacity(0.25)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: iconColor, size: 16),
-          const SizedBox(width: 10),
+          Icon(icon, color: iconColor, size: isSmall ? 13 : 16),
+          SizedBox(width: isSmall ? 4 : 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
                     color: AppColors.textGray,
-                    fontSize: 11,
+                    fontSize: isSmall ? 8.5 : 11,
                   ),
                 ),
-                const SizedBox(height: 2),
+                if (!isSmall) const SizedBox(height: 2),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textWhite,
-                    fontSize: 17,
+                    fontSize: isSmall ? 14 : 17,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -916,27 +941,49 @@ class _ComplianceRow extends StatelessWidget {
           // ── Mobile layout ──────────────────────────────────────────────
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        record.businessName,
+                        style: const TextStyle(
+                          color: AppColors.textWhite,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        record.businessLineLabel,
+                        style: const TextStyle(
+                          color: AppColors.textGray,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
                         children: [
-                          Text(
-                            record.businessName,
-                            style: const TextStyle(
-                              color: AppColors.textWhite,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          _ActivityBadge(status: record.activityStatus),
+                          _BusinessStatusBadge(status: record.businessStatus),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.access_time_rounded,
+                            size: 12,
+                            color: AppColors.textSubtle,
                           ),
-                          const SizedBox(height: 2),
+                          const SizedBox(width: 4),
                           Text(
-                            record.businessLineLabel,
+                            _formatLastActivity(record.lastActivity),
                             style: const TextStyle(
                               color: AppColors.textGray,
                               fontSize: 11,
@@ -944,44 +991,18 @@ class _ComplianceRow extends StatelessWidget {
                           ),
                         ],
                       ),
-                    ),
-                    // Stacked action buttons on mobile
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _buildManageButton(),
-                        const SizedBox(height: 6),
-                        _buildViewStatsButton(),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
+                const SizedBox(width: 12),
+                // Stacked action buttons on mobile
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _ActivityBadge(status: record.activityStatus),
-                    _BusinessStatusBadge(status: record.businessStatus),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.access_time_rounded,
-                      size: 12,
-                      color: AppColors.textSubtle,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatLastActivity(record.lastActivity),
-                      style: const TextStyle(
-                        color: AppColors.textGray,
-                        fontSize: 11,
-                      ),
-                    ),
+                    _buildManageButton(),
+                    const SizedBox(height: 8),
+                    _buildViewStatsButton(),
                   ],
                 ),
               ],
