@@ -239,31 +239,27 @@ class AdminDashboardApi {
   }
 
   List<String> _extractBusinessLines(Object? value) {
+    Iterable<String> raw;
     if (value is List) {
-      return value
-          .map((e) => (e?.toString() ?? '').trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      raw = value.map((e) => (e?.toString() ?? '').trim());
+    } else if (value is String) {
+      raw = value.split(RegExp(r'[,|\n]')).map((e) => e.trim());
+    } else {
+      return const [];
     }
-    if (value is String) {
-      return value
-          .split(RegExp(r'[,|\n]'))
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    return const [];
+    return raw.where((e) => e.isNotEmpty).map(_toTitleCase).toList();
   }
 
   /// Aggregates period tourist counts by each approved business_line value.
   Future<List<AccommodationTypeCount>> _fetchAccommodationTypes(
     List<Map<String, dynamic>> periodRecords,
   ) async {
-    final businessIds = periodRecords
-        .map((record) => record['business_id'] as String?)
-        .whereType<String>()
-        .toSet()
-        .toList();
+    final businessIds =
+        periodRecords
+            .map((record) => record['business_id'] as String?)
+            .whereType<String>()
+            .toSet()
+            .toList();
     if (businessIds.isEmpty) return const [];
 
     final response = await _supabase
@@ -310,9 +306,10 @@ class AdminDashboardApi {
       endDate: end,
     );
 
-    final yearRecords = (month == 0)
-        ? periodRecords
-        : await _fetchGuestRecords(startDate: yearStart, endDate: yearEnd);
+    final yearRecords =
+        (month == 0)
+            ? periodRecords
+            : await _fetchGuestRecords(startDate: yearStart, endDate: yearEnd);
 
     final touristsThisPeriod = periodRecords.fold<int>(
       0,
@@ -349,8 +346,9 @@ class AdminDashboardApi {
     for (final breakdown in breakdowns) {
       final ageGroup = (breakdown['age_group'] as String? ?? '').trim();
       if (ageGroup.isEmpty) continue;
-      ageGroupMap[ageGroup] =
-          (ageGroupMap[ageGroup] ?? 0) + (breakdown['count'] as int? ?? 0);
+      final label = _toTitleCase(ageGroup);
+      ageGroupMap[label] =
+          (ageGroupMap[label] ?? 0) + (breakdown['count'] as int? ?? 0);
     }
     final ageGroups =
         ageGroupMap.entries
@@ -363,8 +361,9 @@ class AdminDashboardApi {
     for (final breakdown in breakdowns) {
       final country = (breakdown['country'] as String? ?? '').trim();
       if (country.isEmpty) continue;
-      nationalityMap[country] =
-          (nationalityMap[country] ?? 0) + (breakdown['count'] as int? ?? 0);
+      final label = _toTitleCase(country);
+      nationalityMap[label] =
+          (nationalityMap[label] ?? 0) + (breakdown['count'] as int? ?? 0);
     }
     final topNationalities =
         (nationalityMap.entries
@@ -384,8 +383,9 @@ class AdminDashboardApi {
     for (final breakdown in breakdowns) {
       final region = (breakdown['philippines_region'] as String? ?? '').trim();
       if (region.isEmpty) continue;
-      regionMap[region] =
-          (regionMap[region] ?? 0) + (breakdown['count'] as int? ?? 0);
+      final label = _toTitleCase(region);
+      regionMap[label] =
+          (regionMap[label] ?? 0) + (breakdown['count'] as int? ?? 0);
     }
     final topRegions =
         (regionMap.entries
@@ -402,8 +402,9 @@ class AdminDashboardApi {
     for (final record in periodRecords) {
       final purpose = (record['purpose_of_visit'] as String? ?? '').trim();
       if (purpose.isEmpty) continue;
-      purposeMap[purpose] =
-          (purposeMap[purpose] ?? 0) + (record['total_guests'] as int? ?? 0);
+      final label = _toTitleCase(purpose);
+      purposeMap[label] =
+          (purposeMap[label] ?? 0) + (record['total_guests'] as int? ?? 0);
     }
     final purposeOfVisit =
         (purposeMap.entries
@@ -527,4 +528,10 @@ class AdminDashboardApi {
     'November',
     'December',
   ][month];
+
+  /// Converts snake_case enum string to Title Case.
+  String _toTitleCase(String s) => s
+      .split('_')
+      .map((w) => w.isEmpty ? '' : '${w[0].toUpperCase()}${w.substring(1)}')
+      .join(' ');
 }
