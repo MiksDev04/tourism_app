@@ -254,14 +254,29 @@ class AdminAccommodationApi {
       final sorted = agg.entries.toList()
         ..sort((a, b) => b.value.total.compareTo(a.value.total));
 
-      return sorted.asMap().entries.map((e) {
-        return AccommodationRankingRow(
-          businessId: e.value.key,
-          businessName: e.value.value.name,
-          totalGuests: e.value.value.total,
-          rank: e.key + 1,
-        );
-      }).toList();
+      int currentRank = 0;
+      int previousTotal = -1;
+      final results = <AccommodationRankingRow>[];
+
+      for (final entry in sorted) {
+        final total = entry.value.total;
+
+        // If the total is different from the previous one, increment the rank
+        if (total != previousTotal) {
+          currentRank++;
+        }
+
+        results.add(AccommodationRankingRow(
+          businessId: entry.key,
+          businessName: entry.value.name,
+          totalGuests: total,
+          rank: currentRank,
+        ));
+
+        previousTotal = total;
+      }
+
+      return results;
     } catch (e) {
       debugPrint('❌ fetchRankings error: $e');
       rethrow;
